@@ -1,0 +1,26 @@
+[package]
+name = "rust-framework-template"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.93.0"
+license.workspace = true
+repository = "https://github.com/dornglut/rust-framework-template"
+description = "Reusable Rust framework bootstrap template"
+publish = false
+
+[workspace]
+resolver = "3"
+members = ["xtask"]
+
+[workspace.package]
+edition = "2024"
+license = "Apache-2.0"
+
+[lints]
+workspace = true
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+all = { level = "deny", priority = -1 }
