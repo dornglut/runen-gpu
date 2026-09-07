@@ -27,9 +27,7 @@ fn render_pipeline(source: &GpuAdmittedProgramSource) -> GpuRenderPipelineDescri
     .unwrap()
 }
 
-fn offscreen_target(
-    resources: &mut GpuResourceScope,
-) -> (GpuTextureHandle, GpuTextureViewHandle) {
+fn offscreen_target(resources: &mut GpuResourceScope) -> (GpuTextureHandle, GpuTextureViewHandle) {
     let texture = resources
         .texture(
             GpuTextureDescriptor::ordinary_owned_2d(
@@ -134,15 +132,7 @@ fn author_visual_work(
             GpuUploadOperation::whole_buffer(&state_b, prepared_source).unwrap(),
         )?;
 
-        record_visual_frame(
-            work,
-            &render,
-            &state_a,
-            &texture,
-            &view,
-            0,
-            &mut readbacks,
-        )?;
+        record_visual_frame(work, &render, &state_a, &texture, &view, 0, &mut readbacks)?;
 
         for step_index in 0..STEP_COUNT {
             let (input, output) = if step_index % 2 == 0 {
@@ -178,10 +168,7 @@ fn native_visual_context() -> GpuContext {
         .merge(&GpuCapabilityProfile::OffscreenGraphicsBaseline.requirements())
         .unwrap();
     let descriptor = GpuContextDescriptor::new(requirements)
-        .require_format_role(
-            GpuTextureFormat::Rgba8Unorm,
-            GpuFormatRole::ColorAttachment,
-        )
+        .require_format_role(GpuTextureFormat::Rgba8Unorm, GpuFormatRole::ColorAttachment)
         .require_format_role(GpuTextureFormat::Rgba8Unorm, GpuFormatRole::CopySource)
         .with_fallback_policy(GpuSoftwareFallbackPolicy::Require)
         .with_allowed_backends([GpuBackendFamily::Vulkan])
@@ -313,8 +300,7 @@ fn native_game_of_life_retains_exact_17_frame_visual_sequence() {
     let context = native_visual_context();
     let step_source = admitted_step_source();
     let render_source = admitted_render_source();
-    let (fragment, readback_ids) =
-        author_visual_work(&step_source, &render_source, &source_state);
+    let (fragment, readback_ids) = author_visual_work(&step_source, &render_source, &source_state);
     let graph = GpuPreparedWorkGraph::prepare(
         label("G5-C02 Game of Life visual prepared graph"),
         [fragment],
