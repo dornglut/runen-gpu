@@ -1,19 +1,23 @@
 # RunenGPU
 
 RunenGPU is a standalone Rust framework for backend-neutral GPU execution
-contracts. It is intended to own reusable GPU execution semantics while keeping
-renderer and application meaning above the framework boundary.
+contracts. It owns reusable GPU execution semantics while keeping renderer and
+application meaning above the framework boundary.
 
 ## Maturity
 
-This repository contains the extracted RunenGPU implementation and its
-standalone proof portfolio. The public API is backend-neutral; WGPU is a
-private realization. Runenwerk integration and any predecessor cutover remain
-separate ADR-0008 work and are not part of this repository.
+This repository contains the accepted standalone RunenGPU implementation and its
+proof portfolio. `dornglut/runen-gpu` is the sole RunenGPU semantic implementation
+authority. The public API is backend-neutral; WGPU is a private realization.
+
+The ADR-0008 authority transfer is complete: Runenwerk consumes an exact accepted
+RunenGPU revision and its predecessor RunenGPU implementation/namespace has been
+deleted. Runenwerk integration remains a separate downstream responsibility and is
+not owned by this repository.
 
 ## Boundary
 
-RunenGPU will own reusable GPU execution semantics, resource/work submission
+RunenGPU owns reusable GPU execution semantics, resource/work submission
 contracts, and private backend realization. It does not own renderer image
 formation, scene/material/lighting semantics, ECS/UI/world/application behavior,
 window/event-loop ownership, shader-file policy, product recovery, or media and
@@ -33,9 +37,9 @@ publish: false
 ## Validation
 
 `cargo validate` is the single repository-owned validation command. It verifies
-the required authority files, extraction boundary, dependency audit, locked
-workspace tests, the independent downstream package, strict Clippy, rustdoc
-with warnings denied, the declared MSRV, product identity and license
+the required authority files, standalone source/dependency boundary, dependency
+audit, locked workspace tests, the independent downstream package, strict Clippy,
+rustdoc with warnings denied, the declared MSRV, product identity and license
 consistency, Git whitespace, and unchanged repository state.
 
 See [TESTING.md](TESTING.md).

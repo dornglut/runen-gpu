@@ -7,7 +7,7 @@ cargo validate
 ```
 
 This command is implemented by the repository-local `xtask` and is the merge
-readiness baseline for the bootstrap repository.
+readiness baseline for the standalone RunenGPU repository.
 
 ## Baseline checks
 
@@ -31,7 +31,7 @@ remains unchanged after the checks.
 
 ## Proof portfolio
 
-The transferred proof mapping is intentionally successor-local:
+The retained proof mapping is intentionally successor-local:
 
 | Evidence | Successor proof |
 | --- | --- |
