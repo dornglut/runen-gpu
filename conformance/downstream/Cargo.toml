@@ -1,0 +1,13 @@
+[package]
+name = "runen-gpu-downstream-prefix-scan"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.87"
+publish = false
+
+[dependencies]
+pollster = "0.4.0"
+runen-gpu = { package = "runen-gpu", path = "../.." }
+
+[workspace]
+resolver = "3"

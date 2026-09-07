@@ -1,5 +1,12 @@
-//! RunenGPU's backend-neutral GPU execution contract.
+//! Backend-neutral GPU execution contracts with a private WGPU realization.
 //!
-//! This repository is currently in bootstrap and extraction preparation. The
-//! implementation remains authoritative in Runenwerk until the later ADR-0008
-//! successor-acceptance switch; no GPU implementation is exposed here yet.
+//! RunenGPU owns reusable GPU capabilities, resources, programs, work graphs,
+//! submission, transfers, readback, surfaces, completion, and diagnostics.
+//! Renderer image formation, application lifecycle, window policy, shader-file
+//! policy, and product artifact policy remain outside this crate.
+
+pub mod api;
+mod backend;
+
+pub(crate) use api::GpuPreparedInitialContent;
+pub use api::*;

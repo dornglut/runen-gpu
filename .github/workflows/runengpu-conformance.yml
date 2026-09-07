@@ -1,0 +1,403 @@
+name: RunenGPU Conformance
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'src/**'
+      - 'tests/gpu_*.rs'
+      - 'tests/gpu_*/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'conformance/downstream/**'
+      - 'examples/**'
+      - '.github/workflows/runengpu-conformance.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'src/**'
+      - 'tests/gpu_*.rs'
+      - 'tests/gpu_*/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'conformance/downstream/**'
+      - 'examples/**'
+      - '.github/workflows/runengpu-conformance.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: runengpu-conformance-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  headless-compute:
+    name: Vulkan fallback headless execution
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Resolve expected revision
+        id: revision
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_SHA: ${{ github.sha }}
+          PULL_REQUEST_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PULL_REQUEST_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          case "$EVENT_NAME" in
+            pull_request) expected_revision="$PULL_REQUEST_HEAD_SHA" ;;
+            push|workflow_dispatch) expected_revision="$EVENT_SHA" ;;
+            *) echo "Unsupported event: $EVENT_NAME" >&2; exit 1 ;;
+          esac
+          test -n "$expected_revision"
+          echo "expected_revision=$expected_revision" >> "$GITHUB_OUTPUT"
+          echo "pull_request_base_revision=$PULL_REQUEST_BASE_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout exact revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ steps.revision.outputs.expected_revision }}
+          clean: true
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Prove checked-out revision
+        env:
+          EXPECTED_REVISION: ${{ steps.revision.outputs.expected_revision }}
+          PULL_REQUEST_BASE_REVISION: ${{ steps.revision.outputs.pull_request_base_revision }}
+        run: |
+          set -euo pipefail
+          actual_revision="$(git rev-parse HEAD)"
+          echo "Repository: $GITHUB_REPOSITORY"
+          echo "Event: $GITHUB_EVENT_NAME"
+          echo "Expected revision: $EXPECTED_REVISION"
+          echo "Actual checked-out revision: $actual_revision"
+          if [ -n "$PULL_REQUEST_BASE_REVISION" ]; then
+            echo "Pull-request base revision: $PULL_REQUEST_BASE_REVISION"
+          fi
+          test "$actual_revision" = "$EXPECTED_REVISION"
+          echo "Conclusion: PASS"
+
+      - name: Install stable Rust
+        run: rustup toolchain install stable --profile minimal
+
+      - name: Cache Cargo data
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+
+      - name: Run CPU graph preparation scale characterization
+        env:
+          RUST_BACKTRACE: '1'
+          RUNEN_GPU_PROOF_ARTIFACT_DIR: ${{ runner.temp }}/runengpu-proof-artifacts
+          RUNEN_GPU_PROOF_REVISION: ${{ steps.revision.outputs.expected_revision }}
+        run: |
+          set -euo pipefail
+          cargo +stable test --test gpu_graph_scale \
+            graph_preparation_scale_characterization_records_structural_and_timing_evidence \
+            --locked -- --ignored --nocapture
+          test -s "${RUNEN_GPU_PROOF_ARTIFACT_DIR}/graph-scale/report.json"
+
+      - name: Retain graph preparation scale report
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: runengpu-graph-scale-${{ steps.revision.outputs.expected_revision }}
+          path: ${{ runner.temp }}/runengpu-proof-artifacts/graph-scale/report.json
+          if-no-files-found: error
+
+      - name: Install Mesa Vulkan fallback and virtual X display
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --yes mesa-vulkan-drivers vulkan-tools xvfb xauth libxkbcommon-x11-0
+          icd="$(find /usr/share/vulkan/icd.d -maxdepth 1 -type f -name 'lvp_icd*.json' -print -quit)"
+          test -n "$icd"
+          echo "Lavapipe ICD: $icd"
+          echo "VK_DRIVER_FILES=$icd" >> "$GITHUB_ENV"
+          echo "VK_ICD_FILENAMES=$icd" >> "$GITHUB_ENV"
+          echo "WGPU_BACKEND=vulkan" >> "$GITHUB_ENV"
+          echo "XDG_RUNTIME_DIR=${RUNNER_TEMP}/runengpu-xdg" >> "$GITHUB_ENV"
+          mkdir -p "${RUNNER_TEMP}/runengpu-xdg"
+          chmod 700 "${RUNNER_TEMP}/runengpu-xdg"
+
+      - name: Prove Vulkan software adapter
+        run: |
+          set -euo pipefail
+          vulkaninfo --summary
+
+      - name: Run public reproducibility provider proof
+        env:
+          RUST_BACKTRACE: '1'
+        run: |
+          set -euo pipefail
+          cargo +stable test --test gpu_reproducibility_provider \
+            reproducibility_provider_collects_public_context_work_and_identity_facts \
+            --locked -- --ignored --nocapture
+
+      - name: Run optimized G6-P01 direct-WGPU portfolio proof
+        env:
+          RUST_BACKTRACE: '1'
+          RUNEN_GPU_PROOF_ARTIFACT_DIR: ${{ runner.temp }}/runengpu-proof-artifacts
+          RUNEN_GPU_PROOF_BUILD_PROFILE: release
+          RUNEN_GPU_PROOF_REVISION: ${{ steps.revision.outputs.expected_revision }}
+        run: |
+          set -euo pipefail
+          cargo +stable test --release --test gpu_direct_wgpu_cost_native \
+            report::direct_wgpu_cost_portfolio_retains_report \
+            --locked -- --ignored --nocapture --test-threads=1
+          test -s "${RUNEN_GPU_PROOF_ARTIFACT_DIR}/direct-wgpu-cost/report.json"
+
+      - name: Retain G6-P01 direct-WGPU cost report
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: runengpu-direct-wgpu-cost-${{ steps.revision.outputs.expected_revision }}
+          path: ${{ runner.temp }}/runengpu-proof-artifacts/direct-wgpu-cost/report.json
+          if-no-files-found: error
+
+      - name: Run retained G5-C01 prefix scan proof
+        env:
+          RUST_BACKTRACE: '1'
+        run: |
+          set -euo pipefail
+          cargo +stable test --test gpu_prefix_scan_native \
+            native_prefix_scan_proves_exact_4097_element_inclusive_and_exclusive_results \
+            --locked -- --ignored --nocapture
+
+      - name: Run independent downstream prefix scan proof
+        env:
+          RUST_BACKTRACE: '1'
+        run: cargo +stable run --manifest-path conformance/downstream/Cargo.toml --locked
+
+      - name: Run retained G5-C02 Game of Life proof
+        env:
+          RUST_BACKTRACE: '1'
+        run: |
+          set -euo pipefail
+          cargo +stable test --test gpu_game_of_life_native \
+            native_game_of_life_proves_exact_160x90_seed_16_step_oracle \
+            --locked -- --ignored --nocapture
+
+      - name: Run native G5 transfer and G5R initial-content proofs
+        env:
+          RUST_BACKTRACE: '1'
+        run: |
+          set -euo pipefail
+          cargo +stable test --test gpu_g5b_native_runtime --locked -- --ignored --nocapture
+          cargo +stable test --test gpu_g5b_native_render --locked -- --ignored --nocapture
+          cargo +stable test --test gpu_initial_content_native --locked -- --ignored --nocapture
+
+      - name: Run graceful execution shutdown proof
+        env:
+          RUST_BACKTRACE: '1'
+        run: |
+          set -euo pipefail
+          cargo +stable test --test gpu_execution_lifecycle \
+            graceful_shutdown_revokes_unaccepted_work_and_drains_accepted_readback_once \
+            --locked -- --nocapture
+
+      - name: Run indexed offscreen known-pattern proof
+        env:
+          RUST_BACKTRACE: '1'
+          RUNEN_GPU_PROOF_ARTIFACT_DIR: ${{ runner.temp }}/runengpu-proof-artifacts
+        run: |
+          set -euo pipefail
+          cargo +stable test --test gpu_offscreen_indexed_native --locked -- --ignored --nocapture
+          test -s "${RUNEN_GPU_PROOF_ARTIFACT_DIR}/known-pattern-indexed-offscreen.png"
+
+      - name: Retain indexed offscreen proof artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: runengpu-known-pattern-offscreen-${{ steps.revision.outputs.expected_revision }}
+          path: ${{ runner.temp }}/runengpu-proof-artifacts/known-pattern-indexed-offscreen.png
+          if-no-files-found: error
+
+      - name: Run compute-generated indirect drawing proof
+        env:
+          RUST_BACKTRACE: '1'
+          RUNEN_GPU_PROOF_ARTIFACT_DIR: ${{ runner.temp }}/runengpu-proof-artifacts
+        run: |
+          set -euo pipefail
+          cargo +stable test --test gpu_compute_generated_indirect_native --locked -- --ignored --nocapture
+          test -s "${RUNEN_GPU_PROOF_ARTIFACT_DIR}/compute-generated-indirect-offscreen.png"
+
+      - name: Retain compute-generated indirect proof artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: runengpu-compute-generated-indirect-${{ steps.revision.outputs.expected_revision }}
+          path: ${{ runner.temp }}/runengpu-proof-artifacts/compute-generated-indirect-offscreen.png
+          if-no-files-found: error
+
+      - name: Run persistent reaction-diffusion sequence proof
+        env:
+          RUST_BACKTRACE: '1'
+          RUNEN_GPU_PROOF_ARTIFACT_DIR: ${{ runner.temp }}/runengpu-proof-artifacts
+        run: |
+          set -euo pipefail
+          cargo +stable test --test gpu_reaction_diffusion_native \
+            native_reaction_diffusion_retains_bounded_png_sequences_and_manifest \
+            --locked -- --ignored --nocapture
+          root="${RUNEN_GPU_PROOF_ARTIFACT_DIR}/reaction-diffusion"
+          test -s "${root}/manifest.json"
+          test "$(find "${root}/64x64-4-iterations" -type f -name 'frame_*.png' | wc -l)" -eq 8
+          test "$(find "${root}/128x128-8-iterations" -type f -name 'frame_*.png' | wc -l)" -eq 8
+          find "${root}" -type f -name 'frame_*.png' -exec test -s {} \;
+
+      - name: Retain reaction-diffusion sequence artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: runengpu-reaction-diffusion-${{ steps.revision.outputs.expected_revision }}
+          path: ${{ runner.temp }}/runengpu-proof-artifacts/reaction-diffusion
+          if-no-files-found: error
+
+      - name: Run bounded offscreen boids proof
+        env:
+          RUST_BACKTRACE: '1'
+          RUNEN_GPU_PROOF_ARTIFACT_DIR: ${{ runner.temp }}/runengpu-proof-artifacts
+        run: |
+          set -euo pipefail
+          cargo +stable test --test gpu_boids_native \
+            native_boids_proves_bounded_compute_to_instanced_render_sequence \
+            --locked -- --ignored --nocapture
+          root="${RUNEN_GPU_PROOF_ARTIFACT_DIR}/boids"
+          test -s "${root}/manifest.json"
+          test "$(find "${root}" -maxdepth 1 -type f -name 'frame_*.png' | wc -l)" -eq 8
+          find "${root}" -maxdepth 1 -type f -name 'frame_*.png' -exec test -s {} \;
+
+      - name: Retain bounded offscreen boids proof artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: runengpu-bounded-boids-${{ steps.revision.outputs.expected_revision }}
+          path: ${{ runner.temp }}/runengpu-proof-artifacts/boids
+          if-no-files-found: error
+
+      - name: Run native G7A2 surface Present proof
+        env:
+          RUST_BACKTRACE: '1'
+        run: |
+          set -euo pipefail
+          xvfb-run --auto-servernum --server-args='-screen 0 1024x768x24' \
+            cargo +stable test --test gpu_g7a2_native_surface --locked -- --ignored --nocapture
+
+      - name: Run reaction-diffusion surface Present proof
+        env:
+          RUST_BACKTRACE: '1'
+        run: |
+          set -euo pipefail
+          xvfb-run --auto-servernum --server-args='-screen 0 1024x768x24' \
+            cargo +stable test --test gpu_reaction_diffusion_native \
+              native_reaction_diffusion_replays_same_compute_to_render_path_to_surface_present \
+              --locked -- --ignored --nocapture
+
+      - name: Check diff hygiene
+        run: git diff --check
+
+      - name: Prove native proof leaves tracked state clean
+        run: |
+          status="$(git status --short)"
+          if [ -n "$status" ]; then
+            printf 'Native conformance changed tracked state:\n%s\n' "$status" >&2
+            exit 1
+          fi
+
+  wasm-compile:
+    name: Wasm WebGPU compilation + actual-browser execution
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Resolve expected revision
+        id: revision
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_SHA: ${{ github.sha }}
+          PULL_REQUEST_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PULL_REQUEST_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          case "$EVENT_NAME" in
+            pull_request) expected_revision="$PULL_REQUEST_HEAD_SHA" ;;
+            push|workflow_dispatch) expected_revision="$EVENT_SHA" ;;
+            *) echo "Unsupported event: $EVENT_NAME" >&2; exit 1 ;;
+          esac
+          test -n "$expected_revision"
+          echo "expected_revision=$expected_revision" >> "$GITHUB_OUTPUT"
+          echo "pull_request_base_revision=$PULL_REQUEST_BASE_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout exact revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ steps.revision.outputs.expected_revision }}
+          clean: true
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Prove checked-out revision
+        env:
+          EXPECTED_REVISION: ${{ steps.revision.outputs.expected_revision }}
+          PULL_REQUEST_BASE_REVISION: ${{ steps.revision.outputs.pull_request_base_revision }}
+        run: |
+          set -euo pipefail
+          actual_revision="$(git rev-parse HEAD)"
+          echo "Repository: $GITHUB_REPOSITORY"
+          echo "Event: $GITHUB_EVENT_NAME"
+          echo "Expected revision: $EXPECTED_REVISION"
+          echo "Actual checked-out revision: $actual_revision"
+          if [ -n "$PULL_REQUEST_BASE_REVISION" ]; then
+            echo "Pull-request base revision: $PULL_REQUEST_BASE_REVISION"
+          fi
+          test "$actual_revision" = "$EXPECTED_REVISION"
+          echo "Conclusion: PASS"
+
+      - name: Install stable Rust and Wasm target
+        run: |
+          set -euo pipefail
+          rustup toolchain install stable --profile minimal
+          rustup target add --toolchain stable wasm32-unknown-unknown
+
+      - name: Cache Cargo data
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+
+      - name: Check RunenGPU library for Wasm WebGPU
+        run: cargo +stable check --lib --target wasm32-unknown-unknown --locked
+
+      - name: Prove actual-browser tooling
+        run: |
+          set -euo pipefail
+          google-chrome --version
+          chromedriver --version
+
+      - name: Install lock-matched wasm-bindgen CLI
+        run: |
+          set -euo pipefail
+          wasm_bindgen_version="$(python3 -c 'import tomllib; data=tomllib.load(open("Cargo.lock", "rb")); versions={package["version"] for package in data["package"] if package["name"] == "wasm-bindgen"}; assert len(versions) == 1, versions; print(versions.pop())')"
+          echo "wasm-bindgen CLI version: ${wasm_bindgen_version}"
+          cargo +stable install wasm-bindgen-cli --version "${wasm_bindgen_version}" --locked
+
+      - name: Run retained G5-C01 and G6-C01 proofs in actual-browser WebGPU
+        env:
+          RUST_BACKTRACE: '1'
+        run: |
+          set -euo pipefail
+          messages="${RUNNER_TEMP}/runengpu-browser-webgpu-cargo.json"
+          cargo +stable test --test gpu_browser_webgpu \
+            --target wasm32-unknown-unknown --locked --no-run --message-format=json > "${messages}"
+          browser_wasm="$(python3 -c 'import json,sys; artifacts={path for message in map(json.loads, open(sys.argv[1])) if message.get("reason") == "compiler-artifact" and message.get("target", {}).get("name") == "gpu_browser_webgpu" for path in ([message.get("executable")] + message.get("filenames", [])) if isinstance(path, str) and path.endswith(".wasm")}; assert len(artifacts) == 1, artifacts; print(artifacts.pop())' "${messages}")"
+          test -s "${browser_wasm}"
+          out_dir="${RUNNER_TEMP}/runengpu-browser-webgpu"
+          rm -rf "${out_dir}"
+          wasm-bindgen "${browser_wasm}" --target web --no-typescript \
+            --out-dir "${out_dir}" --out-name gpu_browser_webgpu
+          python3 tests/gpu_browser_webgpu/run.py "${out_dir}"
+
+      - name: Check diff hygiene
+        run: git diff --check
+
+      - name: Prove Wasm check leaves tracked state clean
+        run: |
+          status="$(git status --short)"
+          if [ -n "$status" ]; then
+            printf 'Wasm conformance changed tracked state:\n%s\n' "$status" >&2
+            exit 1
+          fi
