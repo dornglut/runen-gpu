@@ -1,6 +1,6 @@
 # RunenGPU bootstrap and provenance
 
-This record captures stable bootstrap facts and the boundary before extraction.
+This record captures stable bootstrap facts and the accepted extraction boundary.
 It is not a branch, pull-request, workflow-run, or current-head ledger.
 
 ## Repository recreation
@@ -47,9 +47,10 @@ license: GPL-3.0-only
 ```
 
 RunenGPU is a standalone product repository with one framework package. `xtask`
-is repository tooling only. The accepted extraction now supplies the semantic
-implementation in this repository; Runenwerk integration and predecessor
-deletion remain separate ADR-0008 work.
+is repository tooling only. The accepted extraction supplies the semantic
+implementation in this repository. The subsequent ADR-0008 Runenwerk
+exact-revision consumer cutover and predecessor deletion are also complete;
+Runenwerk retains only its downstream integration boundary.
 
 The repository classification is `profile=rust-framework`, `lifecycle=active`,
 and `contribution=owner-only`, with public visibility and `main` as the default
@@ -69,9 +70,9 @@ branch. These are repository posture decisions, not implementation authority.
 10. Removal of the template `unsafe_code = "forbid"` lint because GX did not
     accept that source constraint; no replacement unsafe-code policy is added.
 
-## Future extraction provenance
+## Accepted extraction provenance
 
-The accepted extraction has this stable boundary:
+The accepted extraction has this stable historical boundary:
 
 ```text
 predecessor: dornglut/runenwerk
@@ -85,3 +86,9 @@ The implementation source was transferred from the accepted Runenwerk snapshot
 without preserving Runenwerk imports or a workspace dependency. The source
 boundary is `engine/src/plugins/gpu/**`; the successor keeps public contracts
 under `src/api/**` and private realization under `src/backend/wgpu/**`.
+
+After accepted successor publication, ADR-0008 switched semantic authority to
+this repository. Runenwerk then completed its exact-revision consumer migration
+and deleted the predecessor RunenGPU implementation/namespace. The revisions
+above remain provenance for the transfer; they do not describe an active or
+repeatable synchronization relationship.

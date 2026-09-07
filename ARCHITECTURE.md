@@ -16,9 +16,8 @@ RunenGPU has no upward dependency on Runenwerk or domain integration.
 
 RunenGPU owns reusable GPU execution semantics: backend-neutral public contracts
 for capabilities, resources, work, submission, uploads/readback, surfaces, and
-device outcomes. The accepted extraction target uses WGPU as a private backend
-realization; public contracts remain backend-neutral and expose no general raw-
-WGPU escape hatch.
+device outcomes. WGPU is the accepted private backend realization; public
+contracts remain backend-neutral and expose no general raw-WGPU escape hatch.
 
 The source boundary is explicit: `src/api/**` is the public contract surface,
 `src/backend/wgpu/**` is private realization, and `src/lib.rs` re-exports only
@@ -44,10 +43,16 @@ dependency and computes the accepted 4097-element inclusive and exclusive
 prefix-scan oracle. It does not import `wgpu`, Runenwerk, or a workspace
 dependency.
 
-## Authority transfer
+## Authority-transfer history
 
-During bootstrap and an unmerged extraction candidate, Runenwerk remains the sole
-semantic implementation authority. Under ADR-0008, accepted successor default-
-branch publication switches authority to RunenGPU; the predecessor then remains
-only as a frozen, deletion-bound copy until exact-revision downstream cutover
-and predecessor deletion are accepted.
+During bootstrap and the unmerged extraction candidate, Runenwerk remained the
+sole RunenGPU semantic implementation authority. Under ADR-0008, accepted
+successor default-branch publication switched semantic authority to
+`dornglut/runen-gpu`; the Runenwerk predecessor then became frozen and
+deletion-bound until the exact-revision downstream cutover completed.
+
+That transfer is now complete. `dornglut/runen-gpu` is the sole RunenGPU semantic
+implementation authority. Runenwerk consumes an exact accepted RunenGPU revision
+and retains only downstream integration; the predecessor RunenGPU source and
+namespace were deleted. The paragraph above records historical authority
+transition, not an active migration state.
