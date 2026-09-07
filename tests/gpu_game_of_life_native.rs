@@ -9,6 +9,9 @@
 use runen_gpu::*;
 use std::time::{Duration, Instant};
 
+#[path = "gpu_game_of_life_native/visual.rs"]
+mod visual;
+
 const WIDTH: u32 = 160;
 const HEIGHT: u32 = 90;
 const CELL_COUNT: usize = (WIDTH as usize) * (HEIGHT as usize);
