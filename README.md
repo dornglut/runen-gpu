@@ -1,77 +1,63 @@
-# Rust Framework Template
+# RunenGPU
 
-`dornglut/rust-framework-template` is a one-time bootstrap baseline for new
-Dornglut Rust framework repositories.
-
-It provides a minimal repository shape, repository-owned validation entrypoint,
-bootstrap guidance, and licensing/provenance rules. It is not a product,
-framework runtime, or ongoing synchronization authority.
+RunenGPU is a standalone Rust framework for backend-neutral GPU execution
+contracts. It is intended to own reusable GPU execution semantics while keeping
+renderer and application meaning above the framework boundary.
 
 ## Maturity
 
-This repository is intentionally minimal bootstrap infrastructure. It proves a
-working repository shape and validation baseline; it does not define a product
-runtime or public framework API.
+This repository is in GX bootstrap and extraction preparation. It establishes
+the standalone repository authority, but it does not yet contain the transferred
+RunenGPU implementation. Runenwerk remains the semantic implementation
+authority until the later ADR-0008 successor-acceptance switch.
 
 ## Boundary
 
-The template owns only generic bootstrap infrastructure:
+RunenGPU will own reusable GPU execution semantics, resource/work submission
+contracts, and private backend realization. It does not own renderer image
+formation, scene/material/lighting semantics, ECS/UI/world/application behavior,
+window/event-loop ownership, shader-file policy, product recovery, or media and
+artifact persistence.
 
-- Rust package and workspace conventions;
-- root architecture, testing, and agent entrypoints;
-- one canonical `cargo validate` command;
-- a thin immutable CI caller;
-- bootstrap guidance for identity, ownership, licensing, toolchain, settings,
-  validation extensions, conformance, provenance, and deviations.
+## Package
 
-Generated repositories own their implementation, public API, architecture,
-dependencies, compatibility, releases, and product-specific validation.
-
-## Bootstrap
-
-A repository created from this template must resolve its own:
-
-1. repository, package, and crate identity;
-2. profile, lifecycle, and contribution classification;
-3. public license class and required license files;
-4. product MSRV and toolchain;
-5. repository visibility, merge policy, branch protection, and security controls;
-6. canonical validation extensions;
-7. downstream conformance workload when a public framework contract exists;
-8. extraction and source provenance when applicable;
-9. every intentional deviation from this baseline.
-
-The template is irrelevant after bootstrap. Do not add synchronization or
-template-update machinery to generated repositories.
-
-See [BOOTSTRAP.md](BOOTSTRAP.md).
+```text
+package: runen-gpu
+crate: runen_gpu
+version: 0.1.0
+edition: 2024
+MSRV: 1.87
+publish: false
+```
 
 ## Validation
 
-`cargo validate` is the single repository-owned validation command.
-
-It verifies the required template authority files, formatting, workspace tests,
-Clippy with warnings denied, rustdoc with warnings denied, Git whitespace, and
-unchanged repository state.
-
-CI invokes the same command through the accepted immutable
-`dornglut/github-workflows` reusable Rust validation workflow.
+`cargo validate` is the single repository-owned validation command. It verifies
+the required authority files, formatting, locked workspace tests, strict
+Clippy, rustdoc with warnings denied, the declared MSRV, product identity and
+license consistency, Git whitespace, and unchanged repository state.
 
 See [TESTING.md](TESTING.md).
 
-## Architecture and policy
+## Authority and policy
 
 - [Architecture](ARCHITECTURE.md)
 - [Testing](TESTING.md)
-- [Bootstrap](BOOTSTRAP.md)
-- [Agent guide](AGENTS.md)
+- [Bootstrap and provenance](BOOTSTRAP.md)
+- [Executor guidance](AGENTS.md)
 - [Organization contribution guidance](https://github.com/dornglut/.github/blob/main/CONTRIBUTING.md)
 - [Organization security policy](https://github.com/dornglut/.github/blob/main/SECURITY.md)
+- [Public license](LICENSE)
+- [Commercial-license guidance](LICENSING.md)
+
+## Contribution
+
+Tracked-content contributions are currently `owner-only`. Issues, discussion,
+reviews, and reproducible reports may still be used through the repository's
+public channels. This posture remains until an accepted inbound mechanism
+preserves the rights needed for commercial relicensing.
 
 ## License
 
-This template repository is available under the [Apache License 2.0](LICENSE).
-
-A generated repository must select its own product license before accepting
-substantive implementation. The template's Apache-2.0 license does not become
-the generated product's licensing authority.
+RunenGPU is publicly represented under [GPL-3.0-only](LICENSE). A separately
+governed commercial licensing path is described in [LICENSING.md](LICENSING.md).

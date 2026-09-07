@@ -3,8 +3,8 @@
 version = 4
 
 [[package]]
-name = "rust-framework-template"
-version = "0.0.0"
+name = "runen-gpu"
+version = "0.1.0"
 
 [[package]]
 name = "xtask"

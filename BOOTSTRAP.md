@@ -1,103 +1,86 @@
-# Bootstrap procedure
+# RunenGPU bootstrap and provenance
 
-This template is a one-time starting point. A generated repository must establish
-its own current authority before accepting substantive implementation.
+This record captures stable bootstrap facts and the boundary before extraction.
+It is not a branch, pull-request, workflow-run, or current-head ledger.
 
-## 1. Identity
+## Repository recreation
 
-Replace the placeholder repository, package, crate, version, description, and
-repository metadata with the generated repository's accepted identity.
+The originally reserved empty shell was deleted and recreated from the accepted
+template. The repository identity therefore changed:
 
-Do not leave `rust-framework-template` as an active product identity.
+```text
+prior empty-shell repository ID: 1358301376
+current recreated repository ID: 1359449274
+```
 
-## 2. Classification
+The deleted shell contained no commits, refs, package, implementation, release,
+or semantic authority. Its deletion and recreation did not duplicate source
+authority.
 
-Resolve and record:
+## Accepted template provenance
 
-- repository profile;
-- lifecycle;
-- contribution mode;
-- owning domain;
-- relationship to existing repositories.
+```text
+template repository: dornglut/rust-framework-template
+accepted template commit: 500461d51fe155febc806e288e5bc013e413a785
+accepted template tree: 1e1ae24713cd48b5ea2c3fe1da87cf8dd8f8358a
+generated RunenGPU initial commit: e30d05729ed7ac9cabdfb649ad8af6212b8cc0b3
+generated RunenGPU initial tree: 1e1ae24713cd48b5ea2c3fe1da87cf8dd8f8358a
+```
 
-Use the accepted organization vocabulary rather than inventing local property
-values.
+The generated initial tree exactly matched the accepted template tree, and
+generated-repository validation passed during bootstrap proof. The historical
+template material originated under the Apache-2.0 framework-template grant; that
+historical grant remains historical and is not an ongoing synchronization or
+architecture authority.
 
-## 3. Licensing
+## Product decisions
 
-Select the product license class before substantive implementation.
+```text
+package: runen-gpu
+crate: runen_gpu
+version: 0.1.0
+edition: 2024
+MSRV: 1.87
+publish: false
+features: default=[]
+license: GPL-3.0-only
+```
 
-Establish the required current `LICENSE`, package SPDX metadata, README license
-statement, and any required additional licensing documentation.
+RunenGPU is a standalone product repository with one framework package. `xtask`
+is repository tooling only. Runenwerk remains the sole semantic implementation
+authority during this bootstrap; this issue transfers no implementation.
 
-The template's Apache-2.0 license is the template's own current license; it is
-not a generic product-license choice.
+The repository classification is `profile=rust-framework`, `lifecycle=active`,
+and `contribution=owner-only`, with public visibility and `main` as the default
+branch. These are repository posture decisions, not implementation authority.
 
-License changes are prospective. Historical grants remain historical evidence,
-and third-party material keeps its own license.
+## Intentional deviations from the accepted template
 
-## 4. Toolchain
+1. RunenGPU repository, package, and crate identity.
+2. Initial standalone SemVer `0.1.0`.
+3. Product MSRV `1.87` rather than the template tooling baseline.
+4. GPL-3.0-only current representation and `LICENSING.md`.
+5. RunenGPU-local README, architecture, testing, agent, and bootstrap guidance.
+6. RunenGPU validation and workflow identity.
+7. Product identity, license, and MSRV validation guards.
+8. Implementation-empty RunenGPU crate documentation.
+9. RunenGPU repository profile, settings, and owner-only contribution posture.
+10. Removal of the template `unsafe_code = "forbid"` lint because GX did not
+    accept that source constraint; no replacement unsafe-code policy is added.
 
-Resolve the generated repository's MSRV and toolchain from product evidence.
+## Future extraction provenance
 
-Do not assume the template's current toolchain is the generated product's final
-MSRV. Update the package metadata and toolchain declaration together.
+The later, separately authorized extraction has this stable boundary:
 
-## 5. Repository settings
+```text
+predecessor: dornglut/runenwerk
+transfer boundary: engine/src/plugins/gpu/**
+predecessor origin: 5bbdab36ae661d99432bfe5d215062c397aac975
+accepted GX census base: a27dbf341220205e69f8adfc92617d08646c8165
+```
 
-Establish the repository's accepted GitHub posture:
-
-- public or explicitly accepted visibility;
-- default branch `main`;
-- squash merge enabled;
-- merge commits disabled;
-- rebase merge disabled unless specifically justified;
-- merged head branches deleted;
-- normal changes through pull requests;
-- canonical validation required;
-- conversations resolved before merge;
-- force pushes and default-branch deletion blocked;
-- linear history preferred;
-- no meaningless solo-maintainer approval count;
-- applicable security controls enabled or recorded as platform deviations.
-
-## 6. Validation
-
-Keep `cargo validate` as the canonical command.
-
-Extend the local `xtask` only when the product has a demonstrated validation
-requirement. Product-specific checks remain repository-local and are not moved
-into shared CI.
-
-## 7. Downstream conformance
-
-When the framework exposes a public contract consumed by another repository,
-create an independent downstream conformance package or workload. Do not use
-the template itself as conformance evidence.
-
-## 8. Extraction and provenance
-
-If implementation is transferred from another repository, record:
-
-- source repository and accepted source revision;
-- source path or boundary;
-- ownership and licensing disposition;
-- transfer rationale and scope;
-- consumer migration boundary;
-- deviations introduced during extraction.
-
-The template does not grant authority to transfer source. Extraction remains
-owned by the accepted source and destination work.
-
-## 9. Deviations
-
-Record every intentional deviation from this template baseline in the generated
-repository's appropriate authority.
-
-Do not preserve obsolete template material merely for tree similarity.
-
-## Completion
-
-After these decisions are accepted, the template ceases to be relevant. The
-generated repository becomes the sole authority for its code, architecture,
-validation semantics, roadmap, releases, and compatibility.
+Engineering #9 transfers zero RunenGPU implementation source and establishes
+only repository authority/readiness. The later extraction must be owned by a
+RunenGPU-local issue and follow ADR-0008: accepted Runenwerk implementation,
+unmerged successor candidate, successor acceptance, then exact-pin cutover and
+predecessor deletion in Runenwerk.

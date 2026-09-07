@@ -1,49 +1,42 @@
-# Architecture
-
-## Boundary
-
-`rust-framework-template` is bootstrap infrastructure. Its purpose is to
-provide a minimal, reusable starting shape for a new Dornglut Rust framework
-repository.
-
-It owns no runtime behavior, public product contract, domain model, renderer,
-GPU subsystem, ECS, service, application, or product data.
-
-## Repository shape
-
-The baseline consists of:
-
-- a tiny non-published root Rust library used to prove the package baseline;
-- a local `xtask` that owns canonical validation;
-- a thin immutable shared-workflow caller;
-- root agent, architecture, testing, and bootstrap documentation;
-- the repository's Apache-2.0 license.
-
-No empty taxonomy directories or product-specific modules are created.
+# RunenGPU architecture
 
 ## Dependency direction
 
 ```text
-repository source
-    └── root package
-
-validation authority
-    └── xtask
-          └── cargo / git commands
-
-CI orchestration
-    └── dornglut/github-workflows
-          └── cargo +stable validate
+Runenwerk host/integration adapters
+    -> RunenRender semantic rendering
+        -> RunenGPU generic GPU execution
+            -> private backend implementation
 ```
 
-The reusable workflow orchestrates validation but does not define its meaning.
-The `xtask` is repository-local validation authority.
+Independent non-render consumers may also depend directly downward on RunenGPU.
+RunenGPU has no upward dependency on Runenwerk or domain integration.
 
-## Generated repositories
+## Ownership
 
-A generated repository replaces the placeholder package identity and source,
-selects its own license and toolchain contract, establishes its repository
-settings, and extends validation only for proven product-specific requirements.
+RunenGPU owns reusable GPU execution semantics: backend-neutral public contracts
+for capabilities, resources, work, submission, uploads/readback, surfaces, and
+device outcomes. The accepted extraction target uses WGPU as a private backend
+realization; public contracts remain backend-neutral and expose no general raw-
+WGPU escape hatch.
 
-After bootstrap, the template is not an architectural dependency and must not
-remain a synchronization authority.
+RunenGPU does not own renderer image formation; scene, material, lighting,
+visibility, or presentation semantics; ECS, UI, world, or application behavior;
+application scheduling; window/event-loop ownership; shader filesystem/watch,
+reload, or last-known-good policy; product recovery; or persisted PNG, video, or
+other artifact policy.
+
+## Repository boundary
+
+RunenGPU is one product package: `runen-gpu` / `runen_gpu`. `xtask` is tooling,
+not a second product or release boundary. Dependency direction is one-way and
+there are no compatibility, forwarding, mirror, or template-synchronization
+paths.
+
+## Authority transfer
+
+During bootstrap and an unmerged extraction candidate, Runenwerk remains the sole
+semantic implementation authority. Under ADR-0008, accepted successor default-
+branch publication switches authority to RunenGPU; the predecessor then remains
+only as a frozen, deletion-bound copy until exact-revision downstream cutover
+and predecessor deletion are accepted.
