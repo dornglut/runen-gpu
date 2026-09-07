@@ -1,34 +1,53 @@
-# Rust Framework Template Agent Guide
+# RunenGPU executor contract
 
-Start with `README.md`, `ARCHITECTURE.md`, `TESTING.md`, and `BOOTSTRAP.md`.
+Begin with `README.md`, `ARCHITECTURE.md`, `TESTING.md`, `BOOTSTRAP.md`, and the
+current owning issue. Confirm the accepted base, repository state, and applicable
+Engineering and Runenwerk authority before editing.
 
-## Scope
+## Durable constraints
 
-This repository owns a generic, one-time bootstrap baseline for Dornglut Rust
-framework repositories. It does not own product behavior, product architecture,
-product dependencies, releases, or ongoing synchronization.
+- Keep one semantic authority per concern and preserve one-way dependencies.
+- Keep public RunenGPU contracts backend-neutral. After extraction, WGPU is a
+  private implementation authority; no public raw-device, raw-queue, or generic
+  backend escape hatch is allowed.
+- Keep one RunenGPU product package unless later independent authority proves a
+  separate release boundary. `xtask` is repository tooling only.
+- Do not place Runenwerk, RunenRender, ECS, UI, SDF, world, or application types
+  in public RunenGPU contracts.
+- Do not add compatibility aliases, forwarding packages/modules, mirrors, source
+  includes, submodules, moving-branch dependencies, or duplicate execution
+  authority.
+- Do not transfer implementation under the bootstrap boundary. Source extraction
+  requires a separately accepted repository-local issue and successor branch.
+- Keep tracked-content contributions `owner-only` until an accepted inbound
+  contribution mechanism preserves commercial relicensing rights.
 
-## Rules
+## ADR-0008 sequence
 
-- Keep the template generic and one-shot.
-- Do not add product-specific implementation or dependencies.
-- Do not copy sibling repository roadmaps, status, issues, or live Project state.
-- Do not create compatibility forwarders, aliases, mirrors, or synchronization
-  machinery.
-- Preserve one semantic authority for each concern.
-- Keep the canonical validation command as `cargo validate`.
-- Keep CI a thin read-only caller of repository-owned validation.
-- Resolve generated repository identity, license, MSRV, settings, conformance,
-  provenance, and deviations during bootstrap rather than freezing them here.
+```text
+accepted Runenwerk implementation
+    -> sole semantic source authority
+unmerged runen-gpu extraction candidate
+    -> candidate only
+accepted runen-gpu successor on default branch
+    -> semantic authority switches
+Runenwerk predecessor
+    -> frozen and deletion-bound
+```
 
-## Required workflow
+The historical framework template is one-time provenance, not synchronization or
+architecture authority. Do not begin the ADR-0008 authority switch or modify
+Runenwerk during bootstrap.
 
-1. Read the current repository authority and accepted Engineering standards.
-2. Keep changes bounded to the template's generic bootstrap purpose.
-3. Run `cargo validate` from a suitable checked-out Rust executor when one is
-   available; do not simulate local validation when the selected procedure lacks
-   local execution.
-4. Validate the exact feature head through repository-owned CI before acceptance.
-5. Merge only the exact reviewed head after reconciling current `main`.
+## Validation and evidence
 
-The template is not an ongoing authority for repositories generated from it.
+Run the canonical command from a clean checkout:
+
+```text
+cargo validate
+```
+
+CI must validate the exact reviewed feature head through the thin immutable
+caller. Reconcile `main`, branch state, repository settings, and the observed
+check context before guarded squash merge. Do not claim CI, runtime, browser, or
+platform evidence that was not observed.

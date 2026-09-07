@@ -1,4 +1,5 @@
-//! Placeholder library for the Rust framework bootstrap template.
+//! RunenGPU's backend-neutral GPU execution contract.
 //!
-//! Generated repositories replace this package identity and source during
-//! bootstrap. The template itself owns no product semantics.
+//! This repository is currently in bootstrap and extraction preparation. The
+//! implementation remains authoritative in Runenwerk until the later ADR-0008
+//! successor-acceptance switch; no GPU implementation is exposed here yet.

@@ -1,12 +1,15 @@
 [package]
-name = "rust-framework-template"
-version = "0.0.0"
+name = "runen-gpu"
+version = "0.1.0"
 edition = "2024"
-rust-version = "1.93.0"
+rust-version = "1.87"
 license.workspace = true
-repository = "https://github.com/dornglut/rust-framework-template"
-description = "Reusable Rust framework bootstrap template"
+repository = "https://github.com/dornglut/runen-gpu"
+description = "Backend-neutral GPU execution framework"
 publish = false
+
+[features]
+default = []
 
 [workspace]
 resolver = "3"
@@ -14,13 +17,10 @@ members = ["xtask"]
 
 [workspace.package]
 edition = "2024"
-license = "Apache-2.0"
+license = "GPL-3.0-only"
 
 [lints]
 workspace = true
-
-[workspace.lints.rust]
-unsafe_code = "forbid"
 
 [workspace.lints.clippy]
 all = { level = "deny", priority = -1 }

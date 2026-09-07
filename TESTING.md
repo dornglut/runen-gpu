@@ -7,19 +7,22 @@ cargo validate
 ```
 
 This command is implemented by the repository-local `xtask` and is the merge
-readiness baseline for this template.
+readiness baseline for the bootstrap repository.
 
 ## Baseline checks
 
-Validation fails closed when:
+At bootstrap, this proves repository/package integrity rather than the future
+GX-X02 GPU runtime portfolio. It covers:
 
-- a required template authority file is missing;
-- Rust formatting is not clean;
-- workspace tests fail;
-- Clippy emits warnings;
-- rustdoc emits warnings;
-- `git diff --check` reports whitespace errors;
-- validation changes repository state.
+- a clean starting repository and required authority files;
+- rustfmt;
+- locked workspace tests;
+- strict Clippy;
+- rustdoc with warnings denied;
+- an executable Rust 1.87 MSRV workspace check;
+- product identity and GPL license consistency;
+- Git whitespace checks; and
+- validation not mutating repository state.
 
 The validator starts from a clean repository and verifies that the repository
 remains unchanged after the checks.
@@ -39,6 +42,6 @@ checked-out repository.
 Local validation is preparation. Pull-request acceptance requires independent
 repository-owned CI against the exact reviewed feature head.
 
-Product-specific target matrices, dependency policy, benchmarks, native/browser
-proofs, and downstream conformance workloads do not belong in this generic
-baseline.
+Future extraction work separately owns native, Wasm, browser, downstream,
+runtime, benchmark, and conformance evidence. No such proof is claimed by this
+bootstrap baseline or moved into `runen-gpu` yet.
