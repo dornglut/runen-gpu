@@ -6,10 +6,10 @@ renderer and application meaning above the framework boundary.
 
 ## Maturity
 
-This repository is in GX bootstrap and extraction preparation. It establishes
-the standalone repository authority, but it does not yet contain the transferred
-RunenGPU implementation. Runenwerk remains the semantic implementation
-authority until the later ADR-0008 successor-acceptance switch.
+This repository contains the extracted RunenGPU implementation and its
+standalone proof portfolio. The public API is backend-neutral; WGPU is a
+private realization. Runenwerk integration and any predecessor cutover remain
+separate ADR-0008 work and are not part of this repository.
 
 ## Boundary
 
@@ -33,11 +33,18 @@ publish: false
 ## Validation
 
 `cargo validate` is the single repository-owned validation command. It verifies
-the required authority files, formatting, locked workspace tests, strict
-Clippy, rustdoc with warnings denied, the declared MSRV, product identity and
-license consistency, Git whitespace, and unchanged repository state.
+the required authority files, extraction boundary, dependency audit, locked
+workspace tests, the independent downstream package, strict Clippy, rustdoc
+with warnings denied, the declared MSRV, product identity and license
+consistency, Git whitespace, and unchanged repository state.
 
 See [TESTING.md](TESTING.md).
+
+The standalone entry points are the public items re-exported from
+[`runen_gpu`](src/lib.rs). A small independent consumer is maintained under
+[`conformance/downstream`](conformance/downstream), and public compute,
+render, runtime-binding, and native-host-surface examples live under
+[`examples`](examples).
 
 ## Authority and policy
 

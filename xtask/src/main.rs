@@ -7,12 +7,16 @@ use std::{
 const REQUIRED_FILES: &[&str] = &[
     ".cargo/config.toml",
     ".github/workflows/validation.yml",
+    ".github/workflows/runengpu-conformance.yml",
     ".gitignore",
     "AGENTS.md",
     "ARCHITECTURE.md",
     "BOOTSTRAP.md",
     "Cargo.lock",
     "Cargo.toml",
+    "conformance/downstream/Cargo.lock",
+    "conformance/downstream/Cargo.toml",
+    "conformance/downstream/src/main.rs",
     "LICENSE",
     "LICENSING.md",
     "README.md",
@@ -60,6 +64,7 @@ fn validate() -> Result<(), String> {
 
     validate_required_files(&root)?;
     validate_product_identity(&root)?;
+    validate_extraction_boundary(&root)?;
 
     let initial_state = git_status(&root)?;
     if !initial_state.is_empty() {
@@ -69,7 +74,41 @@ fn validate() -> Result<(), String> {
     }
 
     run(&root, "cargo", &["fmt", "--all", "--", "--check"])?;
+    run(
+        &root,
+        "cargo",
+        &["metadata", "--locked", "--format-version", "1"],
+    )?;
+    run(
+        &root,
+        "cargo",
+        &["tree", "-p", "runen-gpu", "-e", "normal", "--locked"],
+    )?;
+    run(
+        &root,
+        "cargo",
+        &[
+            "tree",
+            "-p",
+            "runen-gpu",
+            "--target",
+            "wasm32-unknown-unknown",
+            "-e",
+            "normal",
+            "--locked",
+        ],
+    )?;
     run(&root, "cargo", &["test", "--workspace", "--locked"])?;
+    run(
+        &root,
+        "cargo",
+        &[
+            "test",
+            "--manifest-path",
+            "conformance/downstream/Cargo.toml",
+            "--locked",
+        ],
+    )?;
     run(
         &root,
         "cargo",
@@ -161,6 +200,122 @@ fn validate_product_identity(root: &Path) -> Result<(), String> {
     }
 
     Ok(())
+}
+
+fn validate_extraction_boundary(root: &Path) -> Result<(), String> {
+    let manifest = read_file(root, "Cargo.toml")?;
+    let dependencies = section(&manifest, "[dependencies]")?;
+    let allowed_production = [
+        "bytemuck",
+        "naga",
+        "raw-window-handle",
+        "tokio",
+        "tracing",
+        "wgpu",
+    ];
+    for line in dependencies.lines().filter(|line| !line.trim().is_empty()) {
+        let name = line
+            .split_once('=')
+            .map(|(name, _)| name.trim())
+            .unwrap_or_default();
+        if !allowed_production.contains(&name) {
+            return Err(format!(
+                "Cargo.toml contains an unaccepted production dependency: {name}"
+            ));
+        }
+    }
+    if dependencies.contains("git =") || dependencies.contains("path =") {
+        return Err(
+            "standalone production manifest contains a moving/source-coupled dependency".to_owned(),
+        );
+    }
+
+    let source_root = root.join("src");
+    let mut source_paths = Vec::new();
+    collect_files(&source_root, &mut source_paths)?;
+    for path in source_paths {
+        let source = fs::read_to_string(&path)
+            .map_err(|error| format!("failed to read {}: {error}", path.display()))?;
+        let executable = without_line_comments(&source);
+        let relative = path
+            .strip_prefix(root)
+            .map_err(|error| format!("failed to relativize {}: {error}", path.display()))?;
+        let is_private_backend = relative.starts_with(Path::new("src/backend/"));
+        if !is_private_backend && executable.contains("wgpu::") {
+            return Err(format!(
+                "public RunenGPU source exposes raw WGPU usage: {}",
+                relative.display()
+            ));
+        }
+        for forbidden in [
+            "engine::",
+            "crate::plugins::",
+            "runenwerk",
+            "include!(",
+            "include_str!(",
+        ] {
+            if executable.contains(forbidden) {
+                return Err(format!(
+                    "standalone source contains forbidden coupling {forbidden:?}: {}",
+                    relative.display()
+                ));
+            }
+        }
+    }
+    let lib = read_file(root, "src/lib.rs")?;
+    if lib.contains("pub mod backend") || lib.contains("pub use backend") {
+        return Err("private backend module is publicly wired".to_owned());
+    }
+    if root.join(".gitmodules").exists() {
+        return Err("standalone repository must not contain a submodule".to_owned());
+    }
+
+    let downstream_manifest = read_file(root, "conformance/downstream/Cargo.toml")?;
+    let downstream_dependencies = section(&downstream_manifest, "[dependencies]")?;
+    if downstream_dependencies.contains("workspace = true")
+        || downstream_dependencies.contains("wgpu")
+        || downstream_dependencies.contains("engine")
+        || !downstream_dependencies.contains("path = \"../..\"")
+    {
+        return Err("independent downstream dependency boundary is not isolated".to_owned());
+    }
+    Ok(())
+}
+
+fn section<'a>(manifest: &'a str, header: &str) -> Result<&'a str, String> {
+    let start = manifest
+        .find(header)
+        .ok_or_else(|| format!("manifest is missing {header}"))?;
+    let contents = &manifest[start + header.len()..];
+    let end = contents.find("\n[").unwrap_or(contents.len());
+    Ok(&contents[..end])
+}
+
+fn collect_files(root: &Path, paths: &mut Vec<PathBuf>) -> Result<(), String> {
+    for entry in
+        fs::read_dir(root).map_err(|error| format!("failed to read {}: {error}", root.display()))?
+    {
+        let path = entry
+            .map_err(|error| format!("failed to read source entry: {error}"))?
+            .path();
+        if path.is_dir() {
+            collect_files(&path, paths)?;
+        } else if path.extension().is_some_and(|extension| extension == "rs") {
+            paths.push(path);
+        }
+    }
+    Ok(())
+}
+
+fn without_line_comments(contents: &str) -> String {
+    contents
+        .lines()
+        .filter(|line| {
+            let trimmed = line.trim_start();
+            !trimmed.starts_with("//") && !trimmed.starts_with('*')
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 fn read_file(root: &Path, relative_path: &str) -> Result<String, String> {

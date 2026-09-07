@@ -47,8 +47,9 @@ license: GPL-3.0-only
 ```
 
 RunenGPU is a standalone product repository with one framework package. `xtask`
-is repository tooling only. Runenwerk remains the sole semantic implementation
-authority during this bootstrap; this issue transfers no implementation.
+is repository tooling only. The accepted extraction now supplies the semantic
+implementation in this repository; Runenwerk integration and predecessor
+deletion remain separate ADR-0008 work.
 
 The repository classification is `profile=rust-framework`, `lifecycle=active`,
 and `contribution=owner-only`, with public visibility and `main` as the default
@@ -63,24 +64,24 @@ branch. These are repository posture decisions, not implementation authority.
 5. RunenGPU-local README, architecture, testing, agent, and bootstrap guidance.
 6. RunenGPU validation and workflow identity.
 7. Product identity, license, and MSRV validation guards.
-8. Implementation-empty RunenGPU crate documentation.
+8. RunenGPU crate and extraction documentation.
 9. RunenGPU repository profile, settings, and owner-only contribution posture.
 10. Removal of the template `unsafe_code = "forbid"` lint because GX did not
     accept that source constraint; no replacement unsafe-code policy is added.
 
 ## Future extraction provenance
 
-The later, separately authorized extraction has this stable boundary:
+The accepted extraction has this stable boundary:
 
 ```text
 predecessor: dornglut/runenwerk
 transfer boundary: engine/src/plugins/gpu/**
 predecessor origin: 5bbdab36ae661d99432bfe5d215062c397aac975
 accepted GX census base: a27dbf341220205e69f8adfc92617d08646c8165
+accepted RunenGPU extraction source snapshot: 8b38ac009eba279705318f13123a13697228d6b3
 ```
 
-Engineering #9 transfers zero RunenGPU implementation source and establishes
-only repository authority/readiness. The later extraction must be owned by a
-RunenGPU-local issue and follow ADR-0008: accepted Runenwerk implementation,
-unmerged successor candidate, successor acceptance, then exact-pin cutover and
-predecessor deletion in Runenwerk.
+The implementation source was transferred from the accepted Runenwerk snapshot
+without preserving Runenwerk imports or a workspace dependency. The source
+boundary is `engine/src/plugins/gpu/**`; the successor keeps public contracts
+under `src/api/**` and private realization under `src/backend/wgpu/**`.
