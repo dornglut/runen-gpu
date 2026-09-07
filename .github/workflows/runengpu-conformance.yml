@@ -180,6 +180,27 @@ jobs:
             native_game_of_life_proves_exact_160x90_seed_16_step_oracle \
             --locked -- --ignored --nocapture
 
+      - name: Run deterministic G5-C02 Game of Life visual sequence proof
+        env:
+          RUST_BACKTRACE: '1'
+          RUNEN_GPU_PROOF_ARTIFACT_DIR: ${{ runner.temp }}/runengpu-proof-artifacts
+        run: |
+          set -euo pipefail
+          cargo +stable test --test gpu_game_of_life_native \
+            visual::native_game_of_life_retains_exact_17_frame_visual_sequence \
+            --locked -- --ignored --nocapture --test-threads=1
+          root="${RUNEN_GPU_PROOF_ARTIFACT_DIR}/game-of-life"
+          test -s "${root}/manifest.json"
+          test "$(find "${root}" -maxdepth 1 -type f -name 'frame_*.png' | wc -l)" -eq 17
+          find "${root}" -maxdepth 1 -type f -name 'frame_*.png' -exec test -s {} \;
+
+      - name: Retain deterministic G5-C02 Game of Life visual artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: runengpu-game-of-life-${{ steps.revision.outputs.expected_revision }}
+          path: ${{ runner.temp }}/runengpu-proof-artifacts/game-of-life
+          if-no-files-found: error
+
       - name: Run native G5 transfer and G5R initial-content proofs
         env:
           RUST_BACKTRACE: '1'
