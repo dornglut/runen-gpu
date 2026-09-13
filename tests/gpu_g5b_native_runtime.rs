@@ -380,7 +380,12 @@ fn native_copy_context_with_policy(policy: GpuExecutionPolicy) -> GpuContext {
     context
 }
 
-fn native_texture_round_trip_graph() -> (GpuPreparedWorkGraph, GpuReadbackId, Vec<u8>) {
+fn native_texture_round_trip_graph() -> (
+    GpuPreparedWorkGraph,
+    GpuReadbackId,
+    GpuTransferRegion,
+    Vec<u8>,
+) {
     const WIDTH: u32 = 3;
     const HEIGHT: u32 = 2;
     const LAYERS: u32 = 2;
@@ -437,7 +442,8 @@ fn native_texture_round_trip_graph() -> (GpuPreparedWorkGraph, GpuReadbackId, Ve
     )
     .unwrap();
     let readback_id = GpuReadbackId::allocate().unwrap();
-    let readback = GpuReadbackOperation::new(region.into(), readback_id).unwrap();
+    let readback_source = GpuTransferRegion::Texture(region.clone());
+    let readback = GpuReadbackOperation::new(readback_source.clone(), readback_id).unwrap();
 
     let mut builder = GpuWorkFragmentBuilder::new(
         label("native texture transfer"),
@@ -461,6 +467,7 @@ fn native_texture_round_trip_graph() -> (GpuPreparedWorkGraph, GpuReadbackId, Ve
         )
         .unwrap(),
         readback_id,
+        readback_source,
         expected,
     )
 }
@@ -468,7 +475,7 @@ fn native_texture_round_trip_graph() -> (GpuPreparedWorkGraph, GpuReadbackId, Ve
 #[test]
 #[ignore = "requires a real Vulkan fallback adapter; executed by RunenGPU Native Conformance CI"]
 fn native_texture_preparation_accounts_for_private_staging_and_drop_releases_capacity() {
-    let (upload_graph, _, expected) = native_texture_round_trip_graph();
+    let (upload_graph, _, _, expected) = native_texture_round_trip_graph();
     let logical_bytes = u64::try_from(expected.len()).unwrap();
     let upload_policy = GpuExecutionPolicy::new(
         NonZeroUsize::new(2).unwrap(),
@@ -486,7 +493,7 @@ fn native_texture_preparation_accounts_for_private_staging_and_drop_releases_cap
     );
     assert_eq!(upload_context.execution_stats().prepared_submissions(), 0);
 
-    let (readback_graph, _, _) = native_texture_round_trip_graph();
+    let (readback_graph, _, _, _) = native_texture_round_trip_graph();
     let readback_policy = GpuExecutionPolicy::new(
         NonZeroUsize::new(2).unwrap(),
         NonZeroUsize::new(1).unwrap(),
@@ -504,7 +511,7 @@ fn native_texture_preparation_accounts_for_private_staging_and_drop_releases_cap
     assert_eq!(readback_context.execution_stats().prepared_submissions(), 0);
 
     let context = native_copy_context();
-    let (graph, _, _) = native_texture_round_trip_graph();
+    let (graph, _, _, _) = native_texture_round_trip_graph();
     let prepared = pollster::block_on(context.prepare_submission(graph)).unwrap();
     assert_eq!(context.execution_stats().prepared_submissions(), 1);
     drop(prepared);
@@ -515,7 +522,7 @@ fn native_texture_preparation_accounts_for_private_staging_and_drop_releases_cap
 #[ignore = "requires a real Vulkan fallback adapter; executed by RunenGPU Native Conformance CI"]
 fn native_texture_upload_readback_normalizes_private_row_padding() {
     let context = native_copy_context();
-    let (graph, readback_id, expected) = native_texture_round_trip_graph();
+    let (graph, readback_id, expected_source, expected) = native_texture_round_trip_graph();
 
     let prepared = pollster::block_on(context.prepare_submission(graph)).unwrap();
     let submission = context.submit_prepared(prepared).unwrap();
@@ -523,6 +530,7 @@ fn native_texture_upload_readback_normalizes_private_row_padding() {
         .readback(readback_id)
         .expect("accepted native texture readback must remain observable")
         .clone();
+    assert_eq!(readback.source(), &expected_source);
     let bytes = progress_to_readback(&context, &submission, &readback);
 
     assert_eq!(bytes.as_bytes(), expected.as_slice());
@@ -616,7 +624,13 @@ fn direct_copy_region(texture: &GpuTextureHandle) -> GpuTextureCopyRegion {
 
 fn direct_texture_copy_graph(
     bytes_per_row: u32,
-) -> (GpuPreparedWorkGraph, Vec<GpuReadbackId>, Vec<Vec<u8>>, u64) {
+) -> (
+    GpuPreparedWorkGraph,
+    Vec<GpuReadbackId>,
+    Vec<GpuTransferRegion>,
+    Vec<Vec<u8>>,
+    u64,
+) {
     let footprint = direct_copy_footprint(bytes_per_row);
     let mut allocator = GpuWorkResourceIdAllocator::new();
     let source_buffer = direct_copy_buffer(&mut allocator, "native direct-copy source", footprint);
@@ -667,6 +681,7 @@ fn direct_texture_copy_graph(
         GpuCopyOperation::texture_to_buffer(second_region, destination_layout).unwrap();
 
     let mut readback_ids = Vec::new();
+    let mut readback_sources = Vec::new();
     let mut readbacks = Vec::new();
     for row in 0..DIRECT_COPY_ROWS {
         let offset = u64::from(row) * u64::from(bytes_per_row);
@@ -681,8 +696,10 @@ fn direct_texture_copy_graph(
         )
         .unwrap();
         let id = GpuReadbackId::allocate().unwrap();
+        let source = GpuTransferRegion::Buffer(region);
         readback_ids.push(id);
-        readbacks.push(GpuReadbackOperation::new(region.into(), id).unwrap());
+        readback_sources.push(source.clone());
+        readbacks.push(GpuReadbackOperation::new(source, id).unwrap());
     }
 
     let name = "native direct texture copy";
@@ -726,6 +743,7 @@ fn direct_texture_copy_graph(
         )
         .unwrap(),
         readback_ids,
+        readback_sources,
         expected_rows,
         footprint,
     )
@@ -735,7 +753,8 @@ fn direct_texture_copy_graph(
 #[ignore = "requires a real Vulkan fallback adapter; executed by RunenGPU Native Conformance CI"]
 fn native_texture_copy_executes_all_directions_without_copy_scratch() {
     const BYTES_PER_ROW: u32 = 256;
-    let (graph, readback_ids, expected_rows, footprint) = direct_texture_copy_graph(BYTES_PER_ROW);
+    let (graph, readback_ids, expected_sources, expected_rows, footprint) =
+        direct_texture_copy_graph(BYTES_PER_ROW);
     let policy = GpuExecutionPolicy::new(
         NonZeroUsize::new(2).unwrap(),
         NonZeroUsize::new(1).unwrap(),
@@ -747,11 +766,16 @@ fn native_texture_copy_executes_all_directions_without_copy_scratch() {
 
     let prepared = pollster::block_on(context.prepare_submission(graph)).unwrap();
     let submission = context.submit_prepared(prepared).unwrap();
-    for (readback_id, expected) in readback_ids.into_iter().zip(expected_rows) {
+    for ((readback_id, expected_source), expected) in readback_ids
+        .into_iter()
+        .zip(expected_sources)
+        .zip(expected_rows)
+    {
         let readback = submission
             .readback(readback_id)
             .expect("accepted direct-copy row readback must remain observable")
             .clone();
+        assert_eq!(readback.source(), &expected_source);
         let bytes = progress_to_readback(&context, &submission, &readback);
         assert_eq!(bytes.as_bytes(), expected.as_slice());
     }
@@ -767,7 +791,7 @@ fn native_texture_copy_executes_all_directions_without_copy_scratch() {
 #[test]
 #[ignore = "requires a real Vulkan fallback adapter; executed by RunenGPU Native Conformance CI"]
 fn native_texture_copy_rejects_nonencodable_logical_row_stride_before_acceptance() {
-    let (graph, _, _, _) = direct_texture_copy_graph(DIRECT_COPY_ROW_BYTES);
+    let (graph, _, _, _, _) = direct_texture_copy_graph(DIRECT_COPY_ROW_BYTES);
     let context = native_copy_context();
 
     let error = pollster::block_on(context.prepare_submission(graph))

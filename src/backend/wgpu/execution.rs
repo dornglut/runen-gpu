@@ -15,12 +15,12 @@ use super::health::{WgpuDeviceFaultClass, WgpuDeviceFaultEvidence};
 use super::resource_realization::map_texture_aspect;
 use super::surface::execution::WgpuSurfaceLeaseGuard;
 use crate::{
-    GpuBufferInitialization, GpuBufferTextureLayout, GpuCapabilityAdmission, GpuClearOperation,
-    GpuContext, GpuContextAffinity, GpuCopyExtent, GpuCopyOperation, GpuDataLayout,
-    GpuDispatchSize, GpuExecutionLifecycleState, GpuExecutionPolicy, GpuExecutionStats,
-    GpuPipelineRealizationError, GpuPipelineRealizationErrorCategory, GpuPreparedInitialContent,
-    GpuPreparedSubmission, GpuPreparedSubmissionRejected, GpuPreparedTextureData,
-    GpuPreparedWorkGraph, GpuProgramBindingRealizationError,
+    GpuBufferInitialization, GpuBufferRegion, GpuBufferTextureLayout, GpuCapabilityAdmission,
+    GpuClearOperation, GpuContext, GpuContextAffinity, GpuCopyExtent, GpuCopyOperation,
+    GpuDataLayout, GpuDispatchSize, GpuExecutionLifecycleState, GpuExecutionPolicy,
+    GpuExecutionStats, GpuPipelineRealizationError, GpuPipelineRealizationErrorCategory,
+    GpuPreparedInitialContent, GpuPreparedSubmission, GpuPreparedSubmissionRejected,
+    GpuPreparedTextureData, GpuPreparedWorkGraph, GpuProgramBindingRealizationError,
     GpuProgramBindingRealizationErrorCategory, GpuReadback, GpuReadbackBytes, GpuReadbackId,
     GpuReadbackStatus, GpuRealizedBindGroup, GpuRealizedBuffer, GpuRealizedComputePipeline,
     GpuRealizedQuerySet, GpuRealizedTexture, GpuResourceLabel, GpuResourceProvenance,
@@ -476,8 +476,7 @@ enum PreparedExecutionOperation {
     Readback {
         id: GpuReadbackId,
         source: GpuRealizedBuffer,
-        source_offset: u64,
-        size: u64,
+        region: GpuBufferRegion,
         metadata: BufferReadbackMetadata,
     },
     TextureReadback {
@@ -804,17 +803,27 @@ impl WgpuExecutionState {
         let mut readbacks = BTreeMap::new();
         let mut public_readbacks = Vec::with_capacity(plan.readback_ids.len());
         for operation in &plan.operations {
-            let (readback_id, size, metadata) = match operation {
+            let (readback_id, source, size, metadata) = match operation {
                 PreparedExecutionOperation::Readback {
-                    id, size, metadata, ..
-                } => (*id, *size, ReadbackMetadata::Buffer(metadata.clone())),
+                    id,
+                    region,
+                    metadata,
+                    ..
+                } => (
+                    *id,
+                    GpuTransferRegion::Buffer(region.clone()),
+                    region.range().size(),
+                    ReadbackMetadata::Buffer(metadata.clone()),
+                ),
                 PreparedExecutionOperation::TextureReadback {
                     id,
+                    region,
                     staging,
                     metadata,
                     ..
                 } => (
                     *id,
+                    GpuTransferRegion::Texture(region.clone()),
                     staging.staging_byte_len,
                     ReadbackMetadata::Texture(metadata.clone()),
                 ),
@@ -831,7 +840,7 @@ impl WgpuExecutionState {
                     terminal: false,
                 },
             );
-            public_readbacks.push(GpuReadback::new(readback_id, readback_status));
+            public_readbacks.push(GpuReadback::new(readback_id, source, readback_status));
         }
         if readbacks.len() != plan.readback_ids.len() {
             return Err(GpuSubmissionRejectionReason::new(
@@ -1709,8 +1718,7 @@ async fn prepare_execution_plan(
                         operations.push(PreparedExecutionOperation::Readback {
                             id: readback.id(),
                             source: realized_buffer(context, &mut buffer_cache, source.buffer())?,
-                            source_offset: source.range().offset(),
-                            size,
+                            region: source.clone(),
                             metadata,
                         });
                     }
@@ -2419,12 +2427,12 @@ fn materialize_staging(
             }
             PreparedExecutionOperation::Readback {
                 id: readback_id,
-                size,
+                region,
                 ..
             } => {
                 let staging = Arc::new(backend.device.create_buffer(&BufferDescriptor {
                     label: Some("RunenGPU readback staging"),
-                    size: *size,
+                    size: region.range().size(),
                     usage: BufferUsages::COPY_DST | BufferUsages::MAP_READ,
                     mapped_at_creation: false,
                 }));
@@ -2680,8 +2688,7 @@ fn encode_submit_and_register(
             PreparedExecutionOperation::Readback {
                 id: readback_id,
                 source,
-                source_offset,
-                size,
+                region,
                 ..
             } => {
                 let staging_buffer = staging.readbacks.get(&index).ok_or_else(|| {
@@ -2692,10 +2699,10 @@ fn encode_submit_and_register(
                 })?;
                 encoder.copy_buffer_to_buffer(
                     &source.record.object,
-                    *source_offset,
+                    region.range().offset(),
                     staging_buffer,
                     0,
-                    *size,
+                    region.range().size(),
                 );
                 segment_readbacks.push((*readback_id, Arc::clone(staging_buffer)));
             }
