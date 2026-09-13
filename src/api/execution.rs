@@ -1,6 +1,6 @@
 use super::{
     GpuContextAffinity, GpuInitialCoverage, GpuProgramContractError, GpuReadbackBytes,
-    GpuReadbackId, GpuResourceRef, GpuSurfaceLeaseError, GpuWorkOperationError,
+    GpuReadbackId, GpuResourceRef, GpuSurfaceLeaseError, GpuTransferRegion, GpuWorkOperationError,
 };
 use core::fmt;
 use core::num::{NonZeroU64, NonZeroUsize};
@@ -289,16 +289,25 @@ pub enum GpuReadbackStatus {
 #[derive(Clone)]
 pub struct GpuReadback {
     id: GpuReadbackId,
+    source: GpuTransferRegion,
     status: Arc<Mutex<GpuReadbackStatus>>,
 }
 
 impl GpuReadback {
-    pub(crate) fn new(id: GpuReadbackId, status: Arc<Mutex<GpuReadbackStatus>>) -> Self {
-        Self { id, status }
+    pub(crate) fn new(
+        id: GpuReadbackId,
+        source: GpuTransferRegion,
+        status: Arc<Mutex<GpuReadbackStatus>>,
+    ) -> Self {
+        Self { id, source, status }
     }
 
     pub const fn id(&self) -> GpuReadbackId {
         self.id
+    }
+
+    pub fn source(&self) -> &GpuTransferRegion {
+        &self.source
     }
 
     pub fn status(&self) -> GpuReadbackStatus {
@@ -314,6 +323,7 @@ impl fmt::Debug for GpuReadback {
         formatter
             .debug_struct("GpuReadback")
             .field("id", &self.id)
+            .field("source", &self.source)
             .field("status", &self.status())
             .finish()
     }
