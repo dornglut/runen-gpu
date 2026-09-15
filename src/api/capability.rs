@@ -290,6 +290,12 @@ pub struct GpuLimits {
     max_dynamic_uniform_buffers_per_pipeline_layout: u32,
     max_dynamic_storage_buffers_per_pipeline_layout: u32,
     max_compute_workgroups_per_dimension: u32,
+    max_buffer_size: u64,
+    max_texture_dimension_1d: u32,
+    max_texture_dimension_3d: u32,
+    max_texture_array_layers: u32,
+    max_vertex_attributes: u32,
+    max_vertex_buffer_array_stride: u32,
 }
 
 impl GpuLimits {
@@ -306,6 +312,12 @@ impl GpuLimits {
         max_dynamic_uniform_buffers_per_pipeline_layout: u32,
         max_dynamic_storage_buffers_per_pipeline_layout: u32,
         max_compute_workgroups_per_dimension: u32,
+        max_buffer_size: u64,
+        max_texture_dimension_1d: u32,
+        max_texture_dimension_3d: u32,
+        max_texture_array_layers: u32,
+        max_vertex_attributes: u32,
+        max_vertex_buffer_array_stride: u32,
     ) -> Result<Self, GpuCapabilityAdmissionError> {
         if max_uniform_buffer_binding_size == 0
             || max_storage_buffer_binding_size == 0
@@ -316,6 +328,12 @@ impl GpuLimits {
             || max_bind_groups == 0
             || max_bind_groups_plus_vertex_buffers == 0
             || max_compute_workgroups_per_dimension == 0
+            || max_buffer_size == 0
+            || max_texture_dimension_1d == 0
+            || max_texture_dimension_3d == 0
+            || max_texture_array_layers == 0
+            || max_vertex_attributes == 0
+            || max_vertex_buffer_array_stride == 0
             || max_bind_groups_plus_vertex_buffers < max_bind_groups
             || max_bind_groups_plus_vertex_buffers < max_vertex_buffers
         {
@@ -339,6 +357,12 @@ impl GpuLimits {
             max_dynamic_uniform_buffers_per_pipeline_layout,
             max_dynamic_storage_buffers_per_pipeline_layout,
             max_compute_workgroups_per_dimension,
+            max_buffer_size,
+            max_texture_dimension_1d,
+            max_texture_dimension_3d,
+            max_texture_array_layers,
+            max_vertex_attributes,
+            max_vertex_buffer_array_stride,
         })
     }
 
@@ -375,6 +399,24 @@ impl GpuLimits {
     pub const fn max_compute_workgroups_per_dimension(self) -> u32 {
         self.max_compute_workgroups_per_dimension
     }
+    pub const fn max_buffer_size(self) -> u64 {
+        self.max_buffer_size
+    }
+    pub const fn max_texture_dimension_1d(self) -> u32 {
+        self.max_texture_dimension_1d
+    }
+    pub const fn max_texture_dimension_3d(self) -> u32 {
+        self.max_texture_dimension_3d
+    }
+    pub const fn max_texture_array_layers(self) -> u32 {
+        self.max_texture_array_layers
+    }
+    pub const fn max_vertex_attributes(self) -> u32 {
+        self.max_vertex_attributes
+    }
+    pub const fn max_vertex_buffer_array_stride(self) -> u32 {
+        self.max_vertex_buffer_array_stride
+    }
 
     #[allow(clippy::too_many_arguments)]
     pub(crate) const fn from_validated_adapter_facts(
@@ -389,6 +431,12 @@ impl GpuLimits {
         max_dynamic_uniform_buffers_per_pipeline_layout: u32,
         max_dynamic_storage_buffers_per_pipeline_layout: u32,
         max_compute_workgroups_per_dimension: u32,
+        max_buffer_size: u64,
+        max_texture_dimension_1d: u32,
+        max_texture_dimension_3d: u32,
+        max_texture_array_layers: u32,
+        max_vertex_attributes: u32,
+        max_vertex_buffer_array_stride: u32,
     ) -> Self {
         Self {
             max_uniform_buffer_binding_size,
@@ -402,6 +450,12 @@ impl GpuLimits {
             max_dynamic_uniform_buffers_per_pipeline_layout,
             max_dynamic_storage_buffers_per_pipeline_layout,
             max_compute_workgroups_per_dimension,
+            max_buffer_size,
+            max_texture_dimension_1d,
+            max_texture_dimension_3d,
+            max_texture_array_layers,
+            max_vertex_attributes,
+            max_vertex_buffer_array_stride,
         }
     }
 }
@@ -585,7 +639,7 @@ mod tests {
     use super::*;
 
     fn test_limits() -> GpuLimits {
-        GpuLimits::new(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1).unwrap()
+        GpuLimits::new(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 256 * 1024 * 1024, 8192, 2048, 256, 16, 2048).unwrap()
     }
 
     #[test]
@@ -740,14 +794,20 @@ mod tests {
 
     #[test]
     fn normalized_execution_limits_are_complete_and_consistent() {
-        let limits = GpuLimits::new(1, 2, 3, 4, 5, 8192, 4, 24, 8, 4, 65535).unwrap();
+        let limits = GpuLimits::new(1, 2, 3, 4, 5, 8192, 4, 24, 8, 4, 65535, 256 * 1024 * 1024, 8192, 2048, 256, 16, 2048).unwrap();
         assert_eq!(limits.max_texture_dimension_2d(), 8192);
         assert_eq!(limits.max_bind_groups(), 4);
         assert_eq!(limits.max_bind_groups_plus_vertex_buffers(), 24);
         assert_eq!(limits.max_dynamic_uniform_buffers_per_pipeline_layout(), 8);
         assert_eq!(limits.max_dynamic_storage_buffers_per_pipeline_layout(), 4);
         assert_eq!(limits.max_compute_workgroups_per_dimension(), 65535);
-        let no_dynamic_buffers = GpuLimits::new(1, 2, 3, 4, 5, 8192, 4, 24, 0, 0, 65535).unwrap();
+        assert_eq!(limits.max_buffer_size(), 256 * 1024 * 1024);
+        assert_eq!(limits.max_texture_dimension_1d(), 8192);
+        assert_eq!(limits.max_texture_dimension_3d(), 2048);
+        assert_eq!(limits.max_texture_array_layers(), 256);
+        assert_eq!(limits.max_vertex_attributes(), 16);
+        assert_eq!(limits.max_vertex_buffer_array_stride(), 2048);
+        let no_dynamic_buffers = GpuLimits::new(1, 2, 3, 4, 5, 8192, 4, 24, 0, 0, 65535, 256 * 1024 * 1024, 8192, 2048, 256, 16, 2048).unwrap();
         assert_eq!(
             no_dynamic_buffers.max_dynamic_uniform_buffers_per_pipeline_layout(),
             0
@@ -756,7 +816,7 @@ mod tests {
             no_dynamic_buffers.max_dynamic_storage_buffers_per_pipeline_layout(),
             0
         );
-        assert!(GpuLimits::new(1, 2, 3, 8, 5, 8192, 4, 4, 8, 4, 65535).is_err());
+        assert!(GpuLimits::new(1, 2, 3, 8, 5, 8192, 4, 4, 8, 4, 65535, 256 * 1024 * 1024, 8192, 2048, 256, 16, 2048).is_err());
     }
 
     #[test]
@@ -842,7 +902,7 @@ mod tests {
             Some(GpuCapabilityFeature::TimestampQuery)
         );
 
-        let invalid_limit = GpuLimits::new(0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1).unwrap_err();
+        let invalid_limit = GpuLimits::new(0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 256 * 1024 * 1024, 8192, 2048, 256, 16, 2048).unwrap_err();
         assert_eq!(
             invalid_limit.cause(),
             GpuCapabilityAdmissionCause::InvalidLimit

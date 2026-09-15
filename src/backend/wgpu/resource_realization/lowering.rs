@@ -53,10 +53,14 @@ pub(super) fn lower_buffer(
     if usages.contains(GpuBufferUsage::QueryResolve) {
         require_feature(context, identity, GpuCapabilityFeature::TimestampQuery)?;
     }
-    if descriptor.size_bytes() > context.backend.device.limits().max_buffer_size {
+    let device_limits = context.device_facts().device_limits().values();
+    let workload_limits = context.device_facts().workload_budget().limits();
+    if descriptor.size_bytes() > device_limits.max_buffer_size()
+        || descriptor.size_bytes() > workload_limits.max_buffer_size()
+    {
         return Err(incompatible(
             identity,
-            "buffer size exceeds the created device's maximum buffer size",
+            "buffer size exceeds an admitted or created-device limit",
         ));
     }
 
@@ -133,24 +137,25 @@ pub(super) fn lower_texture(
     )?;
 
     let extent = descriptor.extent();
-    let limits = context.backend.device.limits();
-    let within_limits = match descriptor.dimension() {
-        GpuTextureDimension::D1 => extent.width() <= limits.max_texture_dimension_1d,
+    let device_limits = context.device_facts().device_limits().values();
+    let workload_limits = context.device_facts().workload_budget().limits();
+    let within_limits = |limits: crate::GpuLimits| match descriptor.dimension() {
+        GpuTextureDimension::D1 => extent.width() <= limits.max_texture_dimension_1d(),
         GpuTextureDimension::D2 => {
-            extent.width() <= limits.max_texture_dimension_2d
-                && extent.height() <= limits.max_texture_dimension_2d
-                && extent.depth_or_layers() <= limits.max_texture_array_layers
+            extent.width() <= limits.max_texture_dimension_2d()
+                && extent.height() <= limits.max_texture_dimension_2d()
+                && extent.depth_or_layers() <= limits.max_texture_array_layers()
         }
         GpuTextureDimension::D3 => {
-            extent.width() <= limits.max_texture_dimension_3d
-                && extent.height() <= limits.max_texture_dimension_3d
-                && extent.depth_or_layers() <= limits.max_texture_dimension_3d
+            extent.width() <= limits.max_texture_dimension_3d()
+                && extent.height() <= limits.max_texture_dimension_3d()
+                && extent.depth_or_layers() <= limits.max_texture_dimension_3d()
         }
     };
-    if !within_limits {
+    if !within_limits(device_limits) || !within_limits(workload_limits) {
         return Err(incompatible(
             identity,
-            "texture extent exceeds the created device's dimension or array-layer limits",
+            "texture extent exceeds an admitted or created-device dimension or array-layer limit",
         ));
     }
     if descriptor.dimension() != GpuTextureDimension::D2 && descriptor.format().is_depth() {

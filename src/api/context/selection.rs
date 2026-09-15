@@ -707,7 +707,7 @@ mod tests {
             8,
             4,
             65_535,
-        )
+         256 * 1024 * 1024, 8192, 2048, 256, 16, 2048)
         .expect("complete test limits are valid")
     }
 
