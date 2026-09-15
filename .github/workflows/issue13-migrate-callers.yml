@@ -1,0 +1,101 @@
+name: Issue 13 caller migration helper
+
+on:
+  push:
+    branches:
+      - issue-13-texture-view-dimension-authority
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    name: Apply exact view-dimension caller migration
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out exact branch head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: issue-13-texture-view-dimension-authority
+          fetch-depth: 0
+
+      - name: Apply bounded replacements
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          replacements = {
+              "src/backend/wgpu/surface.rs": [
+                  (
+                      "    GpuTextureSubresourceRange, GpuTextureUsage, GpuTextureUsages, GpuTextureViewDescriptor,\n    GpuTextureViewHandle, GpuWorkResourceId, GpuWorkResourceIdAllocator, allocate_surface_id,",
+                      "    GpuTextureSubresourceRange, GpuTextureUsage, GpuTextureUsages, GpuTextureViewDescriptor,\n    GpuTextureViewDimension, GpuTextureViewHandle, GpuWorkResourceId, GpuWorkResourceIdAllocator,\n    allocate_surface_id,",
+                  ),
+                  (
+                      "        GpuTextureDimension::D2,\n        subresources,\n    )\n    .map_err(|error| acquisition_invariant(surface.id(), error.to_string()))?;",
+                      "        GpuTextureViewDimension::D2,\n        subresources,\n    )\n    .map_err(|error| acquisition_invariant(surface.id(), error.to_string()))?;",
+                  ),
+              ],
+              "src/api/access.rs": [
+                  (
+                      "    GpuResourceAccessIntent, GpuSamplerHandle, GpuTextureAspect, GpuTextureDimension,\n    GpuTextureHandle, GpuTextureSubresourceRange, GpuTextureUsage, GpuTextureViewHandle,",
+                      "    GpuResourceAccessIntent, GpuSamplerHandle, GpuTextureAspect, GpuTextureDimension,\n    GpuTextureHandle, GpuTextureSubresourceRange, GpuTextureUsage, GpuTextureViewDimension,\n    GpuTextureViewHandle,",
+                  ),
+                  (
+                      "                    None,\n                    GpuTextureDimension::D2,\n                    view_range,",
+                      "                    None,\n                    GpuTextureViewDimension::D2,\n                    view_range,",
+                  ),
+              ],
+              "src/api/graph/tests/support.rs": [
+                  (
+                      "                None,\n                GpuTextureDimension::D2,\n                subresources,",
+                      "                None,\n                GpuTextureViewDimension::D2,\n                subresources,",
+                  ),
+              ],
+              "src/api/render_pass.rs": [
+                  (
+                      "    GpuRenderPipelineDescriptor, GpuScissorRect, GpuTextureDimension, GpuTextureFormat,\n    GpuTextureHandle, GpuTextureViewHandle, GpuWorkOperationCause, GpuWorkOperationError,",
+                      "    GpuRenderPipelineDescriptor, GpuScissorRect, GpuTextureDimension, GpuTextureFormat,\n    GpuTextureHandle, GpuTextureViewDimension, GpuTextureViewHandle, GpuWorkOperationCause,\n    GpuWorkOperationError,",
+                  ),
+                  (
+                      "                    None,\n                    GpuTextureDimension::D2,\n                    subresources,",
+                      "                    None,\n                    GpuTextureViewDimension::D2,\n                    subresources,",
+                  ),
+              ],
+              "src/api/work/tests.rs": [
+                  (
+                      "    GpuTextureInitialization, GpuTextureUsage, GpuTextureUsages, GpuTextureViewDescriptor,\n    GpuWorkResourceIdAllocator,",
+                      "    GpuTextureInitialization, GpuTextureUsage, GpuTextureUsages, GpuTextureViewDescriptor,\n    GpuTextureViewDimension, GpuWorkResourceIdAllocator,",
+                  ),
+                  (
+                      "                None,\n                GpuTextureDimension::D2,\n                subresources,",
+                      "                None,\n                GpuTextureViewDimension::D2,\n                subresources,",
+                  ),
+              ],
+          }
+
+          for path_text, edits in replacements.items():
+              path = Path(path_text)
+              text = path.read_text()
+              for old, new in edits:
+                  count = text.count(old)
+                  if count != 1:
+                      raise SystemExit(f"{path}: expected exactly one match, found {count}: {old!r}")
+                  text = text.replace(old, new, 1)
+              path.write_text(text)
+          PY
+
+          git diff --check
+          git diff -- src/backend/wgpu/surface.rs src/api/access.rs src/api/graph/tests/support.rs src/api/render_pass.rs src/api/work/tests.rs
+
+      - name: Commit bounded migration
+        run: |
+          set -euo pipefail
+          if git diff --quiet; then
+            echo "No migration changes found" >&2
+            exit 1
+          fi
+          git config user.name "Aschenrot"
+          git config user.email "128308156+aschenrot@users.noreply.github.com"
+          git add src/backend/wgpu/surface.rs src/api/access.rs src/api/graph/tests/support.rs src/api/render_pass.rs src/api/work/tests.rs
+          git commit -m "gpu: migrate authoritative texture-view callers"
+          git push origin HEAD:issue-13-texture-view-dimension-authority
