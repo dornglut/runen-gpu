@@ -12,9 +12,12 @@ jobs:
     if: github.head_ref == 'issue-20-normalized-public-descriptor-limits'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ github.event.pull_request.head.sha }}
+          clean: true
+          fetch-depth: 1
+          persist-credentials: false
       - name: Census normalized limit constructors
         run: |
           set -euo pipefail
