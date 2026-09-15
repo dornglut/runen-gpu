@@ -1,8 +1,9 @@
 # RunenGPU executor contract
 
-Begin with `README.md`, `ARCHITECTURE.md`, `TESTING.md`, `BOOTSTRAP.md`, and the
-current owning issue. Confirm the accepted base, repository state, and applicable
-Engineering and Runenwerk authority before editing.
+Begin with `README.md`, `ARCHITECTURE.md`, `ROADMAP.md`, `TESTING.md`,
+`BOOTSTRAP.md`, and the current owning issue. Confirm the accepted base,
+repository state, and applicable Engineering and Runenwerk authority before
+editing.
 
 ## Durable constraints
 
