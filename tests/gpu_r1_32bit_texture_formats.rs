@@ -119,9 +119,7 @@ fn structural_normalization_preserves_backend_role_facts() {
         test_limits(),
         [(GpuTextureFormat::Rgba32Float, supplied)],
     );
-    let normalized = capabilities
-        .format(GpuTextureFormat::Rgba32Float)
-        .unwrap();
+    let normalized = capabilities.format(GpuTextureFormat::Rgba32Float).unwrap();
 
     assert_eq!(normalized.block_dimensions, Some((1, 1)));
     assert_eq!(normalized.block_copy_size, Some(16));
@@ -237,14 +235,9 @@ fn prepared_texture_data_uses_4_8_and_16_byte_block_rows_through_public_descript
         ("rgba32sint", GpuTextureFormat::Rgba32Sint, 16_u32),
     ] {
         let resource_label = label(name);
-        let extent = GpuTextureExtent::new(
-            &resource_label,
-            GpuTextureDimension::D2,
-            WIDTH,
-            HEIGHT,
-            1,
-        )
-        .unwrap();
+        let extent =
+            GpuTextureExtent::new(&resource_label, GpuTextureDimension::D2, WIDTH, HEIGHT, 1)
+                .unwrap();
         let bytes_per_row = WIDTH * bytes_per_texel;
         let byte_len = (bytes_per_row * HEIGHT) as usize;
         let data = PreparedGpuData::<TransferData>::from_pod_transfer(
@@ -253,15 +246,9 @@ fn prepared_texture_data_uses_4_8_and_16_byte_block_rows_through_public_descript
             provenance(&format!("{name} bytes")),
         )
         .unwrap();
-        let prepared = GpuPreparedTextureData::new(
-            &resource_label,
-            data,
-            format,
-            extent,
-            bytes_per_row,
-            0,
-        )
-        .unwrap();
+        let prepared =
+            GpuPreparedTextureData::new(&resource_label, data, format, extent, bytes_per_row, 0)
+                .unwrap();
         assert_eq!(prepared.bytes_per_row(), bytes_per_row);
         assert_eq!(prepared.rows_per_image(), 0);
         assert_eq!(prepared.data().layout().byte_len(), byte_len as u64);
@@ -273,11 +260,7 @@ fn prepared_texture_data_uses_4_8_and_16_byte_block_rows_through_public_descript
             1,
             1,
             format,
-            GpuTextureUsages::new(
-                &resource_label,
-                [GpuTextureUsage::CopyDestination],
-            )
-            .unwrap(),
+            GpuTextureUsages::new(&resource_label, [GpuTextureUsage::CopyDestination]).unwrap(),
             GpuTextureInitialization::Prepared(prepared),
         )
         .unwrap();
