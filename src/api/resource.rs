@@ -1,6 +1,6 @@
 use super::{
     GpuResourceDescriptorCause, GpuResourceDescriptorError, GpuResourceRef, GpuTextureFormat,
-    GpuTextureHandle, PreparedGpuData, TransferData,
+    GpuTextureHandle, GpuTextureViewDimension, PreparedGpuData, TransferData,
 };
 use std::collections::BTreeSet;
 
@@ -946,7 +946,7 @@ pub struct GpuTextureViewDescriptor {
     common: GpuResourceCommon,
     texture: GpuTextureHandle,
     format: Option<GpuTextureFormat>,
-    dimension: GpuTextureDimension,
+    dimension: GpuTextureViewDimension,
     subresources: GpuTextureSubresourceRange,
 }
 
@@ -955,7 +955,7 @@ impl GpuTextureViewDescriptor {
         common: GpuResourceCommon,
         texture: &GpuTextureHandle,
         format: Option<GpuTextureFormat>,
-        dimension: GpuTextureDimension,
+        dimension: GpuTextureViewDimension,
         subresources: GpuTextureSubresourceRange,
     ) -> Result<Self, GpuResourceDescriptorError> {
         let label = common.label().as_str();
@@ -979,12 +979,20 @@ impl GpuTextureViewDescriptor {
                 "keep view ownership and lifetime within the parent texture lease",
             ));
         }
-        if dimension != parent.dimension() {
+        let parent_dimension_compatible = match dimension {
+            GpuTextureViewDimension::D1 => parent.dimension() == GpuTextureDimension::D1,
+            GpuTextureViewDimension::D2
+            | GpuTextureViewDimension::D2Array
+            | GpuTextureViewDimension::Cube
+            | GpuTextureViewDimension::CubeArray => parent.dimension() == GpuTextureDimension::D2,
+            GpuTextureViewDimension::D3 => parent.dimension() == GpuTextureDimension::D3,
+        };
+        if !parent_dimension_compatible {
             return Err(GpuResourceDescriptorError::invalid(
                 "construct GPU texture-view descriptor",
                 label,
                 GpuResourceDescriptorCause::IncompatibleViewDimension,
-                "use a view dimension compatible with the parent texture",
+                "use a view dimension compatible with the parent texture dimension",
             ));
         }
         let mip_end = subresources
@@ -1007,6 +1015,7 @@ impl GpuTextureViewDescriptor {
                 "keep mip and array-layer ranges inside the parent descriptor",
             ));
         }
+        validate_texture_view_dimension(label, parent, dimension, subresources)?;
         validate_aspect(label, parent.format(), subresources.aspect())?;
         if let Some(view_format) = format {
             if !formats_are_view_compatible(parent.format(), view_format) {
@@ -1036,12 +1045,41 @@ impl GpuTextureViewDescriptor {
     pub const fn format(&self) -> Option<GpuTextureFormat> {
         self.format
     }
-    pub const fn dimension(&self) -> GpuTextureDimension {
+    pub const fn dimension(&self) -> GpuTextureViewDimension {
         self.dimension
     }
     pub const fn subresources(&self) -> GpuTextureSubresourceRange {
         self.subresources
     }
+}
+
+fn validate_texture_view_dimension(
+    label: &str,
+    parent: &GpuTextureDescriptor,
+    dimension: GpuTextureViewDimension,
+    subresources: GpuTextureSubresourceRange,
+) -> Result<(), GpuResourceDescriptorError> {
+    let layer_count = subresources.array_layer_count();
+    let square = parent.extent().width() == parent.extent().height();
+    let shape_compatible = match dimension {
+        GpuTextureViewDimension::D1 | GpuTextureViewDimension::D2 | GpuTextureViewDimension::D3 => {
+            layer_count == 1
+        }
+        GpuTextureViewDimension::D2Array => true,
+        GpuTextureViewDimension::Cube => layer_count == 6 && square,
+        GpuTextureViewDimension::CubeArray => layer_count.is_multiple_of(6) && square,
+    };
+    let multisample_compatible =
+        parent.sample_count() == 1 || dimension == GpuTextureViewDimension::D2;
+    if !shape_compatible || !multisample_compatible {
+        return Err(GpuResourceDescriptorError::invalid(
+            "construct GPU texture-view descriptor",
+            label,
+            GpuResourceDescriptorCause::IncompatibleViewDimension,
+            "match normalized view shape: scalar views select one layer, Cube selects six square D2 layers, CubeArray selects a positive multiple of six square D2 layers, and multisampled views use D2",
+        ));
+    }
+    Ok(())
 }
 
 fn validate_aspect(
@@ -1734,7 +1772,7 @@ mod tests {
                 common("view"),
                 &handle,
                 None,
-                GpuTextureDimension::D2,
+                GpuTextureViewDimension::D2,
                 range
             )
             .is_err()
@@ -1748,7 +1786,7 @@ mod tests {
                 common("view"),
                 &handle,
                 Some(GpuTextureFormat::Rgba8UnormSrgb),
-                GpuTextureDimension::D2,
+                GpuTextureViewDimension::D2,
                 valid_range,
             )
             .is_ok()
@@ -1763,7 +1801,7 @@ mod tests {
                 imported_common,
                 &handle,
                 None,
-                GpuTextureDimension::D2,
+                GpuTextureViewDimension::D2,
                 valid_range,
             )
             .is_err()
@@ -1812,7 +1850,7 @@ mod tests {
                 common("retained child"),
                 &transient_handle,
                 None,
-                GpuTextureDimension::D2,
+                GpuTextureViewDimension::D2,
                 valid_range,
             )
             .is_err()
