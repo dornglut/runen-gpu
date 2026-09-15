@@ -21,8 +21,8 @@ jobs:
       - name: Census normalized limit constructors
         run: |
           set -euo pipefail
-          rg -n 'GpuLimits::new|from_validated_adapter_facts' src tests || true
+          grep -R -n -E 'GpuLimits::new|from_validated_adapter_facts' src tests || true
       - name: Census direct native device limit reads
         run: |
           set -euo pipefail
-          rg -n 'device\.limits\(\)|max_buffer_size|max_texture_dimension_1d|max_texture_dimension_3d|max_texture_array_layers|max_vertex_attributes|max_vertex_buffer_array_stride' src tests || true
+          grep -R -n -E 'device\.limits\(\)|max_buffer_size|max_texture_dimension_1d|max_texture_dimension_3d|max_texture_array_layers|max_vertex_attributes|max_vertex_buffer_array_stride' src tests || true
