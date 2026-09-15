@@ -222,24 +222,15 @@ pub enum GpuTextureFormat {
 
 impl GpuTextureFormat {
     pub const fn bytes_per_texel(self) -> u32 {
-        match self {
-            Self::R8Unorm => 1,
-            Self::Rgba8Unorm
-            | Self::Rgba8UnormSrgb
-            | Self::Bgra8Unorm
-            | Self::Bgra8UnormSrgb
-            | Self::R32Uint
-            | Self::R32Float
-            | Self::Depth32Float => 4,
-        }
+        super::texture_format::bytes_per_texel(self)
     }
 
     pub const fn is_depth(self) -> bool {
-        matches!(self, Self::Depth32Float)
+        super::texture_format::is_depth(self)
     }
 
     pub const fn is_srgb(self) -> bool {
-        matches!(self, Self::Rgba8UnormSrgb | Self::Bgra8UnormSrgb)
+        super::texture_format::is_srgb(self)
     }
 }
 
@@ -253,9 +244,9 @@ pub struct GpuTextureFormatCapabilities {
     pub depth_stencil: bool,
     pub copy_source: bool,
     pub copy_destination: bool,
-    /// Texture-block dimensions are absent when the backend cannot report them.
+    /// Normalized structural texture-block dimensions for this format.
     pub block_dimensions: Option<(u32, u32)>,
-    /// Copy bytes per texture block are absent when the backend cannot report them.
+    /// Normalized copy bytes per texture block when the format has one unambiguous copy aspect.
     pub block_copy_size: Option<u32>,
 }
 
@@ -473,10 +464,18 @@ impl GpuCapabilities {
         limits: GpuLimits,
         formats: impl IntoIterator<Item = (GpuTextureFormat, GpuTextureFormatCapabilities)>,
     ) -> Self {
+        let formats = formats
+            .into_iter()
+            .map(|(format, mut facts)| {
+                facts.block_dimensions = Some(super::texture_format::block_dimensions(format));
+                facts.block_copy_size = super::texture_format::default_copy_block_size(format);
+                (format, facts)
+            })
+            .collect();
         Self {
             features: features.into_iter().collect(),
             limits,
-            formats: formats.into_iter().collect(),
+            formats,
         }
     }
 
@@ -666,6 +665,38 @@ mod tests {
         assert_eq!(GpuTextureFormat::R32Float.bytes_per_texel(), 4);
         assert!(!GpuTextureFormat::R32Float.is_depth());
         assert!(!GpuTextureFormat::R32Float.is_srgb());
+    }
+
+    #[test]
+    fn format_capability_construction_normalizes_structural_fields() {
+        let input = GpuTextureFormatCapabilities {
+            sampled: true,
+            filterable: false,
+            storage_read: true,
+            storage_write: false,
+            color_attachment: false,
+            depth_stencil: false,
+            copy_source: true,
+            copy_destination: false,
+            block_dimensions: Some((99, 77)),
+            block_copy_size: Some(123),
+        };
+        let capabilities = GpuCapabilities::from_normalized_facts(
+            [],
+            test_limits(),
+            [(GpuTextureFormat::R32Float, input)],
+        );
+        let normalized = capabilities.format(GpuTextureFormat::R32Float).unwrap();
+        assert_eq!(normalized.block_dimensions, Some((1, 1)));
+        assert_eq!(normalized.block_copy_size, Some(4));
+        assert_eq!(normalized.sampled, input.sampled);
+        assert_eq!(normalized.filterable, input.filterable);
+        assert_eq!(normalized.storage_read, input.storage_read);
+        assert_eq!(normalized.storage_write, input.storage_write);
+        assert_eq!(normalized.color_attachment, input.color_attachment);
+        assert_eq!(normalized.depth_stencil, input.depth_stencil);
+        assert_eq!(normalized.copy_source, input.copy_source);
+        assert_eq!(normalized.copy_destination, input.copy_destination);
     }
 
     #[test]

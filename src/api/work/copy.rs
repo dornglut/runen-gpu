@@ -2,7 +2,7 @@ use super::super::{
     GpuBufferAccess, GpuBufferAccessKind, GpuBufferHandle, GpuBufferRange, GpuTextureAccess,
     GpuTextureAccessKind, GpuTextureAccessResource, GpuTextureAspect, GpuTextureDimension,
     GpuTextureHandle, GpuTextureSubresourceRange, GpuWorkOperationCause, GpuWorkOperationError,
-    GpuWorkResourceId, gpu_texture_formats_copy_compatible,
+    GpuWorkResourceId, gpu_texture_formats_copy_compatible, texture_format,
 };
 use super::mip_extent;
 
@@ -131,6 +131,17 @@ impl GpuTextureCopyRegion {
                 "use a valid mip of a single-sampled texture",
             ));
         }
+        let Some(canonical_aspect) =
+            texture_format::canonical_copy_aspect(descriptor.format(), aspect)
+        else {
+            return Err(GpuWorkOperationError::invalid(
+                "construct GPU texture copy region",
+                label,
+                Some(texture.diagnostic_identity()),
+                GpuWorkOperationCause::InvalidCopyRegion,
+                "select a copy aspect represented unambiguously by the normalized texture format",
+            ));
+        };
         let (mip_width, mip_height, mip_depth_or_layers) = mip_extent(texture, mip_level);
         let x_end = origin.x().checked_add(extent.width());
         let y_end = origin.y().checked_add(extent.height());
@@ -145,13 +156,7 @@ impl GpuTextureCopyRegion {
             GpuTextureDimension::D2 => true,
             GpuTextureDimension::D3 => true,
         };
-        let aspect_valid = if descriptor.format().is_depth() {
-            matches!(aspect, GpuTextureAspect::All | GpuTextureAspect::DepthOnly)
-        } else {
-            matches!(aspect, GpuTextureAspect::All | GpuTextureAspect::Color)
-        };
         if !dimension_valid
-            || !aspect_valid
             || x_end.is_none_or(|end| end > mip_width)
             || y_end.is_none_or(|end| end > mip_height)
             || z_end.is_none_or(|end| end > mip_depth_or_layers)
@@ -164,7 +169,7 @@ impl GpuTextureCopyRegion {
                 "keep origin, extent, and aspect inside the selected mip",
             ));
         }
-        if descriptor.format().is_depth()
+        if canonical_aspect == GpuTextureAspect::DepthOnly
             && (origin.x() != 0
                 || origin.y() != 0
                 || extent.width() != mip_width
@@ -181,11 +186,6 @@ impl GpuTextureCopyRegion {
         let (base_array_layer, array_layer_count) = match descriptor.dimension() {
             GpuTextureDimension::D2 => (origin.z(), extent.depth_or_layers()),
             GpuTextureDimension::D1 | GpuTextureDimension::D3 => (0, 1),
-        };
-        let canonical_aspect = if descriptor.format().is_depth() {
-            GpuTextureAspect::DepthOnly
-        } else {
-            GpuTextureAspect::Color
         };
         let subresources = GpuTextureSubresourceRange::new(
             descriptor.common().label(),
@@ -231,6 +231,25 @@ impl GpuTextureCopyRegion {
     }
     pub const fn subresources(&self) -> GpuTextureSubresourceRange {
         self.subresources
+    }
+
+    pub(crate) fn logical_copy_footprint(&self) -> Option<(u32, u32)> {
+        texture_format::logical_copy_footprint(
+            self.texture.descriptor().format(),
+            self.aspect,
+            self.extent.width(),
+            self.extent.height(),
+        )
+    }
+
+    pub(crate) fn tightly_packed_byte_len(&self) -> Option<u64> {
+        texture_format::tightly_packed_copy_byte_len(
+            self.texture.descriptor().format(),
+            self.aspect,
+            self.extent.width(),
+            self.extent.height(),
+            self.extent.depth_or_layers(),
+        )
     }
 }
 
@@ -450,20 +469,17 @@ fn buffer_layout_access(
     kind: GpuBufferAccessKind,
 ) -> Result<GpuBufferAccess, GpuWorkOperationError> {
     let extent = texture.extent();
-    let logical_row = extent
-        .width()
-        .checked_mul(texture.texture().descriptor().format().bytes_per_texel())
-        .ok_or_else(|| {
-            copy_layout_error(
-                layout,
-                "reduce the copy width so logical row size does not overflow",
-            )
-        })?;
+    let (logical_row, logical_rows) = texture.logical_copy_footprint().ok_or_else(|| {
+        copy_layout_error(
+            layout,
+            "reduce the copy extent or choose a copyable normalized format aspect",
+        )
+    })?;
     if layout.bytes_per_row() < logical_row
-        || (extent.depth_or_layers() > 1 && layout.rows_per_image() < extent.height())
+        || (extent.depth_or_layers() > 1 && layout.rows_per_image() < logical_rows)
         || (extent.depth_or_layers() == 1
             && layout.rows_per_image() != 0
-            && layout.rows_per_image() < extent.height())
+            && layout.rows_per_image() < logical_rows)
     {
         return Err(copy_layout_error(
             layout,
@@ -481,7 +497,7 @@ fn buffer_layout_access(
     let preceding_images = u64::from(extent.depth_or_layers() - 1)
         .checked_mul(image_stride)
         .ok_or_else(|| copy_layout_error(layout, "reduce the copy depth or layer count"))?;
-    let preceding_rows = u64::from(extent.height() - 1)
+    let preceding_rows = u64::from(logical_rows - 1)
         .checked_mul(u64::from(layout.bytes_per_row()))
         .ok_or_else(|| copy_layout_error(layout, "reduce the copy height"))?;
     let size = preceding_images

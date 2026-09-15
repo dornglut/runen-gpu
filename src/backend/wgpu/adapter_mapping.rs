@@ -1,8 +1,9 @@
 use super::device_request::profile_limits;
+use crate::api::texture_format;
 use crate::{
     GpuAdapterClass, GpuAdapterFacts, GpuAdapterLimits, GpuAlignmentFacts, GpuBackendFamily,
     GpuCapabilities, GpuCapabilityFeature, GpuDeviceRequestProfile, GpuFallbackStatus, GpuLimits,
-    GpuSoftwareStatus, GpuTextureFormat, GpuTextureFormatCapabilities,
+    GpuSoftwareStatus, GpuTextureAspect, GpuTextureFormat, GpuTextureFormatCapabilities,
 };
 use wgpu::{
     Adapter, Backend, DeviceType, DownlevelCapabilities, DownlevelFlags, Features, TextureFormat,
@@ -20,7 +21,7 @@ pub(super) fn adapter_facts(
     let formats = known_formats().into_iter().map(|(normalized, native)| {
         (
             normalized,
-            format_capabilities(native, adapter.get_texture_format_features(native)),
+            format_capabilities(normalized, adapter.get_texture_format_features(native)),
         )
     });
     let profile = select_device_request_profile(info.backend, &downlevel);
@@ -179,9 +180,12 @@ pub(super) fn known_formats() -> [(GpuTextureFormat, TextureFormat); 8] {
 }
 
 pub(super) fn format_capabilities(
-    format: TextureFormat,
+    format: GpuTextureFormat,
     features: wgpu::TextureFormatFeatures,
 ) -> GpuTextureFormatCapabilities {
+    let render_attachment = features
+        .allowed_usages
+        .contains(TextureUsages::RENDER_ATTACHMENT);
     GpuTextureFormatCapabilities {
         sampled: features
             .allowed_usages
@@ -201,18 +205,15 @@ pub(super) fn format_capabilities(
             || features
                 .flags
                 .contains(TextureFormatFeatureFlags::STORAGE_READ_WRITE),
-        color_attachment: !format.is_depth_stencil_format()
-            && features
-                .allowed_usages
-                .contains(TextureUsages::RENDER_ATTACHMENT),
-        depth_stencil: format.is_depth_stencil_format()
-            && features
-                .allowed_usages
-                .contains(TextureUsages::RENDER_ATTACHMENT),
+        color_attachment: render_attachment
+            && texture_format::supports_aspect(format, GpuTextureAspect::Color),
+        depth_stencil: render_attachment
+            && (texture_format::supports_aspect(format, GpuTextureAspect::DepthOnly)
+                || texture_format::supports_aspect(format, GpuTextureAspect::StencilOnly)),
         copy_source: features.allowed_usages.contains(TextureUsages::COPY_SRC),
         copy_destination: features.allowed_usages.contains(TextureUsages::COPY_DST),
-        block_dimensions: Some(format.block_dimensions()),
-        block_copy_size: format.block_copy_size(None),
+        block_dimensions: None,
+        block_copy_size: None,
     }
 }
 
@@ -401,7 +402,7 @@ mod tests {
         assert!(known_formats().contains(&(GpuTextureFormat::R32Float, TextureFormat::R32Float)));
 
         let sampled_copy_source = format_capabilities(
-            TextureFormat::R32Float,
+            GpuTextureFormat::R32Float,
             wgpu::TextureFormatFeatures {
                 allowed_usages: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_SRC,
                 flags: TextureFormatFeatureFlags::empty(),
@@ -414,11 +415,11 @@ mod tests {
         assert!(!sampled_copy_source.storage_read);
         assert!(!sampled_copy_source.storage_write);
         assert!(!sampled_copy_source.depth_stencil);
-        assert_eq!(sampled_copy_source.block_dimensions, Some((1, 1)));
-        assert_eq!(sampled_copy_source.block_copy_size, Some(4));
+        assert_eq!(sampled_copy_source.block_dimensions, None);
+        assert_eq!(sampled_copy_source.block_copy_size, None);
 
         let richer = format_capabilities(
-            TextureFormat::R32Float,
+            GpuTextureFormat::R32Float,
             wgpu::TextureFormatFeatures {
                 allowed_usages: TextureUsages::TEXTURE_BINDING
                     | TextureUsages::STORAGE_BINDING
@@ -436,7 +437,7 @@ mod tests {
     }
 
     #[test]
-    fn texture_mapping_preserves_normalized_roles_and_block_facts() {
+    fn texture_mapping_preserves_normalized_roles_without_owning_structure() {
         let features = wgpu::TextureFormatFeatures {
             allowed_usages: TextureUsages::TEXTURE_BINDING
                 | TextureUsages::RENDER_ATTACHMENT
@@ -444,12 +445,15 @@ mod tests {
                 | TextureUsages::COPY_DST,
             flags: TextureFormatFeatureFlags::FILTERABLE,
         };
-        let color = format_capabilities(TextureFormat::Rgba8Unorm, features);
+        let color = format_capabilities(GpuTextureFormat::Rgba8Unorm, features);
         assert!(color.color_attachment);
         assert!(!color.depth_stencil);
-        assert_eq!(color.block_dimensions, Some((1, 1)));
-        let depth = format_capabilities(TextureFormat::Depth32Float, features);
+        assert_eq!(color.block_dimensions, None);
+        assert_eq!(color.block_copy_size, None);
+        let depth = format_capabilities(GpuTextureFormat::Depth32Float, features);
         assert!(depth.depth_stencil);
         assert!(!depth.color_attachment);
+        assert_eq!(depth.block_dimensions, None);
+        assert_eq!(depth.block_copy_size, None);
     }
 }

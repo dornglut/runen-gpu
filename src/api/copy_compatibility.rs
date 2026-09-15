@@ -1,4 +1,4 @@
-use super::GpuTextureFormat;
+use super::{GpuTextureFormat, texture_format};
 
 /// Backend-neutral storage-format compatibility for texture-to-texture copies.
 ///
@@ -9,23 +9,7 @@ pub fn gpu_texture_formats_copy_compatible(
     source: GpuTextureFormat,
     destination: GpuTextureFormat,
 ) -> bool {
-    source == destination
-        || matches!(
-            (source, destination),
-            (
-                GpuTextureFormat::Rgba8Unorm,
-                GpuTextureFormat::Rgba8UnormSrgb
-            ) | (
-                GpuTextureFormat::Rgba8UnormSrgb,
-                GpuTextureFormat::Rgba8Unorm
-            ) | (
-                GpuTextureFormat::Bgra8Unorm,
-                GpuTextureFormat::Bgra8UnormSrgb
-            ) | (
-                GpuTextureFormat::Bgra8UnormSrgb,
-                GpuTextureFormat::Bgra8Unorm
-            )
-        )
+    texture_format::raw_copy_compatible(source, destination)
 }
 
 #[cfg(test)]

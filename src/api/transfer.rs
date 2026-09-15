@@ -19,24 +19,13 @@ impl GpuTransferRegion {
     pub fn logical_byte_len(&self) -> Result<u64, GpuWorkOperationError> {
         match self {
             Self::Buffer(region) => Ok(region.range().size()),
-            Self::Texture(region) => {
-                let extent = region.extent();
-                u64::from(extent.width())
-                    .checked_mul(u64::from(extent.height()))
-                    .and_then(|value| value.checked_mul(u64::from(extent.depth_or_layers())))
-                    .and_then(|value| {
-                        value.checked_mul(u64::from(
-                            region.texture().descriptor().format().bytes_per_texel(),
-                        ))
-                    })
-                    .ok_or_else(|| {
-                        transfer_error(
-                            "derive GPU texture transfer byte length",
-                            region.texture().diagnostic_identity(),
-                            "reduce the logical texture transfer extent",
-                        )
-                    })
-            }
+            Self::Texture(region) => region.tightly_packed_byte_len().ok_or_else(|| {
+                transfer_error(
+                    "derive GPU texture transfer byte length",
+                    region.texture().diagnostic_identity(),
+                    "reduce the logical texture transfer extent or choose a copyable normalized format aspect",
+                )
+            }),
         }
     }
 
@@ -276,6 +265,46 @@ mod tests {
         .unwrap()
     }
 
+    fn texture_region(
+        allocator: &mut GpuWorkResourceIdAllocator,
+        name: &str,
+        format: GpuTextureFormat,
+        aspect: GpuTextureAspect,
+    ) -> GpuTextureCopyRegion {
+        let resource_label = label(name);
+        let texture = allocator
+            .allocate_texture_handle(
+                GpuTextureDescriptor::new(
+                    common(name),
+                    GpuTextureDimension::D2,
+                    GpuTextureExtent::new(&resource_label, GpuTextureDimension::D2, 8, 8, 1)
+                        .unwrap(),
+                    1,
+                    1,
+                    format,
+                    GpuTextureUsages::new(
+                        &resource_label,
+                        [
+                            GpuTextureUsage::CopyDestination,
+                            GpuTextureUsage::CopySource,
+                        ],
+                    )
+                    .unwrap(),
+                    GpuTextureInitialization::Uninitialized,
+                )
+                .unwrap(),
+            )
+            .unwrap();
+        GpuTextureCopyRegion::new(
+            &texture,
+            0,
+            GpuTextureOrigin::new(0, 0, 0),
+            aspect,
+            GpuCopyExtent::new(8, 8, 1).unwrap(),
+        )
+        .unwrap()
+    }
+
     #[test]
     fn buffer_upload_requires_exact_payload_and_derives_copy_destination_access() {
         let mut allocator =
@@ -357,5 +386,39 @@ mod tests {
         assert_eq!(readback.logical_byte_len().unwrap(), 128);
         assert!(readback.source_access().reads());
         assert!(!readback.source_access().writes());
+    }
+
+    #[test]
+    fn texture_transfer_byte_lengths_follow_normalized_format_structure() {
+        let mut allocator =
+            GpuWorkResourceIdAllocator::for_owner_scope(NonZeroU64::new(113).unwrap());
+        for (name, format, aspect, expected) in [
+            ("r8", GpuTextureFormat::R8Unorm, GpuTextureAspect::Color, 64),
+            (
+                "rgba8",
+                GpuTextureFormat::Rgba8Unorm,
+                GpuTextureAspect::Color,
+                256,
+            ),
+            (
+                "r32float",
+                GpuTextureFormat::R32Float,
+                GpuTextureAspect::Color,
+                256,
+            ),
+            (
+                "depth32",
+                GpuTextureFormat::Depth32Float,
+                GpuTextureAspect::DepthOnly,
+                256,
+            ),
+        ] {
+            let region = texture_region(&mut allocator, name, format, aspect);
+            assert_eq!(GpuTransferRegion::from(region.clone()).logical_byte_len().unwrap(), expected);
+            let readback =
+                GpuReadbackOperation::new(region.into(), GpuReadbackId::allocate().unwrap())
+                    .unwrap();
+            assert_eq!(readback.logical_byte_len().unwrap(), expected);
+        }
     }
 }

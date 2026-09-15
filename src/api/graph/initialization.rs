@@ -1213,13 +1213,9 @@ fn buffer_layout_region(
     prepared_id: GpuPreparedWorkNodeId,
 ) -> Result<InitializationRegion, GpuWorkGraphError> {
     let extent = texture.extent();
-    let segment_size = u64::from(extent.width())
-        .checked_mul(u64::from(
-            texture.texture().descriptor().format().bytes_per_texel(),
-        ))
-        .ok_or_else(|| {
-            initialization_layout_error(graph_label, fragment, node, prepared_id, layout)
-        })?;
+    let (segment_size, segment_count) = texture.logical_copy_footprint().ok_or_else(|| {
+        initialization_layout_error(graph_label, fragment, node, prepared_id, layout)
+    })?;
     let group_stride = if extent.depth_or_layers() > 1 {
         u64::from(layout.bytes_per_row())
             .checked_mul(u64::from(layout.rows_per_image()))
@@ -1232,9 +1228,9 @@ fn buffer_layout_region(
     let coverage = GpuBufferStridedCoverage::new(
         layout.buffer(),
         layout.byte_offset(),
-        segment_size,
+        u64::from(segment_size),
         u64::from(layout.bytes_per_row()),
-        extent.height(),
+        segment_count,
         group_stride,
         extent.depth_or_layers(),
     )
