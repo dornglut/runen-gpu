@@ -216,6 +216,7 @@ pub enum GpuTextureFormat {
     Bgra8Unorm,
     Bgra8UnormSrgb,
     R32Uint,
+    R32Float,
     Depth32Float,
 }
 
@@ -228,6 +229,7 @@ impl GpuTextureFormat {
             | Self::Bgra8Unorm
             | Self::Bgra8UnormSrgb
             | Self::R32Uint
+            | Self::R32Float
             | Self::Depth32Float => 4,
         }
     }
@@ -584,6 +586,13 @@ mod tests {
 
     fn test_limits() -> GpuLimits {
         GpuLimits::new(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1).unwrap()
+    }
+
+    #[test]
+    fn r32float_is_one_four_byte_non_depth_non_srgb_texel() {
+        assert_eq!(GpuTextureFormat::R32Float.bytes_per_texel(), 4);
+        assert!(!GpuTextureFormat::R32Float.is_depth());
+        assert!(!GpuTextureFormat::R32Float.is_srgb());
     }
 
     #[test]

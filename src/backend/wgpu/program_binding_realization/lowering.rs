@@ -174,6 +174,7 @@ pub(super) const fn texture_format(format: GpuTextureFormat) -> TextureFormat {
         GpuTextureFormat::Bgra8Unorm => TextureFormat::Bgra8Unorm,
         GpuTextureFormat::Bgra8UnormSrgb => TextureFormat::Bgra8UnormSrgb,
         GpuTextureFormat::R32Uint => TextureFormat::R32Uint,
+        GpuTextureFormat::R32Float => TextureFormat::R32Float,
         GpuTextureFormat::Depth32Float => TextureFormat::Depth32Float,
     }
 }
