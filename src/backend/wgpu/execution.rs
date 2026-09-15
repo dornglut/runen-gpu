@@ -14,6 +14,7 @@ use super::WgpuContextState;
 use super::health::{WgpuDeviceFaultClass, WgpuDeviceFaultEvidence};
 use super::resource_realization::map_texture_aspect;
 use super::surface::execution::WgpuSurfaceLeaseGuard;
+use crate::api::texture_format;
 use crate::{
     GpuBufferInitialization, GpuBufferRegion, GpuBufferTextureLayout, GpuCapabilityAdmission,
     GpuClearOperation, GpuContext, GpuContextAffinity, GpuCopyExtent, GpuCopyOperation,
@@ -243,12 +244,12 @@ struct TextureStagingLayout {
 impl TextureStagingLayout {
     fn new(region: &GpuTextureCopyRegion) -> Result<Self, GpuSubmissionPreparationError> {
         let extent = region.extent();
-        let bytes_per_texel = region.texture().descriptor().format().bytes_per_texel();
-        let logical_bytes_per_row =
-            extent.width().checked_mul(bytes_per_texel).ok_or_else(|| {
-                texture_staging_preparation_error("texture logical row byte count overflowed")
+        let (logical_bytes_per_row, rows_per_image) =
+            region.logical_copy_footprint().ok_or_else(|| {
+                texture_staging_preparation_error(
+                    "texture copy footprint is unavailable for the normalized format aspect",
+                )
             })?;
-        let rows_per_image = extent.height();
         let image_count = extent.depth_or_layers();
         let row_count = u64::from(rows_per_image)
             .checked_mul(u64::from(image_count))
@@ -1733,12 +1734,19 @@ async fn prepare_execution_plan(
                         let staging = TextureStagingLayout::new(source)?;
                         let common = source.texture().descriptor().common();
                         let format = source.texture().descriptor().format();
+                        let copy_block_size = texture_format::copy_block_size(format, source.aspect())
+                            .ok_or_else(|| {
+                                GpuSubmissionPreparationError::new(
+                                    GpuSubmissionPreparationErrorKind::InternalInvariant,
+                                    "validated texture readback lost its normalized copy-block footprint",
+                                )
+                            })?;
                         let metadata = TextureReadbackMetadata {
                             label: common.label().as_str().to_string(),
                             layout: GpuDataLayout::new(
                                 common.label().as_str(),
                                 staging.logical_byte_len,
-                                u64::from(format.bytes_per_texel()),
+                                u64::from(copy_block_size),
                                 u64::from(staging.logical_bytes_per_row),
                                 staging.row_count(),
                             )
@@ -1905,17 +1913,14 @@ fn normalize_prepared_texture_payload(
     source: &GpuPreparedTextureData,
 ) -> Result<PreparedGpuData<TransferData>, GpuSubmissionPreparationError> {
     let extent = source.extent();
-    let logical_row = extent
-        .width()
-        .checked_mul(source.format().bytes_per_texel())
-        .ok_or_else(|| {
-            GpuSubmissionPreparationError::new(
-                GpuSubmissionPreparationErrorKind::InternalInvariant,
-                "prepared texture logical row byte count overflowed during normalization",
-            )
-        })?;
+    let (logical_row, logical_rows) = source.logical_copy_footprint().ok_or_else(|| {
+        GpuSubmissionPreparationError::new(
+            GpuSubmissionPreparationErrorKind::InternalInvariant,
+            "prepared texture lost its normalized copy-block footprint during normalization",
+        )
+    })?;
     let logical_len = u64::from(logical_row)
-        .checked_mul(u64::from(extent.height()))
+        .checked_mul(u64::from(logical_rows))
         .and_then(|value| value.checked_mul(u64::from(extent.depth_or_layers())))
         .ok_or_else(|| {
             GpuSubmissionPreparationError::new(
@@ -1953,10 +1958,10 @@ fn normalize_prepared_texture_payload(
             "prepared texture image count exceeds usize during normalization",
         )
     })?;
-    let row_count = usize::try_from(extent.height()).map_err(|_| {
+    let row_count = usize::try_from(logical_rows).map_err(|_| {
         GpuSubmissionPreparationError::new(
             GpuSubmissionPreparationErrorKind::InternalInvariant,
-            "prepared texture row count exceeds usize during normalization",
+            "prepared texture block-row count exceeds usize during normalization",
         )
     })?;
     let image_stride = if image_count > 1 {
@@ -2290,7 +2295,13 @@ fn validate_buffer_texture_copy_layout(
     region: &GpuTextureCopyRegion,
 ) -> Result<(), GpuSubmissionPreparationError> {
     let extent = region.extent();
-    if (extent.height() > 1 || extent.depth_or_layers() > 1)
+    let (_, logical_rows) = region.logical_copy_footprint().ok_or_else(|| {
+        GpuSubmissionPreparationError::new(
+            GpuSubmissionPreparationErrorKind::InternalInvariant,
+            "validated buffer-texture copy lost its normalized copy-block footprint",
+        )
+    })?;
+    if (logical_rows > 1 || extent.depth_or_layers() > 1)
         && !layout
             .bytes_per_row()
             .is_multiple_of(COPY_BYTES_PER_ROW_ALIGNMENT)
@@ -2312,7 +2323,10 @@ fn wgpu_buffer_texture_copy_layout(
     region: &GpuTextureCopyRegion,
 ) -> TexelCopyBufferLayout {
     let extent = region.extent();
-    let requires_bytes_per_row = extent.height() > 1 || extent.depth_or_layers() > 1;
+    let (_, logical_rows) = region
+        .logical_copy_footprint()
+        .expect("checked texture copy region has normalized copy footprint");
+    let requires_bytes_per_row = logical_rows > 1 || extent.depth_or_layers() > 1;
     TexelCopyBufferLayout {
         offset: layout.byte_offset(),
         bytes_per_row: requires_bytes_per_row.then_some(layout.bytes_per_row()),

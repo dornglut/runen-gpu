@@ -474,15 +474,14 @@ fn copy_buffer_layout_access(
     kind: GpuBufferAccessKind,
 ) -> Result<GpuBufferAccess, GpuWorkOperationError> {
     let extent = texture.extent();
-    let logical_row = extent
-        .width()
-        .checked_mul(texture.texture().descriptor().format().bytes_per_texel())
-        .ok_or_else(|| copy_layout_error(layout, "reduce the copy width"))?;
+    let (logical_row, logical_rows) = texture
+        .logical_copy_footprint()
+        .ok_or_else(|| copy_layout_error(layout, "reduce the copy extent"))?;
     if layout.bytes_per_row() < logical_row
-        || (extent.depth_or_layers() > 1 && layout.rows_per_image() < extent.height())
+        || (extent.depth_or_layers() > 1 && layout.rows_per_image() < logical_rows)
         || (extent.depth_or_layers() == 1
             && layout.rows_per_image() != 0
-            && layout.rows_per_image() < extent.height())
+            && layout.rows_per_image() < logical_rows)
     {
         return Err(copy_layout_error(
             layout,
@@ -500,7 +499,7 @@ fn copy_buffer_layout_access(
     let preceding_images = u64::from(extent.depth_or_layers() - 1)
         .checked_mul(image_stride)
         .ok_or_else(|| copy_layout_error(layout, "reduce the copy depth or layer count"))?;
-    let preceding_rows = u64::from(extent.height() - 1)
+    let preceding_rows = u64::from(logical_rows - 1)
         .checked_mul(u64::from(layout.bytes_per_row()))
         .ok_or_else(|| copy_layout_error(layout, "reduce the copy height"))?;
     let size = preceding_images

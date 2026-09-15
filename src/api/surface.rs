@@ -1,4 +1,4 @@
-use super::{GpuContextAffinity, GpuTextureFormat, GpuTextureUsage};
+use super::{GpuContextAffinity, GpuTextureFormat, GpuTextureUsage, texture_format};
 use core::fmt;
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 use std::collections::BTreeSet;
@@ -281,23 +281,7 @@ fn surface_view_format_is_compatible(
     format: GpuTextureFormat,
     view_format: GpuTextureFormat,
 ) -> bool {
-    format == view_format
-        || matches!(
-            (format, view_format),
-            (
-                GpuTextureFormat::Rgba8Unorm,
-                GpuTextureFormat::Rgba8UnormSrgb
-            ) | (
-                GpuTextureFormat::Rgba8UnormSrgb,
-                GpuTextureFormat::Rgba8Unorm
-            ) | (
-                GpuTextureFormat::Bgra8Unorm,
-                GpuTextureFormat::Bgra8UnormSrgb
-            ) | (
-                GpuTextureFormat::Bgra8UnormSrgb,
-                GpuTextureFormat::Bgra8Unorm
-            )
-        )
+    texture_format::view_compatible(format, view_format)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -485,6 +469,22 @@ mod tests {
                 GpuTextureFormat::Bgra8UnormSrgb
             ]
         );
+    }
+
+    #[test]
+    fn surface_view_formats_use_normalized_pair_authority() {
+        assert!(surface_view_format_is_compatible(
+            GpuTextureFormat::Rgba8Unorm,
+            GpuTextureFormat::Rgba8UnormSrgb
+        ));
+        assert!(surface_view_format_is_compatible(
+            GpuTextureFormat::Bgra8UnormSrgb,
+            GpuTextureFormat::Bgra8Unorm
+        ));
+        assert!(!surface_view_format_is_compatible(
+            GpuTextureFormat::Rgba8Unorm,
+            GpuTextureFormat::Bgra8Unorm
+        ));
     }
 
     #[test]

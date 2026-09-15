@@ -1,4 +1,5 @@
 use super::{TextureRealizationRecord, WgpuContextState};
+use crate::api::texture_format;
 use crate::{
     GpuAddressMode, GpuBufferDescriptor, GpuBufferUsage, GpuCapabilityFeature, GpuCompareFunction,
     GpuContext, GpuFilterMode, GpuFormatRole, GpuMemoryIntent, GpuQueryKind, GpuQuerySetDescriptor,
@@ -212,7 +213,9 @@ pub(super) fn lower_texture(
         format: native_format,
         usage: native_usage,
         paired_view_format: permits_format_reinterpretation
-            .then(|| paired_view_format(native_format))
+            .then(|| {
+                texture_format::paired_view_format(descriptor.format()).map(map_texture_format)
+            })
             .flatten(),
         permits_format_reinterpretation,
     })
@@ -542,20 +545,6 @@ const fn map_texture_usage(usage: GpuTextureUsage) -> TextureUsages {
     }
 }
 
-const fn paired_view_format(format: TextureFormat) -> Option<TextureFormat> {
-    match format {
-        TextureFormat::Rgba8Unorm => Some(TextureFormat::Rgba8UnormSrgb),
-        TextureFormat::Rgba8UnormSrgb => Some(TextureFormat::Rgba8Unorm),
-        TextureFormat::Bgra8Unorm => Some(TextureFormat::Bgra8UnormSrgb),
-        TextureFormat::Bgra8UnormSrgb => Some(TextureFormat::Bgra8Unorm),
-        TextureFormat::R8Unorm
-        | TextureFormat::R32Uint
-        | TextureFormat::R32Float
-        | TextureFormat::Depth32Float => None,
-        _ => None,
-    }
-}
-
 fn incompatible(identity: GpuWorkResourceId, detail: &'static str) -> GpuResourceRealizationError {
     GpuResourceRealizationError::new(
         GpuResourceRealizationErrorCategory::FormatOrAlignmentNotAdmitted,
@@ -594,7 +583,7 @@ mod tests {
             map_compare_function(GpuCompareFunction::LessEqual),
             CompareFunction::LessEqual
         );
-        assert!(paired_view_format(TextureFormat::R32Uint).is_none());
-        assert!(paired_view_format(TextureFormat::R32Float).is_none());
+        assert!(texture_format::paired_view_format(GpuTextureFormat::R32Uint).is_none());
+        assert!(texture_format::paired_view_format(GpuTextureFormat::R32Float).is_none());
     }
 }

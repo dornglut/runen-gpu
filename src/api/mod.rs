@@ -26,6 +26,7 @@ mod render_pass_usage;
 mod resource;
 mod surface;
 mod surface_acquisition;
+pub(crate) mod texture_format;
 mod transfer;
 mod work;
 mod work_resource_id;

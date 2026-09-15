@@ -3,6 +3,7 @@ use super::super::super::{
     GpuEntryPointName, GpuExpectedFragmentOutputSignature, GpuShaderIoLocation,
     GpuShaderIoScalarClass, GpuShaderIoValueType,
 };
+use crate::api::texture_format::{self, GpuTextureScalarClass};
 use crate::{GpuCompareFunction, GpuTextureFormat};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -81,7 +82,9 @@ impl GpuColorTargetStateDescriptor {
                 "use a color-attachment format for a color target",
             ));
         }
-        if blend == GpuBlendMode::Alpha && format == GpuTextureFormat::R32Uint {
+        if blend == GpuBlendMode::Alpha
+            && texture_format::scalar_class(format) == GpuTextureScalarClass::Uint
+        {
             return Err(invalid_attachment_state(
                 format!("color_format={format:?}, blend={blend:?}"),
                 "use replacement blending for integer color targets",
@@ -107,29 +110,16 @@ impl GpuColorTargetStateDescriptor {
     }
 
     pub const fn has_blendable_alpha_channel(self) -> bool {
-        matches!(
-            self.format,
-            GpuTextureFormat::Rgba8Unorm
-                | GpuTextureFormat::Rgba8UnormSrgb
-                | GpuTextureFormat::Bgra8Unorm
-                | GpuTextureFormat::Bgra8UnormSrgb
-        )
+        texture_format::has_alpha(self.format)
     }
 
     pub fn shader_io_type(self) -> GpuShaderIoValueType {
-        let (class, width) = match self.format {
-            GpuTextureFormat::R8Unorm | GpuTextureFormat::R32Float => {
-                (GpuShaderIoScalarClass::Float, 1)
-            }
-            GpuTextureFormat::Rgba8Unorm
-            | GpuTextureFormat::Rgba8UnormSrgb
-            | GpuTextureFormat::Bgra8Unorm
-            | GpuTextureFormat::Bgra8UnormSrgb => (GpuShaderIoScalarClass::Float, 4),
-            GpuTextureFormat::R32Uint => (GpuShaderIoScalarClass::Uint, 1),
-            GpuTextureFormat::Depth32Float => {
-                unreachable!("color-target construction rejects depth formats")
-            }
+        let class = match texture_format::scalar_class(self.format) {
+            GpuTextureScalarClass::Float => GpuShaderIoScalarClass::Float,
+            GpuTextureScalarClass::Uint => GpuShaderIoScalarClass::Uint,
         };
+        let width = texture_format::component_count(self.format);
+        debug_assert!(!self.format.is_depth());
         GpuShaderIoValueType::try_new(class, width)
             .expect("normalized color targets always map to valid shader IO")
     }
@@ -226,4 +216,95 @@ fn invalid_attachment_state(
         GpuProgramContractCause::RenderAttachmentStateInvalid,
         correction,
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn target(format: GpuTextureFormat) -> GpuColorTargetStateDescriptor {
+        GpuColorTargetStateDescriptor::new(format, GpuBlendMode::Replace, GpuColorWriteMask::ALL)
+            .unwrap()
+    }
+
+    #[test]
+    fn render_output_structure_follows_normalized_texture_format_authority() {
+        for (format, class, width, alpha) in [
+            (
+                GpuTextureFormat::R8Unorm,
+                GpuShaderIoScalarClass::Float,
+                1,
+                false,
+            ),
+            (
+                GpuTextureFormat::Rgba8Unorm,
+                GpuShaderIoScalarClass::Float,
+                4,
+                true,
+            ),
+            (
+                GpuTextureFormat::Rgba8UnormSrgb,
+                GpuShaderIoScalarClass::Float,
+                4,
+                true,
+            ),
+            (
+                GpuTextureFormat::Bgra8Unorm,
+                GpuShaderIoScalarClass::Float,
+                4,
+                true,
+            ),
+            (
+                GpuTextureFormat::Bgra8UnormSrgb,
+                GpuShaderIoScalarClass::Float,
+                4,
+                true,
+            ),
+            (
+                GpuTextureFormat::R32Uint,
+                GpuShaderIoScalarClass::Uint,
+                1,
+                false,
+            ),
+            (
+                GpuTextureFormat::R32Float,
+                GpuShaderIoScalarClass::Float,
+                1,
+                false,
+            ),
+        ] {
+            let target = target(format);
+            assert_eq!(target.shader_io_type().scalar_class(), class);
+            assert_eq!(target.shader_io_type().vector_width().get(), width);
+            assert_eq!(target.has_blendable_alpha_channel(), alpha);
+        }
+    }
+
+    #[test]
+    fn render_target_role_checks_keep_current_depth_and_integer_behavior() {
+        assert!(
+            GpuColorTargetStateDescriptor::new(
+                GpuTextureFormat::Depth32Float,
+                GpuBlendMode::Replace,
+                GpuColorWriteMask::ALL,
+            )
+            .is_err()
+        );
+        assert!(
+            GpuColorTargetStateDescriptor::new(
+                GpuTextureFormat::R32Uint,
+                GpuBlendMode::Alpha,
+                GpuColorWriteMask::ALL,
+            )
+            .is_err()
+        );
+        assert!(
+            GpuColorTargetStateDescriptor::new(
+                GpuTextureFormat::Rgba8Unorm,
+                GpuBlendMode::Alpha,
+                GpuColorWriteMask::ALL,
+            )
+            .is_ok()
+        );
+    }
 }

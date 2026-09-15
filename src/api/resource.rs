@@ -1,3 +1,4 @@
+use super::texture_format;
 use super::{
     GpuResourceDescriptorCause, GpuResourceDescriptorError, GpuResourceRef, GpuTextureFormat,
     GpuTextureHandle, GpuTextureViewDimension, PreparedGpuData, TransferData,
@@ -503,28 +504,31 @@ impl GpuPreparedTextureData {
         bytes_per_row: u32,
         rows_per_image: u32,
     ) -> Result<Self, GpuResourceDescriptorError> {
-        let logical_row = extent
-            .width()
-            .checked_mul(format.bytes_per_texel())
-            .ok_or_else(|| {
-                GpuResourceDescriptorError::invalid(
-                    "validate prepared GPU texture data",
-                    label.as_str(),
-                    GpuResourceDescriptorCause::ArithmeticOverflow,
-                    "reduce the texture extent",
-                )
-            })?;
+        let (logical_row, logical_rows) = texture_format::logical_copy_footprint(
+            format,
+            GpuTextureAspect::All,
+            extent.width(),
+            extent.height(),
+        )
+        .ok_or_else(|| {
+            GpuResourceDescriptorError::invalid(
+                "validate prepared GPU texture data",
+                label.as_str(),
+                GpuResourceDescriptorCause::ArithmeticOverflow,
+                "reduce the texture extent or choose a copyable normalized format aspect",
+            )
+        })?;
         let multiple_images = extent.depth_or_layers() > 1;
         if bytes_per_row < logical_row
             || bytes_per_row == 0
-            || (multiple_images && rows_per_image < extent.height())
-            || (!multiple_images && rows_per_image != 0 && rows_per_image < extent.height())
+            || (multiple_images && rows_per_image < logical_rows)
+            || (!multiple_images && rows_per_image != 0 && rows_per_image < logical_rows)
         {
             return Err(GpuResourceDescriptorError::invalid(
                 "validate prepared GPU texture data",
                 label.as_str(),
                 GpuResourceDescriptorCause::InvalidRowLayout,
-                "provide a row stride covering one logical row and enough rows per image",
+                "provide a row stride covering one logical block row and enough block rows per image",
             ));
         }
         let image_stride = if multiple_images {
@@ -551,7 +555,7 @@ impl GpuPreparedTextureData {
                     "reduce the texture layer count",
                 )
             })?;
-        let preceding_rows = u64::from(extent.height() - 1)
+        let preceding_rows = u64::from(logical_rows - 1)
             .checked_mul(u64::from(bytes_per_row))
             .ok_or_else(|| {
                 GpuResourceDescriptorError::invalid(
@@ -603,6 +607,15 @@ impl GpuPreparedTextureData {
     }
     pub const fn rows_per_image(&self) -> u32 {
         self.rows_per_image
+    }
+
+    pub(crate) const fn logical_copy_footprint(&self) -> Option<(u32, u32)> {
+        texture_format::logical_copy_footprint(
+            self.format,
+            GpuTextureAspect::All,
+            self.extent.width(),
+            self.extent.height(),
+        )
     }
 }
 
@@ -923,12 +936,13 @@ fn validate_texture_format_usages(
     format: GpuTextureFormat,
     usages: &GpuTextureUsages,
 ) -> Result<(), GpuResourceDescriptorError> {
+    let depth_format = texture_format::supports_aspect(format, GpuTextureAspect::DepthOnly);
     let depth_usage = usages.contains(GpuTextureUsage::DepthStencilAttachment);
     let color_usage = usages.contains(GpuTextureUsage::ColorAttachment);
     let storage_usage = usages.contains(GpuTextureUsage::StorageRead)
         || usages.contains(GpuTextureUsage::StorageWrite);
-    if (format.is_depth() && (color_usage || storage_usage))
-        || (!format.is_depth() && depth_usage)
+    if (depth_format && (color_usage || storage_usage))
+        || (!depth_format && depth_usage)
         || (format.is_srgb() && storage_usage)
     {
         return Err(GpuResourceDescriptorError::invalid(
@@ -1018,7 +1032,7 @@ impl GpuTextureViewDescriptor {
         validate_texture_view_dimension(label, parent, dimension, subresources)?;
         validate_aspect(label, parent.format(), subresources.aspect())?;
         if let Some(view_format) = format {
-            if !formats_are_view_compatible(parent.format(), view_format) {
+            if !texture_format::view_compatible(parent.format(), view_format) {
                 return Err(GpuResourceDescriptorError::invalid(
                     "construct GPU texture-view descriptor",
                     label,
@@ -1087,12 +1101,7 @@ fn validate_aspect(
     format: GpuTextureFormat,
     aspect: GpuTextureAspect,
 ) -> Result<(), GpuResourceDescriptorError> {
-    let valid = if format.is_depth() {
-        matches!(aspect, GpuTextureAspect::All | GpuTextureAspect::DepthOnly)
-    } else {
-        matches!(aspect, GpuTextureAspect::All | GpuTextureAspect::Color)
-    };
-    if !valid {
+    if !texture_format::supports_aspect(format, aspect) {
         return Err(GpuResourceDescriptorError::invalid(
             "validate GPU texture aspect",
             label,
@@ -1101,26 +1110,6 @@ fn validate_aspect(
         ));
     }
     Ok(())
-}
-
-fn formats_are_view_compatible(parent: GpuTextureFormat, view: GpuTextureFormat) -> bool {
-    parent == view
-        || matches!(
-            (parent, view),
-            (
-                GpuTextureFormat::Rgba8Unorm,
-                GpuTextureFormat::Rgba8UnormSrgb
-            ) | (
-                GpuTextureFormat::Rgba8UnormSrgb,
-                GpuTextureFormat::Rgba8Unorm
-            ) | (
-                GpuTextureFormat::Bgra8Unorm,
-                GpuTextureFormat::Bgra8UnormSrgb
-            ) | (
-                GpuTextureFormat::Bgra8UnormSrgb,
-                GpuTextureFormat::Bgra8Unorm
-            )
-        )
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -1706,6 +1695,23 @@ mod tests {
             )
             .is_ok()
         );
+
+        for (name, format, row_bytes, total_bytes) in [
+            ("r8", GpuTextureFormat::R8Unorm, 8, 64),
+            ("r32", GpuTextureFormat::R32Float, 32, 256),
+            ("depth32", GpuTextureFormat::Depth32Float, 32, 256),
+        ] {
+            let prepared = GpuPreparedTextureData::new(
+                &label,
+                transfer_data(name, total_bytes),
+                format,
+                single_extent,
+                row_bytes,
+                0,
+            )
+            .unwrap();
+            assert_eq!(prepared.logical_copy_footprint(), Some((row_bytes, 8)));
+        }
 
         let multisample_prepared = GpuPreparedTextureData::new(
             &label,
