@@ -339,14 +339,8 @@ fn oversized_texture(
             GpuTextureDescriptor::new(
                 common(name),
                 dimension,
-                GpuTextureExtent::new(
-                    &texture_label,
-                    dimension,
-                    width,
-                    height,
-                    depth_or_layers,
-                )
-                .unwrap(),
+                GpuTextureExtent::new(&texture_label, dimension, width, height, depth_or_layers)
+                    .unwrap(),
                 1,
                 1,
                 GpuTextureFormat::Rgba8Unorm,
@@ -449,11 +443,7 @@ fn native_normalized_vertex_limits_reject_before_render_pipeline_creation() {
     );
     let attributes = (0..attribute_count)
         .map(|location| {
-            GpuVertexAttribute::new(
-                location,
-                u64::from(location) * 4,
-                GpuVertexFormat::Float32,
-            )
+            GpuVertexAttribute::new(location, u64::from(location) * 4, GpuVertexFormat::Float32)
         })
         .collect::<Vec<_>>();
     let attribute_layout = GpuVertexBufferLayoutDescriptor::new(
