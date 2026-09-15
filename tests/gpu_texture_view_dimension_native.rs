@@ -92,23 +92,15 @@ fn texture_view(
         array_layer_count,
         GpuTextureAspect::Color,
     )?;
-    let descriptor = GpuTextureViewDescriptor::new(
-        common(name),
-        texture,
-        None,
-        dimension,
-        subresources,
-    )?;
+    let descriptor =
+        GpuTextureViewDescriptor::new(common(name), texture, None, dimension, subresources)?;
     Ok(allocator.allocate_texture_view_handle(descriptor).unwrap())
 }
 
 fn dimension_pipeline() -> GpuComputePipelineDescriptor {
-    let [program] = admit_static_wgsl_sources([(
-        "texture-view-dimension-authority",
-        1,
-        VIEW_DIMENSION_WGSL,
-    )])
-    .unwrap();
+    let [program] =
+        admit_static_wgsl_sources([("texture-view-dimension-authority", 1, VIEW_DIMENSION_WGSL)])
+            .unwrap();
     GpuComputePipelineDescriptor::ordinary(program, "main").unwrap()
 }
 
