@@ -53,6 +53,7 @@ render, runtime-binding, and native-host-surface examples live under
 ## Authority and policy
 
 - [Architecture](ARCHITECTURE.md)
+- [Roadmap](ROADMAP.md)
 - [Testing](TESTING.md)
 - [Bootstrap and provenance](BOOTSTRAP.md)
 - [Executor guidance](AGENTS.md)
