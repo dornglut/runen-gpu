@@ -1,7 +1,8 @@
 use super::{
     GpuRenderColorAttachment, GpuRenderDepthStencilAttachment, GpuRenderDraw,
     GpuRenderPipelineDescriptor, GpuScissorRect, GpuTextureDimension, GpuTextureFormat,
-    GpuTextureHandle, GpuTextureViewHandle, GpuWorkOperationCause, GpuWorkOperationError,
+    GpuTextureHandle, GpuTextureViewDimension, GpuTextureViewHandle, GpuWorkOperationCause,
+    GpuWorkOperationError,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -301,7 +302,7 @@ mod tests {
                     )),
                     texture,
                     None,
-                    GpuTextureDimension::D2,
+                    GpuTextureViewDimension::D2,
                     subresources,
                 )
                 .unwrap(),

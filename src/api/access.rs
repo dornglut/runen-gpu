@@ -1,7 +1,8 @@
 use super::{
     GpuAccessCause, GpuAccessError, GpuBufferHandle, GpuBufferUsage, GpuQuerySetHandle,
     GpuResourceAccessIntent, GpuSamplerHandle, GpuTextureAspect, GpuTextureDimension,
-    GpuTextureHandle, GpuTextureSubresourceRange, GpuTextureUsage, GpuTextureViewHandle,
+    GpuTextureHandle, GpuTextureSubresourceRange, GpuTextureUsage, GpuTextureViewDimension,
+    GpuTextureViewHandle,
     GpuWorkResourceId,
 };
 
@@ -1042,7 +1043,7 @@ mod tests {
                     common("view"),
                     &texture,
                     None,
-                    GpuTextureDimension::D2,
+                    GpuTextureViewDimension::D2,
                     view_range,
                 )
                 .unwrap(),

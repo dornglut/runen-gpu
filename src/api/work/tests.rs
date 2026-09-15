@@ -5,7 +5,7 @@ use crate::{
     GpuQuerySetDescriptor, GpuReconstruction, GpuResourceCommon, GpuResourceLabel,
     GpuResourceLifetime, GpuResourceProvenance, GpuTextureDescriptor, GpuTextureExtent,
     GpuTextureInitialization, GpuTextureUsage, GpuTextureUsages, GpuTextureViewDescriptor,
-    GpuWorkResourceIdAllocator,
+    GpuTextureViewDimension, GpuWorkResourceIdAllocator,
 };
 use std::{
     collections::hash_map::DefaultHasher,
@@ -134,7 +134,7 @@ fn texture_view(
                 common(name),
                 texture,
                 None,
-                GpuTextureDimension::D2,
+                GpuTextureViewDimension::D2,
                 subresources,
             )
             .unwrap(),
