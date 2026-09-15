@@ -5,7 +5,7 @@ use crate::{
     GpuResourceCommon, GpuResourceOwnership, GpuResourceRealizationError,
     GpuResourceRealizationErrorCategory, GpuSamplerDescriptor, GpuTextureAspect,
     GpuTextureDescriptor, GpuTextureDimension, GpuTextureFormat, GpuTextureUsage,
-    GpuTextureViewDescriptor, GpuWorkResourceId,
+    GpuTextureViewDescriptor, GpuTextureViewDimension, GpuWorkResourceId,
 };
 use wgpu::{
     AddressMode, BufferUsages, CompareFunction, DownlevelFlags, Extent3d, Features, FilterMode,
@@ -329,12 +329,12 @@ pub(super) const fn map_texture_view_dimension(
     descriptor: &GpuTextureViewDescriptor,
 ) -> TextureViewDimension {
     match descriptor.dimension() {
-        GpuTextureDimension::D1 => TextureViewDimension::D1,
-        GpuTextureDimension::D2 if descriptor.subresources().array_layer_count() > 1 => {
-            TextureViewDimension::D2Array
-        }
-        GpuTextureDimension::D2 => TextureViewDimension::D2,
-        GpuTextureDimension::D3 => TextureViewDimension::D3,
+        GpuTextureViewDimension::D1 => TextureViewDimension::D1,
+        GpuTextureViewDimension::D2 => TextureViewDimension::D2,
+        GpuTextureViewDimension::D2Array => TextureViewDimension::D2Array,
+        GpuTextureViewDimension::Cube => TextureViewDimension::Cube,
+        GpuTextureViewDimension::CubeArray => TextureViewDimension::CubeArray,
+        GpuTextureViewDimension::D3 => TextureViewDimension::D3,
     }
 }
 

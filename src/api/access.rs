@@ -823,7 +823,7 @@ mod tests {
         GpuQueryKind, GpuQuerySetDescriptor, GpuReconstruction, GpuResourceCommon,
         GpuResourceLabel, GpuResourceLifetime, GpuResourceProvenance, GpuTextureDescriptor,
         GpuTextureExtent, GpuTextureFormat, GpuTextureInitialization, GpuTextureUsages,
-        GpuTextureViewDescriptor, GpuWorkResourceIdAllocator,
+        GpuTextureViewDescriptor, GpuTextureViewDimension, GpuWorkResourceIdAllocator,
     };
     use std::{
         collections::hash_map::DefaultHasher,
@@ -1042,7 +1042,7 @@ mod tests {
                     common("view"),
                     &texture,
                     None,
-                    GpuTextureDimension::D2,
+                    GpuTextureViewDimension::D2Array,
                     view_range,
                 )
                 .unwrap(),

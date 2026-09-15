@@ -7,7 +7,8 @@ use runen_gpu::{
     GpuResourceOwnership, GpuResourceProvenance, GpuResourceRealizationErrorCategory,
     GpuResourceRealizationPolicy, GpuSamplerDescriptor, GpuTextureDescriptor, GpuTextureDimension,
     GpuTextureExtent, GpuTextureFormat, GpuTextureInitialization, GpuTextureSubresourceRange,
-    GpuTextureUsage, GpuTextureUsages, GpuTextureViewDescriptor, GpuWorkResourceIdAllocator,
+    GpuTextureUsage, GpuTextureUsages, GpuTextureViewDescriptor, GpuTextureViewDimension,
+    GpuWorkResourceIdAllocator,
 };
 use std::num::NonZeroUsize;
 
@@ -118,7 +119,7 @@ fn representative_resources_realize_transactionally_or_report_environment_absenc
                 view_common,
                 &texture,
                 None,
-                GpuTextureDimension::D2,
+                GpuTextureViewDimension::D2,
                 subresources,
             )
             .unwrap(),

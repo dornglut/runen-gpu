@@ -57,20 +57,19 @@ impl GpuRuntimeBufferBinding {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct GpuRuntimeTextureViewBinding {
     handle: GpuTextureViewHandle,
-    dimension: GpuTextureViewDimension,
 }
 
 impl GpuRuntimeTextureViewBinding {
-    pub fn new(handle: GpuTextureViewHandle, dimension: GpuTextureViewDimension) -> Self {
-        Self { handle, dimension }
+    pub fn new(handle: GpuTextureViewHandle) -> Self {
+        Self { handle }
     }
 
     pub fn handle(&self) -> &GpuTextureViewHandle {
         &self.handle
     }
 
-    pub const fn dimension(&self) -> GpuTextureViewDimension {
-        self.dimension
+    pub fn dimension(&self) -> GpuTextureViewDimension {
+        self.handle.descriptor().dimension()
     }
 }
 

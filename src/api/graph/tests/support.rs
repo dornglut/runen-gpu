@@ -85,7 +85,7 @@ pub(super) fn texture_view(
                 common(name),
                 texture,
                 None,
-                GpuTextureDimension::D2,
+                GpuTextureViewDimension::D2,
                 subresources,
             )
             .unwrap(),

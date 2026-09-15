@@ -15,8 +15,8 @@ use crate::{
     GpuSurfaceTarget, GpuTextureAspect, GpuTextureDescriptor, GpuTextureDimension,
     GpuTextureExtent, GpuTextureFormat, GpuTextureHandle, GpuTextureInitialization,
     GpuTextureSubresourceRange, GpuTextureUsage, GpuTextureUsages, GpuTextureViewDescriptor,
-    GpuTextureViewHandle, GpuWorkResourceId, GpuWorkResourceIdAllocator, allocate_surface_id,
-    allocate_surface_lease_id,
+    GpuTextureViewDimension, GpuTextureViewHandle, GpuWorkResourceId, GpuWorkResourceIdAllocator,
+    allocate_surface_id, allocate_surface_lease_id,
 };
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex, MutexGuard, Weak};
@@ -449,7 +449,7 @@ fn build_acquired_surface_resources(
         view_common,
         &texture,
         None,
-        GpuTextureDimension::D2,
+        GpuTextureViewDimension::D2,
         subresources,
     )
     .map_err(|error| acquisition_invariant(surface.id(), error.to_string()))?;

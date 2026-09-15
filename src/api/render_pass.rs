@@ -224,7 +224,7 @@ mod tests {
         GpuReconstruction, GpuResourceCommon, GpuResourceLabel, GpuResourceLifetime,
         GpuResourceProvenance, GpuTextureAspect, GpuTextureDescriptor, GpuTextureExtent,
         GpuTextureInitialization, GpuTextureSubresourceRange, GpuTextureUsage, GpuTextureUsages,
-        GpuTextureViewDescriptor, GpuWorkResourceIdAllocator,
+        GpuTextureViewDescriptor, GpuTextureViewDimension, GpuWorkResourceIdAllocator,
     };
     use std::num::NonZeroU64;
 
@@ -301,7 +301,7 @@ mod tests {
                     )),
                     texture,
                     None,
-                    GpuTextureDimension::D2,
+                    GpuTextureViewDimension::D2,
                     subresources,
                 )
                 .unwrap(),

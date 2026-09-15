@@ -138,7 +138,7 @@ fn render_target(
                 common("indexed offscreen color target view"),
                 &texture,
                 None,
-                GpuTextureDimension::D2,
+                GpuTextureViewDimension::D2,
                 subresources,
             )
             .unwrap(),

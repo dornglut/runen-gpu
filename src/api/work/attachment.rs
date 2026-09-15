@@ -1,8 +1,8 @@
 use super::super::{
     GpuAttachmentLoadKind, GpuAttachmentStore, GpuDepthStencilAccess, GpuTextureAccess,
-    GpuTextureAccessKind, GpuTextureAccessResource, GpuTextureAspect, GpuTextureDimension,
-    GpuTextureFormat, GpuTextureSubresourceRange, GpuTextureViewHandle, GpuWorkOperationCause,
-    GpuWorkOperationError,
+    GpuTextureAccessKind, GpuTextureAccessResource, GpuTextureAspect, GpuTextureFormat,
+    GpuTextureSubresourceRange, GpuTextureViewDimension, GpuTextureViewHandle,
+    GpuWorkOperationCause, GpuWorkOperationError,
 };
 use super::mip_extent;
 use core::fmt;
@@ -481,7 +481,7 @@ fn validate_attachment_view(
 ) -> Result<(), GpuWorkOperationError> {
     let descriptor = view.descriptor();
     let subresources = descriptor.subresources();
-    if descriptor.dimension() != GpuTextureDimension::D2
+    if descriptor.dimension() != GpuTextureViewDimension::D2
         || subresources.mip_level_count() != 1
         || subresources.array_layer_count() != 1
     {

@@ -5,7 +5,7 @@ use crate::{
     GpuQuerySetDescriptor, GpuReconstruction, GpuResourceCommon, GpuResourceLabel,
     GpuResourceLifetime, GpuResourceProvenance, GpuTextureDescriptor, GpuTextureExtent,
     GpuTextureInitialization, GpuTextureUsage, GpuTextureUsages, GpuTextureViewDescriptor,
-    GpuWorkResourceIdAllocator,
+    GpuTextureViewDimension, GpuWorkResourceIdAllocator,
 };
 use std::{
     collections::hash_map::DefaultHasher,
@@ -126,18 +126,13 @@ fn texture_view(
     allocator: &mut GpuWorkResourceIdAllocator,
     texture: &GpuTextureHandle,
     name: &str,
+    dimension: GpuTextureViewDimension,
     subresources: GpuTextureSubresourceRange,
 ) -> GpuTextureViewHandle {
     allocator
         .allocate_texture_view_handle(
-            GpuTextureViewDescriptor::new(
-                common(name),
-                texture,
-                None,
-                GpuTextureDimension::D2,
-                subresources,
-            )
-            .unwrap(),
+            GpuTextureViewDescriptor::new(common(name), texture, None, dimension, subresources)
+                .unwrap(),
         )
         .unwrap()
 }
@@ -159,7 +154,13 @@ fn single_view(
         aspect,
     )
     .unwrap();
-    texture_view(allocator, texture, name, subresources)
+    texture_view(
+        allocator,
+        texture,
+        name,
+        GpuTextureViewDimension::D2,
+        subresources,
+    )
 }
 
 #[test]
@@ -223,6 +224,7 @@ fn render_attachment_views_select_exactly_one_subresource() {
         &mut allocator,
         &layered,
         "whole layered target view",
+        GpuTextureViewDimension::D2Array,
         GpuTextureSubresourceRange::whole(&layered).unwrap(),
     );
     assert!(
