@@ -58,6 +58,33 @@ fn native_copy_context_with_policies(
     context
 }
 
+fn native_r32float_context() -> GpuContext {
+    let mut requirements = GpuCapabilityRequirements::new();
+    requirements
+        .insert(GpuCapabilityRequirement::Required(
+            GpuCapabilityFeature::Copy,
+        ))
+        .unwrap();
+    let descriptor = GpuContextDescriptor::new(requirements)
+        .require_format_role(GpuTextureFormat::R32Float, GpuFormatRole::Sampled)
+        .require_format_role(GpuTextureFormat::R32Float, GpuFormatRole::CopySource)
+        .require_format_role(GpuTextureFormat::R32Float, GpuFormatRole::CopyDestination)
+        .with_fallback_policy(GpuSoftwareFallbackPolicy::Require)
+        .with_allowed_backends([GpuBackendFamily::Vulkan])
+        .with_label("R32Float native format proof");
+    let context = pollster::block_on(GpuContext::request(descriptor))
+        .expect("native conformance Vulkan fallback must admit sampled/copy R32Float roles");
+    let facts = context
+        .adapter_facts()
+        .supported()
+        .format(GpuTextureFormat::R32Float)
+        .expect("R32Float must be present in normalized adapter format facts");
+    assert!(facts.sampled);
+    assert!(facts.copy_source);
+    assert!(facts.copy_destination);
+    context
+}
+
 fn add_operation(builder: &mut GpuWorkFragmentBuilder, name: &str, operation: GpuWorkOperation) {
     builder
         .add_node(
@@ -481,4 +508,181 @@ fn padded_prepared_texture_materializes_through_canonical_texture_upload() {
     assert_eq!(bytes.as_bytes(), expected.as_slice());
     assert_eq!(bytes.layout().byte_len(), expected.len() as u64);
     assert_eq!(bytes.texture_format(), Some(GpuTextureFormat::Rgba8Unorm));
+}
+
+#[test]
+#[ignore = "requires a real Vulkan fallback adapter; executed by RunenGPU Native Conformance CI"]
+fn r32float_transfer_realization_admission_and_sampled_binding_are_backend_proven() {
+    const WIDTH: u32 = 64;
+    const HEIGHT: u32 = 2;
+    const BYTES_PER_ROW: u32 = WIDTH * 4;
+
+    let context = native_r32float_context();
+
+    let mut rejection_requirements = GpuCapabilityRequirements::new();
+    rejection_requirements
+        .insert(GpuCapabilityRequirement::Required(
+            GpuCapabilityFeature::Copy,
+        ))
+        .unwrap();
+    let rejected_descriptor = GpuContextDescriptor::new(rejection_requirements)
+        .require_format_role(GpuTextureFormat::R32Float, GpuFormatRole::DepthStencil)
+        .with_fallback_policy(GpuSoftwareFallbackPolicy::Require)
+        .with_allowed_backends([GpuBackendFamily::Vulkan])
+        .with_label("R32Float unsupported depth-role proof");
+    match pollster::block_on(GpuContext::request(rejected_descriptor)) {
+        Err(error) => assert_eq!(
+            error.category(),
+            GpuContextRequestErrorCategory::NoAdmissibleCandidate,
+            "R32Float depth-role rejection must come from normalized candidate admission"
+        ),
+        Ok(_) => panic!("non-depth R32Float must not admit the depth/stencil role"),
+    }
+
+    let values = (0..(WIDTH * HEIGHT))
+        .map(|index| index as f32 * 0.25 - 8.0)
+        .collect::<Vec<_>>();
+    let expected = values
+        .iter()
+        .flat_map(|value| value.to_ne_bytes())
+        .collect::<Vec<_>>();
+    assert_eq!(expected.len(), usize::try_from(BYTES_PER_ROW * HEIGHT).unwrap());
+
+    let mut allocator = GpuWorkResourceIdAllocator::new();
+    let buffer = prepared_buffer(&mut allocator, &expected);
+    let texture_label = label("native R32Float transfer texture");
+    let extent = GpuTextureExtent::new(
+        &texture_label,
+        GpuTextureDimension::D2,
+        WIDTH,
+        HEIGHT,
+        1,
+    )
+    .unwrap();
+    let texture = allocator
+        .allocate_texture_handle(
+            GpuTextureDescriptor::new(
+                common("native R32Float transfer texture"),
+                GpuTextureDimension::D2,
+                extent,
+                1,
+                1,
+                GpuTextureFormat::R32Float,
+                GpuTextureUsages::new(
+                    &texture_label,
+                    [
+                        GpuTextureUsage::Sampled,
+                        GpuTextureUsage::CopySource,
+                        GpuTextureUsage::CopyDestination,
+                    ],
+                )
+                .unwrap(),
+                GpuTextureInitialization::Uninitialized,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+
+    let realized_texture = context
+        .realize_texture(&texture)
+        .expect("admitted R32Float texture must realize");
+    let view_common = common("native R32Float sampled view");
+    let view_subresources = GpuTextureSubresourceRange::new(
+        view_common.label(),
+        0,
+        1,
+        0,
+        1,
+        GpuTextureAspect::Color,
+    )
+    .unwrap();
+    let view = allocator
+        .allocate_texture_view_handle(
+            GpuTextureViewDescriptor::new(
+                view_common,
+                &texture,
+                None,
+                GpuTextureDimension::D2,
+                view_subresources,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+    let realized_view = context
+        .realize_texture_view(&view, &realized_texture)
+        .expect("R32Float sampled view must realize");
+
+    let binding_key = GpuBindingKey::try_new(0, 0).unwrap();
+    let binding = GpuBindingDeclaration::new(
+        binding_key,
+        GpuShaderStages::one(GpuShaderStage::Fragment),
+        GpuBindingKind::sampled_texture(
+            GpuTextureSampleClass::FloatUnfilterable,
+            GpuTextureViewDimension::D2,
+            false,
+        )
+        .unwrap(),
+        None,
+        "r32float_texture",
+        GpuBindingProvenance::new("R32Float native sampled binding proof", None).unwrap(),
+    )
+    .unwrap();
+    let layout = GpuBindGroupLayoutDescriptor::new(0, [binding]).unwrap();
+    let realized_layout = pollster::block_on(context.realize_bind_group_layout(&layout))
+        .expect("unfilterable R32Float sampled layout must realize");
+    let binding_value = GpuRuntimeBindingValue::new(
+        binding_key,
+        [GpuRuntimeBindingResource::TextureView(
+            GpuRuntimeTextureViewBinding::new(view.clone(), GpuTextureViewDimension::D2),
+        )],
+    )
+    .unwrap();
+    let realized_bind_group = pollster::block_on(
+        context.realize_bind_group(&realized_layout, [binding_value]),
+    )
+    .expect("R32Float sampled texture must bind without a filterability requirement");
+    assert_eq!(realized_bind_group.layout_descriptor(), &layout);
+
+    let region = GpuTextureCopyRegion::new(
+        &texture,
+        0,
+        GpuTextureOrigin::new(0, 0, 0),
+        GpuTextureAspect::Color,
+        GpuCopyExtent::new(WIDTH, HEIGHT, 1).unwrap(),
+    )
+    .unwrap();
+    let source_layout = GpuBufferTextureLayout::new(&buffer, 0, BYTES_PER_ROW, HEIGHT).unwrap();
+    let copy = GpuCopyOperation::buffer_to_texture(source_layout, region.clone()).unwrap();
+    let readback_id = GpuReadbackId::allocate().unwrap();
+    let readback = GpuReadbackOperation::new(region.into(), readback_id).unwrap();
+    let mut builder = GpuWorkFragmentBuilder::new(
+        label("native R32Float transfer proof"),
+        provenance("native R32Float transfer proof"),
+    );
+    builder.declare_resource(buffer.into()).unwrap();
+    builder.declare_resource(texture.into()).unwrap();
+    add_operation(
+        &mut builder,
+        "copy bytes into R32Float texture",
+        GpuWorkOperation::Copy(copy),
+    );
+    add_operation(
+        &mut builder,
+        "read R32Float texture bytes",
+        GpuWorkOperation::Readback(readback),
+    );
+    let graph = GpuPreparedWorkGraph::prepare(
+        label("native R32Float transfer graph"),
+        [builder.finish().unwrap()],
+    )
+    .unwrap();
+
+    let bytes = submit_and_readback(&context, graph, readback_id);
+    assert_eq!(bytes.as_bytes(), expected.as_slice());
+    assert_eq!(bytes.layout().byte_len(), expected.len() as u64);
+    assert_eq!(bytes.texture_format(), Some(GpuTextureFormat::R32Float));
+
+    drop(realized_bind_group);
+    drop(realized_view);
+    drop(realized_texture);
 }
