@@ -27,24 +27,32 @@ jobs:
           test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
       - name: Install maintained stable Rust
         run: rustup toolchain install stable --profile minimal --component rustfmt
-      - name: Format and validate
+      - name: Format candidate
         run: |
           set -euo pipefail
           cargo +stable fmt --all
           git diff --check
+      - name: Commit formatting locally
+        run: |
+          set -euo pipefail
+          git config user.name 'Aschenrot'
+          git config user.email '128308156+aschenrot@users.noreply.github.com'
+          if git diff --quiet; then
+            echo 'No formatting changes required.'
+          else
+            git add src tests
+            git diff --cached --check
+            git commit -m 'style: format normalized limit migration'
+          fi
+          test -z "$(git status --porcelain)"
+      - name: Validate clean formatted candidate
+        run: |
+          set -euo pipefail
           cargo validate
-      - name: Commit validated formatting
+          test -z "$(git status --porcelain)"
+      - name: Publish validated candidate
         env:
           BRANCH: ${{ github.head_ref }}
         run: |
           set -euo pipefail
-          if git diff --quiet; then
-            echo 'No formatting changes required.'
-            exit 0
-          fi
-          git config user.name 'Aschenrot'
-          git config user.email '128308156+aschenrot@users.noreply.github.com'
-          git add src tests
-          git diff --cached --check
-          git commit -m 'style: format normalized limit migration'
           git push origin "HEAD:$BRANCH"
