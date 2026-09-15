@@ -8,9 +8,7 @@ use super::{
     GpuRuntimeBindingDeviceFacts, GpuRuntimeBindingResource, GpuRuntimeBindingValue,
     GpuRuntimeBufferBinding, GpuRuntimeTextureViewBinding,
 };
-use crate::{
-    GpuBufferUsage, GpuFilterMode, GpuTextureDimension, GpuTextureFormat, GpuTextureUsage,
-};
+use crate::{GpuBufferUsage, GpuFilterMode, GpuTextureFormat, GpuTextureUsage};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GpuValidatedBindGroupBindings {
@@ -421,19 +419,11 @@ fn validate_texture_view_shape(
         .kind()
         .texture_view_dimension()
         .expect("texture declarations carry a view dimension");
-    if binding.dimension() != expected_dimension {
-        return Err(incompatible(
-            declaration.key().to_string(),
-            "match the declaration's normalized texture-view dimension exactly",
-        ));
-    }
-
     let view = binding.handle().descriptor();
-    let layer_count = view.subresources().array_layer_count();
-    if !view_dimension_compatible(view.dimension(), layer_count, binding.dimension()) {
+    if view.dimension() != expected_dimension {
         return Err(incompatible(
             declaration.key().to_string(),
-            "provide view facts compatible with the logical texture-view descriptor",
+            "bind a texture view whose authoritative descriptor dimension matches the declaration exactly",
         ));
     }
 
@@ -470,23 +460,6 @@ fn validate_sampler(
         ));
     }
     Ok(())
-}
-
-fn view_dimension_compatible(
-    actual: GpuTextureDimension,
-    layer_count: u32,
-    declared: GpuTextureViewDimension,
-) -> bool {
-    match declared {
-        GpuTextureViewDimension::D1 => actual == GpuTextureDimension::D1 && layer_count == 1,
-        GpuTextureViewDimension::D2 => actual == GpuTextureDimension::D2 && layer_count == 1,
-        GpuTextureViewDimension::D2Array => actual == GpuTextureDimension::D2,
-        GpuTextureViewDimension::Cube => actual == GpuTextureDimension::D2 && layer_count == 6,
-        GpuTextureViewDimension::CubeArray => {
-            actual == GpuTextureDimension::D2 && layer_count >= 6 && layer_count.is_multiple_of(6)
-        }
-        GpuTextureViewDimension::D3 => actual == GpuTextureDimension::D3 && layer_count == 1,
-    }
 }
 
 fn is_float_format(format: GpuTextureFormat) -> bool {
