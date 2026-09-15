@@ -1,0 +1,35 @@
+name: Issue 13 caller census
+
+on:
+  push:
+    branches:
+      - issue-13-texture-view-dimension-authority
+
+permissions:
+  contents: read
+
+jobs:
+  census:
+    name: Enumerate texture-view callers
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out exact branch head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: issue-13-texture-view-dimension-authority
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Enumerate public constructor and runtime binding callers
+        run: |
+          set -euo pipefail
+          echo '=== GpuTextureViewDescriptor::new ==='
+          rg -n -C 5 'GpuTextureViewDescriptor::new' --glob '*.rs' . || true
+          echo '=== GpuRuntimeTextureViewBinding::new ==='
+          rg -n -C 3 'GpuRuntimeTextureViewBinding::new' --glob '*.rs' . || true
+
+      - name: Compile all targets without execution
+        run: |
+          set -euo pipefail
+          rustup toolchain install stable --profile minimal
+          cargo +stable test --all-targets --locked --no-run
