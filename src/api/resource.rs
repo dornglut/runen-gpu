@@ -1,8 +1,8 @@
+use super::texture_format;
 use super::{
     GpuResourceDescriptorCause, GpuResourceDescriptorError, GpuResourceRef, GpuTextureFormat,
     GpuTextureHandle, GpuTextureViewDimension, PreparedGpuData, TransferData,
 };
-use super::texture_format;
 use std::collections::BTreeSet;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -1126,6 +1126,8 @@ pub struct GpuSamplerDescriptor {
     compare: Option<GpuCompareFunction>,
 }
 
+// Construction rejects non-finite LOD values, so semantic equality is
+// reflexive even though the stored representation uses `f32`.
 impl Eq for GpuSamplerDescriptor {}
 
 impl GpuSamplerDescriptor {
@@ -1284,6 +1286,8 @@ impl GpuResourceDescriptor {
     }
 }
 
+/// The already-existing neutral final access intent used only by export relationships.
+/// G3 owns ranges, subresources, hazards, and work-time access validation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum GpuResourceAccessIntent {
     Read,
@@ -1291,6 +1295,11 @@ pub enum GpuResourceAccessIntent {
     ReadWrite,
 }
 
+/// A consumer-owned semantic key used to connect fragment exports and imports.
+///
+/// Unlike labels, an export key participates in graph composition. It is still
+/// process-local work authoring data and carries no persistence, replay, wire,
+/// network, ABI, or cache stability promise.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct GpuExportKey(String);
 

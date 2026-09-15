@@ -213,7 +213,9 @@ pub(super) fn lower_texture(
         format: native_format,
         usage: native_usage,
         paired_view_format: permits_format_reinterpretation
-            .then(|| texture_format::paired_view_format(descriptor.format()).map(map_texture_format))
+            .then(|| {
+                texture_format::paired_view_format(descriptor.format()).map(map_texture_format)
+            })
             .flatten(),
         permits_format_reinterpretation,
     })

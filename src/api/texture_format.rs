@@ -204,12 +204,8 @@ pub(crate) fn view_compatible(parent: GpuTextureFormat, view: GpuTextureFormat) 
     parent == view || paired_view_format(parent).is_some_and(|paired| paired == view)
 }
 
-pub(crate) fn raw_copy_compatible(
-    source: GpuTextureFormat,
-    destination: GpuTextureFormat,
-) -> bool {
-    source == destination
-        || paired_view_format(source).is_some_and(|paired| paired == destination)
+pub(crate) fn raw_copy_compatible(source: GpuTextureFormat, destination: GpuTextureFormat) -> bool {
+    source == destination || paired_view_format(source).is_some_and(|paired| paired == destination)
 }
 
 pub(crate) const fn scalar_class(format: GpuTextureFormat) -> GpuTextureScalarClass {
@@ -382,7 +378,10 @@ mod tests {
             assert_eq!(supports_aspect(format, GpuTextureAspect::Color), !depth);
             assert_eq!(supports_aspect(format, GpuTextureAspect::DepthOnly), depth);
             assert!(!supports_aspect(format, GpuTextureAspect::StencilOnly));
-            assert_eq!(canonical_copy_aspect(format, GpuTextureAspect::All), Some(explicit_aspect));
+            assert_eq!(
+                canonical_copy_aspect(format, GpuTextureAspect::All),
+                Some(explicit_aspect)
+            );
             assert_eq!(
                 logical_copy_footprint(format, GpuTextureAspect::All, 7, 5),
                 Some((7 * bytes, 5))
@@ -397,8 +396,14 @@ mod tests {
     #[test]
     fn view_and_raw_copy_compatibility_share_the_same_storage_pairing() {
         for (linear, srgb) in [
-            (GpuTextureFormat::Rgba8Unorm, GpuTextureFormat::Rgba8UnormSrgb),
-            (GpuTextureFormat::Bgra8Unorm, GpuTextureFormat::Bgra8UnormSrgb),
+            (
+                GpuTextureFormat::Rgba8Unorm,
+                GpuTextureFormat::Rgba8UnormSrgb,
+            ),
+            (
+                GpuTextureFormat::Bgra8Unorm,
+                GpuTextureFormat::Bgra8UnormSrgb,
+            ),
         ] {
             assert!(view_compatible(linear, srgb));
             assert!(view_compatible(srgb, linear));

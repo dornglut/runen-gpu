@@ -282,23 +282,29 @@ mod tests {
 
     #[test]
     fn render_target_role_checks_keep_current_depth_and_integer_behavior() {
-        assert!(GpuColorTargetStateDescriptor::new(
-            GpuTextureFormat::Depth32Float,
-            GpuBlendMode::Replace,
-            GpuColorWriteMask::ALL,
-        )
-        .is_err());
-        assert!(GpuColorTargetStateDescriptor::new(
-            GpuTextureFormat::R32Uint,
-            GpuBlendMode::Alpha,
-            GpuColorWriteMask::ALL,
-        )
-        .is_err());
-        assert!(GpuColorTargetStateDescriptor::new(
-            GpuTextureFormat::Rgba8Unorm,
-            GpuBlendMode::Alpha,
-            GpuColorWriteMask::ALL,
-        )
-        .is_ok());
+        assert!(
+            GpuColorTargetStateDescriptor::new(
+                GpuTextureFormat::Depth32Float,
+                GpuBlendMode::Replace,
+                GpuColorWriteMask::ALL,
+            )
+            .is_err()
+        );
+        assert!(
+            GpuColorTargetStateDescriptor::new(
+                GpuTextureFormat::R32Uint,
+                GpuBlendMode::Alpha,
+                GpuColorWriteMask::ALL,
+            )
+            .is_err()
+        );
+        assert!(
+            GpuColorTargetStateDescriptor::new(
+                GpuTextureFormat::Rgba8Unorm,
+                GpuBlendMode::Alpha,
+                GpuColorWriteMask::ALL,
+            )
+            .is_ok()
+        );
     }
 }

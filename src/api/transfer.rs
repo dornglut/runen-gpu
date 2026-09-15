@@ -414,7 +414,12 @@ mod tests {
             ),
         ] {
             let region = texture_region(&mut allocator, name, format, aspect);
-            assert_eq!(GpuTransferRegion::from(region.clone()).logical_byte_len().unwrap(), expected);
+            assert_eq!(
+                GpuTransferRegion::from(region.clone())
+                    .logical_byte_len()
+                    .unwrap(),
+                expected
+            );
             let readback =
                 GpuReadbackOperation::new(region.into(), GpuReadbackId::allocate().unwrap())
                     .unwrap();

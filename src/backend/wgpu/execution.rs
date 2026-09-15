@@ -244,9 +244,8 @@ struct TextureStagingLayout {
 impl TextureStagingLayout {
     fn new(region: &GpuTextureCopyRegion) -> Result<Self, GpuSubmissionPreparationError> {
         let extent = region.extent();
-        let (logical_bytes_per_row, rows_per_image) = region
-            .logical_copy_footprint()
-            .ok_or_else(|| {
+        let (logical_bytes_per_row, rows_per_image) =
+            region.logical_copy_footprint().ok_or_else(|| {
                 texture_staging_preparation_error(
                     "texture copy footprint is unavailable for the normalized format aspect",
                 )
