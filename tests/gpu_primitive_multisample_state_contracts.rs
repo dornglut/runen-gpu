@@ -14,7 +14,9 @@ fn hash_of(value: &impl Hash) -> u64 {
     hasher.finish()
 }
 
-fn texture_descriptor(sample_count: u32) -> Result<GpuTextureDescriptor, GpuResourceDescriptorError> {
+fn texture_descriptor(
+    sample_count: u32,
+) -> Result<GpuTextureDescriptor, GpuResourceDescriptorError> {
     let label = GpuResourceLabel::new(format!("{sample_count}x multisample texture"))?;
     let provenance = GpuResourceProvenance::new(label.clone(), None, None);
     let common = GpuResourceCommon::owned(
