@@ -6,6 +6,10 @@ order in which that surface should mature. Live priority, issue state, pull
 requests, assignees, and validation runs belong to GitHub and the Dornglut
 Engineering Portfolio rather than this file.
 
+A roadmap entry does **not** authorize implementation by itself. Investigation
+and delivery work still requires an accepted issue in the repository that owns
+the behavior, based on then-current accepted source and writer state.
+
 RunenGPU is a backend-neutral GPU execution framework. Renderer, scene, material,
 lighting, UI, world, application, and product policy remain above this boundary.
 WGPU remains a private implementation authority below it.
@@ -179,7 +183,8 @@ color-management decisions remain RunenRender or product authority.
 Goal: allow external ownership only through normalized owner-safe contracts.
 
 - derive a decision-complete imported-resource source contract covering lifetime,
-  context/device affinity, usage facts, failure semantics, and ownership;
+  context/device affinity, usage facts, failure semantics, and ownership before
+  authorizing its implementation;
 - add external media textures only after implementation and portability maturity
   support a stable contract;
 - never use raw WGPU, Vulkan, DX12, or Metal handles as a public escape hatch.
@@ -207,14 +212,15 @@ This is intentionally family-level rather than a mirror of WGPU's feature list.
 | Portable texture/view/vertex/depth-stencil vocabulary | `CORE` | `PLAN` — R1 |
 | BC/ETC2/ASTC compression | `ADVANCED` | `PLAN` — R1, capability-gated |
 | Anisotropy and complete portable raster/blend/depth/stencil state | `CORE` | `PLAN` — R2 |
-| WGSL `f16` and mature standardized optional shader features | `CORE` / `ADVANCED` | `PLAN` — R3 |
+| WGSL `f16` and mature standardized optional shader features | `ADVANCED` | `PLAN` — R3 |
 | Fixed binding arrays | `ADVANCED` | `CURRENT`, retain truthful admission |
 | Partially-bound/non-uniform/bindless-style native extensions | `ADVANCED` | `DEFER` pending portable contract or concrete advanced-native pressure |
-| Occlusion queries and indirect-first-instance | `CORE` / `ADVANCED` | `PLAN` — R4 |
+| Occlusion queries | `CORE` | `PLAN` — R4 |
+| Indirect-first-instance | `ADVANCED` | `PLAN` — R4 |
 | Multiview and multisampled arrays | `ADVANCED` | `PLAN` — R4 after view/resource foundations |
 | Multi-draw-count and pipeline statistics | `ADVANCED` | `DEFER` while backend/platform scope remains narrow |
 | Explicit surface color spaces and wide-gamut/HDR physical presentation | `ADVANCED` | `PLAN` — R5 |
-| Normalized imported-resource contract | `ADVANCED` | `PLAN` — R6, implementation requires decision-complete source contract |
+| Normalized imported-resource contract | `ADVANCED` | `PLAN` — R6, contract investigation precedes implementation |
 | External media textures | `ADVANCED` | `DEFER` until backend/portable maturity improves |
 | Subgroups and subgroup-size control | `ADVANCED` | `DEFER` until WebGPU/WGPU semantics and conformance converge |
 | Immediates | `ADVANCED` | `DEFER` until standards/deployment maturity is sufficient |
