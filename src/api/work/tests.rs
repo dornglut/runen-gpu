@@ -131,14 +131,8 @@ fn texture_view(
 ) -> GpuTextureViewHandle {
     allocator
         .allocate_texture_view_handle(
-            GpuTextureViewDescriptor::new(
-                common(name),
-                texture,
-                None,
-                dimension,
-                subresources,
-            )
-            .unwrap(),
+            GpuTextureViewDescriptor::new(common(name), texture, None, dimension, subresources)
+                .unwrap(),
         )
         .unwrap()
 }
