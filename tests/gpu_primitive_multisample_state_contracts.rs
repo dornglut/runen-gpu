@@ -1,6 +1,9 @@
 use runen_gpu::{
-    GpuCullMode, GpuFrontFace, GpuIndexFormat, GpuMultisampleStateDescriptor,
-    GpuPrimitiveStateDescriptor, GpuPrimitiveTopology, GpuProgramContractCause,
+    GpuCullMode, GpuFrontFace, GpuIndexFormat, GpuMemoryIntent, GpuMultisampleStateDescriptor,
+    GpuPrimitiveStateDescriptor, GpuPrimitiveTopology, GpuProgramContractCause, GpuReconstruction,
+    GpuResourceCommon, GpuResourceDescriptorError, GpuResourceLabel, GpuResourceLifetime,
+    GpuResourceProvenance, GpuTextureDescriptor, GpuTextureDimension, GpuTextureExtent,
+    GpuTextureFormat, GpuTextureInitialization, GpuTextureUsage, GpuTextureUsages,
 };
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
@@ -9,6 +12,30 @@ fn hash_of(value: &impl Hash) -> u64 {
     let mut hasher = DefaultHasher::new();
     value.hash(&mut hasher);
     hasher.finish()
+}
+
+fn texture_descriptor(sample_count: u32) -> Result<GpuTextureDescriptor, GpuResourceDescriptorError> {
+    let label = GpuResourceLabel::new(format!("{sample_count}x multisample texture"))?;
+    let provenance = GpuResourceProvenance::new(label.clone(), None, None);
+    let common = GpuResourceCommon::owned(
+        label.clone(),
+        GpuResourceLifetime::Transient,
+        GpuMemoryIntent::Device,
+        GpuReconstruction::SourceBacked,
+        provenance,
+    )?;
+    let extent = GpuTextureExtent::new(&label, GpuTextureDimension::D2, 8, 8, 1)?;
+    let usages = GpuTextureUsages::new(&label, [GpuTextureUsage::ColorAttachment])?;
+    GpuTextureDescriptor::new(
+        common,
+        GpuTextureDimension::D2,
+        extent,
+        1,
+        sample_count,
+        GpuTextureFormat::Rgba8Unorm,
+        usages,
+        GpuTextureInitialization::Uninitialized,
+    )
 }
 
 #[test]
@@ -69,16 +96,34 @@ fn multisample_state_retains_count_mask_and_alpha_coverage() {
 }
 
 #[test]
-fn multisample_state_rejects_invalid_counts_masks_and_alpha_coverage() {
-    for count in [0, 3, 65] {
+fn texture_and_pipeline_multisample_counts_share_normalized_vocabulary() {
+    for count in [1, 2, 4, 8, 16] {
+        assert!(
+            texture_descriptor(count).is_ok(),
+            "texture descriptors must represent normalized sample count {count}"
+        );
+        assert!(
+            GpuMultisampleStateDescriptor::new(count, 0, false).is_ok(),
+            "pipeline multisample state must represent normalized sample count {count}"
+        );
+    }
+
+    for count in [0, 3, 32, 64, 65] {
+        assert!(
+            texture_descriptor(count).is_err(),
+            "texture descriptors must reject non-representable sample count {count}"
+        );
         let error = GpuMultisampleStateDescriptor::new(count, 0, false)
-            .expect_err("invalid sample counts must be rejected");
+            .expect_err("pipeline state must reject the same non-representable sample counts");
         assert_eq!(
             error.cause(),
             GpuProgramContractCause::RenderMultisampleStateInvalid
         );
     }
+}
 
+#[test]
+fn multisample_state_rejects_invalid_masks_and_alpha_coverage() {
     let mask_error = GpuMultisampleStateDescriptor::new(4, 1 << 4, false)
         .expect_err("mask bits outside the sample count must be rejected");
     assert_eq!(

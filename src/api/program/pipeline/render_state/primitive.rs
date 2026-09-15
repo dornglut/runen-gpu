@@ -1,4 +1,5 @@
 use super::super::super::contract_diagnostics::{GpuProgramContractCause, GpuProgramContractError};
+use crate::api::resource::is_normalized_sample_count_representable;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum GpuPrimitiveTopology {
@@ -107,10 +108,10 @@ impl GpuMultisampleStateDescriptor {
         sample_mask: u64,
         alpha_to_coverage_enabled: bool,
     ) -> Result<Self, GpuProgramContractError> {
-        if sample_count == 0 || !sample_count.is_power_of_two() || sample_count > u64::BITS {
+        if !is_normalized_sample_count_representable(sample_count) {
             return Err(invalid_multisample_state(
                 format!("sample_count={sample_count}"),
-                "use a nonzero power-of-two sample count no greater than 64",
+                "use one of the normalized representable sample counts: 1, 2, 4, 8, or 16",
             ));
         }
 

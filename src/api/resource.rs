@@ -765,6 +765,10 @@ impl GpuBufferDescriptor {
     }
 }
 
+pub(crate) const fn is_normalized_sample_count_representable(sample_count: u32) -> bool {
+    matches!(sample_count, 1 | 2 | 4 | 8 | 16)
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GpuTextureDescriptor {
     common: GpuResourceCommon,
@@ -834,7 +838,7 @@ impl GpuTextureDescriptor {
                 "choose a nonzero mip count bounded by the texture extent",
             ));
         }
-        if !matches!(sample_count, 1 | 2 | 4 | 8 | 16)
+        if !is_normalized_sample_count_representable(sample_count)
             || (sample_count > 1
                 && (mip_level_count != 1
                     || usages.contains(GpuTextureUsage::StorageRead)
@@ -844,7 +848,7 @@ impl GpuTextureDescriptor {
                 "construct GPU texture descriptor",
                 label,
                 GpuResourceDescriptorCause::InvalidSampleCount,
-                "use a supported power-of-two sample count and one non-storage mip for multisampling",
+                "use a normalized representable sample count and one non-storage mip for multisampling",
             ));
         }
         if matches!(initialization, GpuTextureInitialization::Prepared(_)) && sample_count != 1 {
@@ -1095,8 +1099,6 @@ pub struct GpuSamplerDescriptor {
     compare: Option<GpuCompareFunction>,
 }
 
-// Construction rejects non-finite LOD values, so semantic equality is
-// reflexive even though the stored representation uses `f32`.
 impl Eq for GpuSamplerDescriptor {}
 
 impl GpuSamplerDescriptor {
@@ -1255,8 +1257,6 @@ impl GpuResourceDescriptor {
     }
 }
 
-/// The already-existing neutral final access intent used only by export relationships.
-/// G3 owns ranges, subresources, hazards, and work-time access validation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum GpuResourceAccessIntent {
     Read,
@@ -1264,11 +1264,6 @@ pub enum GpuResourceAccessIntent {
     ReadWrite,
 }
 
-/// A consumer-owned semantic key used to connect fragment exports and imports.
-///
-/// Unlike labels, an export key participates in graph composition. It is still
-/// process-local work authoring data and carries no persistence, replay, wire,
-/// network, ABI, or cache stability promise.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct GpuExportKey(String);
 
