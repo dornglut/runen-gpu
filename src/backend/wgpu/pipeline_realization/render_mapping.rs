@@ -101,7 +101,14 @@ pub(super) const fn texture_format(value: GpuTextureFormat) -> TextureFormat {
         GpuTextureFormat::Bgra8Unorm => TextureFormat::Bgra8Unorm,
         GpuTextureFormat::Bgra8UnormSrgb => TextureFormat::Bgra8UnormSrgb,
         GpuTextureFormat::R32Uint => TextureFormat::R32Uint,
+        GpuTextureFormat::R32Sint => TextureFormat::R32Sint,
         GpuTextureFormat::R32Float => TextureFormat::R32Float,
+        GpuTextureFormat::Rg32Uint => TextureFormat::Rg32Uint,
+        GpuTextureFormat::Rg32Sint => TextureFormat::Rg32Sint,
+        GpuTextureFormat::Rg32Float => TextureFormat::Rg32Float,
+        GpuTextureFormat::Rgba32Uint => TextureFormat::Rgba32Uint,
+        GpuTextureFormat::Rgba32Sint => TextureFormat::Rgba32Sint,
+        GpuTextureFormat::Rgba32Float => TextureFormat::Rgba32Float,
         GpuTextureFormat::Depth32Float => TextureFormat::Depth32Float,
     }
 }
@@ -126,6 +133,17 @@ mod tests {
             compare_function(GpuCompareFunction::LessEqual),
             CompareFunction::LessEqual
         );
+        for (normalized, native) in [
+            (GpuTextureFormat::R32Sint, TextureFormat::R32Sint),
+            (GpuTextureFormat::Rg32Uint, TextureFormat::Rg32Uint),
+            (GpuTextureFormat::Rg32Sint, TextureFormat::Rg32Sint),
+            (GpuTextureFormat::Rg32Float, TextureFormat::Rg32Float),
+            (GpuTextureFormat::Rgba32Uint, TextureFormat::Rgba32Uint),
+            (GpuTextureFormat::Rgba32Sint, TextureFormat::Rgba32Sint),
+            (GpuTextureFormat::Rgba32Float, TextureFormat::Rgba32Float),
+        ] {
+            assert_eq!(texture_format(normalized), native);
+        }
         assert_eq!(
             texture_format(GpuTextureFormat::R32Float),
             TextureFormat::R32Float

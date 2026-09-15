@@ -3,6 +3,7 @@ use super::{GpuTextureAspect, GpuTextureFormat};
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum GpuTextureScalarClass {
     Float,
+    Sint,
     Uint,
 }
 
@@ -87,6 +88,17 @@ const fn semantics(format: GpuTextureFormat) -> GpuTextureFormatSemantics {
             component_count: 1,
             has_alpha: false,
         },
+        GpuTextureFormat::R32Sint => GpuTextureFormatSemantics {
+            block_dimensions: (1, 1),
+            color_copy_block_size: Some(4),
+            depth_copy_block_size: None,
+            stencil_copy_block_size: None,
+            srgb: false,
+            paired_view_format: None,
+            scalar_class: GpuTextureScalarClass::Sint,
+            component_count: 1,
+            has_alpha: false,
+        },
         GpuTextureFormat::R32Float => GpuTextureFormatSemantics {
             block_dimensions: (1, 1),
             color_copy_block_size: Some(4),
@@ -97,6 +109,72 @@ const fn semantics(format: GpuTextureFormat) -> GpuTextureFormatSemantics {
             scalar_class: GpuTextureScalarClass::Float,
             component_count: 1,
             has_alpha: false,
+        },
+        GpuTextureFormat::Rg32Uint => GpuTextureFormatSemantics {
+            block_dimensions: (1, 1),
+            color_copy_block_size: Some(8),
+            depth_copy_block_size: None,
+            stencil_copy_block_size: None,
+            srgb: false,
+            paired_view_format: None,
+            scalar_class: GpuTextureScalarClass::Uint,
+            component_count: 2,
+            has_alpha: false,
+        },
+        GpuTextureFormat::Rg32Sint => GpuTextureFormatSemantics {
+            block_dimensions: (1, 1),
+            color_copy_block_size: Some(8),
+            depth_copy_block_size: None,
+            stencil_copy_block_size: None,
+            srgb: false,
+            paired_view_format: None,
+            scalar_class: GpuTextureScalarClass::Sint,
+            component_count: 2,
+            has_alpha: false,
+        },
+        GpuTextureFormat::Rg32Float => GpuTextureFormatSemantics {
+            block_dimensions: (1, 1),
+            color_copy_block_size: Some(8),
+            depth_copy_block_size: None,
+            stencil_copy_block_size: None,
+            srgb: false,
+            paired_view_format: None,
+            scalar_class: GpuTextureScalarClass::Float,
+            component_count: 2,
+            has_alpha: false,
+        },
+        GpuTextureFormat::Rgba32Uint => GpuTextureFormatSemantics {
+            block_dimensions: (1, 1),
+            color_copy_block_size: Some(16),
+            depth_copy_block_size: None,
+            stencil_copy_block_size: None,
+            srgb: false,
+            paired_view_format: None,
+            scalar_class: GpuTextureScalarClass::Uint,
+            component_count: 4,
+            has_alpha: true,
+        },
+        GpuTextureFormat::Rgba32Sint => GpuTextureFormatSemantics {
+            block_dimensions: (1, 1),
+            color_copy_block_size: Some(16),
+            depth_copy_block_size: None,
+            stencil_copy_block_size: None,
+            srgb: false,
+            paired_view_format: None,
+            scalar_class: GpuTextureScalarClass::Sint,
+            component_count: 4,
+            has_alpha: true,
+        },
+        GpuTextureFormat::Rgba32Float => GpuTextureFormatSemantics {
+            block_dimensions: (1, 1),
+            color_copy_block_size: Some(16),
+            depth_copy_block_size: None,
+            stencil_copy_block_size: None,
+            srgb: false,
+            paired_view_format: None,
+            scalar_class: GpuTextureScalarClass::Float,
+            component_count: 4,
+            has_alpha: true,
         },
         GpuTextureFormat::Depth32Float => GpuTextureFormatSemantics {
             block_dimensions: (1, 1),
@@ -332,6 +410,16 @@ mod tests {
                 false,
             ),
             (
+                GpuTextureFormat::R32Sint,
+                4,
+                false,
+                false,
+                None,
+                GpuTextureScalarClass::Sint,
+                1,
+                false,
+            ),
+            (
                 GpuTextureFormat::R32Float,
                 4,
                 false,
@@ -340,6 +428,66 @@ mod tests {
                 GpuTextureScalarClass::Float,
                 1,
                 false,
+            ),
+            (
+                GpuTextureFormat::Rg32Uint,
+                8,
+                false,
+                false,
+                None,
+                GpuTextureScalarClass::Uint,
+                2,
+                false,
+            ),
+            (
+                GpuTextureFormat::Rg32Sint,
+                8,
+                false,
+                false,
+                None,
+                GpuTextureScalarClass::Sint,
+                2,
+                false,
+            ),
+            (
+                GpuTextureFormat::Rg32Float,
+                8,
+                false,
+                false,
+                None,
+                GpuTextureScalarClass::Float,
+                2,
+                false,
+            ),
+            (
+                GpuTextureFormat::Rgba32Uint,
+                16,
+                false,
+                false,
+                None,
+                GpuTextureScalarClass::Uint,
+                4,
+                true,
+            ),
+            (
+                GpuTextureFormat::Rgba32Sint,
+                16,
+                false,
+                false,
+                None,
+                GpuTextureScalarClass::Sint,
+                4,
+                true,
+            ),
+            (
+                GpuTextureFormat::Rgba32Float,
+                16,
+                false,
+                false,
+                None,
+                GpuTextureScalarClass::Float,
+                4,
+                true,
             ),
             (
                 GpuTextureFormat::Depth32Float,
@@ -413,12 +561,24 @@ mod tests {
             GpuTextureFormat::R32Float,
             GpuTextureFormat::R32Uint
         ));
+        assert!(!view_compatible(
+            GpuTextureFormat::Rg32Float,
+            GpuTextureFormat::Rg32Uint
+        ));
+        assert!(!raw_copy_compatible(
+            GpuTextureFormat::Rgba32Sint,
+            GpuTextureFormat::Rgba32Uint
+        ));
     }
 
     #[test]
     fn aspects_are_explicit_and_all_canonicalizes_only_when_unambiguous() {
         assert_eq!(
             canonical_copy_aspect(GpuTextureFormat::Rgba8Unorm, GpuTextureAspect::All),
+            Some(GpuTextureAspect::Color)
+        );
+        assert_eq!(
+            canonical_copy_aspect(GpuTextureFormat::Rg32Float, GpuTextureAspect::All),
             Some(GpuTextureAspect::Color)
         );
         assert_eq!(
