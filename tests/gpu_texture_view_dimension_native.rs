@@ -58,14 +58,8 @@ fn sampled_texture(
             GpuTextureDescriptor::new(
                 common(name),
                 dimension,
-                GpuTextureExtent::new(
-                    &texture_label,
-                    dimension,
-                    width,
-                    height,
-                    depth_or_layers,
-                )
-                .unwrap(),
+                GpuTextureExtent::new(&texture_label, dimension, width, height, depth_or_layers)
+                    .unwrap(),
                 1,
                 sample_count,
                 GpuTextureFormat::Rgba8Unorm,
