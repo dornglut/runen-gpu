@@ -28,6 +28,17 @@ jobs:
           echo '=== GpuRuntimeTextureViewBinding::new ==='
           grep -RIn -C 3 --include='*.rs' 'GpuRuntimeTextureViewBinding::new' . || true
 
+  compile:
+    name: Compile all targets
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out exact branch head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: issue-13-texture-view-dimension-authority
+          fetch-depth: 1
+          persist-credentials: false
+
       - name: Compile all targets without execution
         run: |
           set -euo pipefail
