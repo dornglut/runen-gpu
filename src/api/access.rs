@@ -1042,7 +1042,7 @@ mod tests {
                     common("view"),
                     &texture,
                     None,
-                    GpuTextureViewDimension::D2,
+                    GpuTextureViewDimension::D2Array,
                     view_range,
                 )
                 .unwrap(),

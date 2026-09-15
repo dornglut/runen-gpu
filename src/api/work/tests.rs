@@ -126,6 +126,7 @@ fn texture_view(
     allocator: &mut GpuWorkResourceIdAllocator,
     texture: &GpuTextureHandle,
     name: &str,
+    dimension: GpuTextureViewDimension,
     subresources: GpuTextureSubresourceRange,
 ) -> GpuTextureViewHandle {
     allocator
@@ -134,7 +135,7 @@ fn texture_view(
                 common(name),
                 texture,
                 None,
-                GpuTextureViewDimension::D2,
+                dimension,
                 subresources,
             )
             .unwrap(),
@@ -159,7 +160,13 @@ fn single_view(
         aspect,
     )
     .unwrap();
-    texture_view(allocator, texture, name, subresources)
+    texture_view(
+        allocator,
+        texture,
+        name,
+        GpuTextureViewDimension::D2,
+        subresources,
+    )
 }
 
 #[test]
@@ -223,6 +230,7 @@ fn render_attachment_views_select_exactly_one_subresource() {
         &mut allocator,
         &layered,
         "whole layered target view",
+        GpuTextureViewDimension::D2Array,
         GpuTextureSubresourceRange::whole(&layered).unwrap(),
     );
     assert!(
