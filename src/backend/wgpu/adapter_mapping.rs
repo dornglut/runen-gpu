@@ -149,7 +149,7 @@ pub(super) fn select_device_request_profile(
     }
 }
 
-pub(super) fn known_formats() -> [(GpuTextureFormat, TextureFormat); 7] {
+pub(super) fn known_formats() -> [(GpuTextureFormat, TextureFormat); 8] {
     [
         (GpuTextureFormat::R8Unorm, TextureFormat::R8Unorm),
         (GpuTextureFormat::Rgba8Unorm, TextureFormat::Rgba8Unorm),
@@ -163,6 +163,7 @@ pub(super) fn known_formats() -> [(GpuTextureFormat, TextureFormat); 7] {
             TextureFormat::Bgra8UnormSrgb,
         ),
         (GpuTextureFormat::R32Uint, TextureFormat::R32Uint),
+        (GpuTextureFormat::R32Float, TextureFormat::R32Float),
         (GpuTextureFormat::Depth32Float, TextureFormat::Depth32Float),
     ]
 }
@@ -346,6 +347,45 @@ mod tests {
         assert_eq!(map_backend(Backend::Noop), GpuBackendFamily::UnknownBackend);
         assert_eq!(map_class(DeviceType::Cpu), GpuAdapterClass::Cpu);
         assert_eq!(map_software(DeviceType::Cpu), GpuSoftwareStatus::Software);
+    }
+
+    #[test]
+    fn r32float_mapping_preserves_backend_reported_roles() {
+        assert!(known_formats().contains(&(GpuTextureFormat::R32Float, TextureFormat::R32Float)));
+
+        let sampled_copy_source = format_capabilities(
+            TextureFormat::R32Float,
+            wgpu::TextureFormatFeatures {
+                allowed_usages: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_SRC,
+                flags: TextureFormatFeatureFlags::empty(),
+            },
+        );
+        assert!(sampled_copy_source.sampled);
+        assert!(sampled_copy_source.copy_source);
+        assert!(!sampled_copy_source.copy_destination);
+        assert!(!sampled_copy_source.filterable);
+        assert!(!sampled_copy_source.storage_read);
+        assert!(!sampled_copy_source.storage_write);
+        assert!(!sampled_copy_source.depth_stencil);
+        assert_eq!(sampled_copy_source.block_dimensions, Some((1, 1)));
+        assert_eq!(sampled_copy_source.block_copy_size, Some(4));
+
+        let richer = format_capabilities(
+            TextureFormat::R32Float,
+            wgpu::TextureFormatFeatures {
+                allowed_usages: TextureUsages::TEXTURE_BINDING
+                    | TextureUsages::STORAGE_BINDING
+                    | TextureUsages::COPY_DST,
+                flags: TextureFormatFeatureFlags::FILTERABLE
+                    | TextureFormatFeatureFlags::STORAGE_READ_WRITE,
+            },
+        );
+        assert!(richer.sampled);
+        assert!(richer.filterable);
+        assert!(richer.storage_read);
+        assert!(richer.storage_write);
+        assert!(richer.copy_destination);
+        assert!(!richer.copy_source);
     }
 
     #[test]
