@@ -2,8 +2,7 @@ use super::{
     GpuAccessCause, GpuAccessError, GpuBufferHandle, GpuBufferUsage, GpuQuerySetHandle,
     GpuResourceAccessIntent, GpuSamplerHandle, GpuTextureAspect, GpuTextureDimension,
     GpuTextureHandle, GpuTextureSubresourceRange, GpuTextureUsage, GpuTextureViewDimension,
-    GpuTextureViewHandle,
-    GpuWorkResourceId,
+    GpuTextureViewHandle, GpuWorkResourceId,
 };
 
 /// A descriptor-bounded byte range.

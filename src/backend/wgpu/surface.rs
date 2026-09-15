@@ -16,8 +16,7 @@ use crate::{
     GpuTextureExtent, GpuTextureFormat, GpuTextureHandle, GpuTextureInitialization,
     GpuTextureSubresourceRange, GpuTextureUsage, GpuTextureUsages, GpuTextureViewDescriptor,
     GpuTextureViewDimension, GpuTextureViewHandle, GpuWorkResourceId, GpuWorkResourceIdAllocator,
-    allocate_surface_id,
-    allocate_surface_lease_id,
+    allocate_surface_id, allocate_surface_lease_id,
 };
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex, MutexGuard, Weak};
