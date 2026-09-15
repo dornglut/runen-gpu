@@ -59,6 +59,9 @@ fn r32float_participates_in_public_texture_and_fragment_output_contracts() {
         .expected_signature(GpuEntryPointName::new("fragment_main").unwrap())
         .unwrap();
     let output = signature.locations().next().unwrap();
-    assert_eq!(output.value_type().scalar_class(), GpuShaderIoScalarClass::Float);
+    assert_eq!(
+        output.value_type().scalar_class(),
+        GpuShaderIoScalarClass::Float
+    );
     assert_eq!(output.value_type().vector_width().get(), 1);
 }
