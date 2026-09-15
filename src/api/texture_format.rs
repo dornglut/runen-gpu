@@ -221,12 +221,7 @@ pub(crate) const fn has_alpha(format: GpuTextureFormat) -> bool {
 }
 
 const fn block_count(extent: u32, block: u32) -> u32 {
-    let quotient = extent / block;
-    if extent % block == 0 {
-        quotient
-    } else {
-        quotient + 1
-    }
+    extent.div_ceil(block)
 }
 
 pub(crate) const fn logical_copy_footprint(
