@@ -98,10 +98,21 @@ fn texture_view(
 }
 
 fn dimension_pipeline() -> GpuComputePipelineDescriptor {
-    let [program] =
+    let [source] =
         admit_static_wgsl_sources([("texture-view-dimension-authority", 1, VIEW_DIMENSION_WGSL)])
             .unwrap();
-    GpuComputePipelineDescriptor::ordinary(program, "main").unwrap()
+    let entry_point = GpuEntryPointName::new("main").unwrap();
+    let refinements = (0_u64..4).map(|binding| {
+        GpuBindingLayoutRefinement::new(GpuBindingKey::try_new(0, binding).unwrap())
+            .with_texture_sample_class(GpuTextureSampleClass::FloatFilterable)
+    });
+    let program = GpuProgramDescriptor::new(source, [entry_point.clone()], refinements).unwrap();
+    GpuComputePipelineDescriptor::new(
+        program,
+        entry_point,
+        GpuPipelineConfiguration::default(),
+    )
+    .unwrap()
 }
 
 fn texture_binding(binding: u32, view: &GpuTextureViewHandle) -> GpuRuntimeBindingValue {
