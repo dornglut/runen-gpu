@@ -1,4 +1,4 @@
-name: Issue 13 caller census
+name: Issue 13 external caller migration
 
 on:
   push:
@@ -6,41 +6,134 @@ on:
       - issue-13-texture-view-dimension-authority
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  census:
-    name: Enumerate texture-view callers
+  migrate:
+    name: Apply exact external caller migration
     runs-on: ubuntu-24.04
     steps:
       - name: Check out exact branch head
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: issue-13-texture-view-dimension-authority
-          fetch-depth: 1
-          persist-credentials: false
+          fetch-depth: 0
 
-      - name: Enumerate public constructor and runtime binding callers
+      - name: Apply bounded migration
         run: |
           set -euo pipefail
-          echo '=== GpuTextureViewDescriptor::new ==='
-          grep -RIn -C 5 --include='*.rs' 'GpuTextureViewDescriptor::new' . || true
-          echo '=== GpuRuntimeTextureViewBinding::new ==='
-          grep -RIn -C 3 --include='*.rs' 'GpuRuntimeTextureViewBinding::new' . || true
+          python - <<'PY'
+          from pathlib import Path
 
-  compile:
-    name: Compile all targets
-    runs-on: ubuntu-24.04
-    steps:
-      - name: Check out exact branch head
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          ref: issue-13-texture-view-dimension-authority
-          fetch-depth: 1
-          persist-credentials: false
+          replacements = {
+              "tests/gpu_resource_realization.rs": [
+                  (
+                      "    GpuTextureUsage, GpuTextureUsages, GpuTextureViewDescriptor, GpuWorkResourceIdAllocator,\n",
+                      "    GpuTextureUsage, GpuTextureUsages, GpuTextureViewDescriptor, GpuTextureViewDimension,\n    GpuWorkResourceIdAllocator,\n",
+                  ),
+                  (
+                      "                None,\n                GpuTextureDimension::D2,\n                subresources,\n",
+                      "                None,\n                GpuTextureViewDimension::D2,\n                subresources,\n",
+                  ),
+              ],
+              "tests/gpu_direct_wgpu_cost_native/offscreen_draw.rs": [
+                  (
+                      "                common(\"direct-cost indexed offscreen color target view\"),\n                &texture,\n                None,\n                GpuTextureDimension::D2,\n                subresources,\n",
+                      "                common(\"direct-cost indexed offscreen color target view\"),\n                &texture,\n                None,\n                GpuTextureViewDimension::D2,\n                subresources,\n",
+                  ),
+              ],
+              "tests/gpu_offscreen_indexed_native.rs": [
+                  (
+                      "                common(\"indexed offscreen color target view\"),\n                &texture,\n                None,\n                GpuTextureDimension::D2,\n                subresources,\n",
+                      "                common(\"indexed offscreen color target view\"),\n                &texture,\n                None,\n                GpuTextureViewDimension::D2,\n                subresources,\n",
+                  ),
+              ],
+              "tests/gpu_r32float.rs": [
+                  (
+                      "                view_common,\n                &texture,\n                None,\n                GpuTextureDimension::D2,\n                view_subresources,\n",
+                      "                view_common,\n                &texture,\n                None,\n                GpuTextureViewDimension::D2,\n                view_subresources,\n",
+                  ),
+                  (
+                      "GpuRuntimeTextureViewBinding::new(view.clone(), GpuTextureViewDimension::D2)",
+                      "GpuRuntimeTextureViewBinding::new(view.clone())",
+                  ),
+              ],
+              "tests/gpu_compute_generated_indirect_native.rs": [
+                  (
+                      "                common(\"compute-generated indirect target view\"),\n                &texture,\n                None,\n                GpuTextureDimension::D2,\n                GpuTextureSubresourceRange::whole(&texture).unwrap(),\n",
+                      "                common(\"compute-generated indirect target view\"),\n                &texture,\n                None,\n                GpuTextureViewDimension::D2,\n                GpuTextureSubresourceRange::whole(&texture).unwrap(),\n",
+                  ),
+              ],
+              "tests/gpu_g5b_native_render.rs": [
+                  (
+                      "                common(\"native offscreen render target view\"),\n                &texture,\n                None,\n                GpuTextureDimension::D2,\n                subresources,\n",
+                      "                common(\"native offscreen render target view\"),\n                &texture,\n                None,\n                GpuTextureViewDimension::D2,\n                subresources,\n",
+                  ),
+              ],
+              "src/api/access.rs": [
+                  (
+                      "    GpuTextureHandle, GpuTextureSubresourceRange, GpuTextureUsage, GpuTextureViewDimension,\n    GpuTextureViewHandle, GpuWorkResourceId,\n",
+                      "    GpuTextureHandle, GpuTextureSubresourceRange, GpuTextureUsage, GpuTextureViewHandle,\n    GpuWorkResourceId,\n",
+                  ),
+                  (
+                      "        GpuTextureViewDescriptor, GpuWorkResourceIdAllocator,\n",
+                      "        GpuTextureViewDescriptor, GpuTextureViewDimension, GpuWorkResourceIdAllocator,\n",
+                  ),
+              ],
+              "src/api/render_pass.rs": [
+                  (
+                      "    GpuTextureHandle, GpuTextureViewDimension, GpuTextureViewHandle, GpuWorkOperationCause,\n    GpuWorkOperationError,\n",
+                      "    GpuTextureHandle, GpuTextureViewHandle, GpuWorkOperationCause, GpuWorkOperationError,\n",
+                  ),
+                  (
+                      "        GpuTextureViewDescriptor, GpuWorkResourceIdAllocator,\n",
+                      "        GpuTextureViewDescriptor, GpuTextureViewDimension, GpuWorkResourceIdAllocator,\n",
+                  ),
+              ],
+          }
 
-      - name: Compile all targets without execution
-        run: |
-          set -euo pipefail
+          for path_text, edits in replacements.items():
+              path = Path(path_text)
+              text = path.read_text()
+              for old, new in edits:
+                  count = text.count(old)
+                  if count != 1:
+                      raise SystemExit(f"{path}: expected exactly one match, found {count}: {old!r}")
+                  text = text.replace(old, new, 1)
+              path.write_text(text)
+          PY
+
           rustup toolchain install stable --profile minimal
-          cargo +stable test --all-targets --locked --no-run
+          cargo +stable fmt --all
+          git rm .github/workflows/issue13-caller-census.yml
+          git diff --check
+
+          actual="$(git diff --name-only | sort)"
+          expected="$(printf '%s\n' \
+            .github/workflows/issue13-caller-census.yml \
+            src/api/access.rs \
+            src/api/render_pass.rs \
+            tests/gpu_compute_generated_indirect_native.rs \
+            tests/gpu_direct_wgpu_cost_native/offscreen_draw.rs \
+            tests/gpu_g5b_native_render.rs \
+            tests/gpu_offscreen_indexed_native.rs \
+            tests/gpu_r32float.rs \
+            tests/gpu_resource_realization.rs | sort)"
+          if [ "$actual" != "$expected" ]; then
+            printf 'Unexpected migration diff.\nExpected:\n%s\nActual:\n%s\n' "$expected" "$actual" >&2
+            exit 1
+          fi
+          git diff --stat
+          git diff -- src/api/access.rs src/api/render_pass.rs tests/gpu_resource_realization.rs tests/gpu_direct_wgpu_cost_native/offscreen_draw.rs tests/gpu_offscreen_indexed_native.rs tests/gpu_r32float.rs tests/gpu_compute_generated_indirect_native.rs tests/gpu_g5b_native_render.rs
+
+      - name: Compile migrated targets
+        run: cargo +stable test --all-targets --locked --no-run
+
+      - name: Commit migration and helper deletion
+        run: |
+          set -euo pipefail
+          git config user.name "Aschenrot"
+          git config user.email "128308156+aschenrot@users.noreply.github.com"
+          git add -A
+          git commit -m "gpu: migrate authoritative texture-view callers"
+          git push origin HEAD:issue-13-texture-view-dimension-authority
