@@ -4,7 +4,7 @@ use super::{
     GpuResourceLifetime, GpuResourceProvenance, GpuTextureAspect, GpuTextureDescriptor,
     GpuTextureDimension, GpuTextureExtent, GpuTextureFormat, GpuTextureHandle,
     GpuTextureInitialization, GpuTextureSubresourceRange, GpuTextureUsage, GpuTextureUsages,
-    GpuTextureViewDescriptor,
+    GpuTextureViewDescriptor, GpuTextureViewDimension,
 };
 
 fn ordinary_owned_common(
@@ -105,6 +105,12 @@ impl GpuTextureViewDescriptor {
             GpuTextureDimension::D2 => parent.extent().depth_or_layers(),
             GpuTextureDimension::D1 | GpuTextureDimension::D3 => 1,
         };
+        let dimension = match parent.dimension() {
+            GpuTextureDimension::D1 => GpuTextureViewDimension::D1,
+            GpuTextureDimension::D2 if array_layer_count == 1 => GpuTextureViewDimension::D2,
+            GpuTextureDimension::D2 => GpuTextureViewDimension::D2Array,
+            GpuTextureDimension::D3 => GpuTextureViewDimension::D3,
+        };
         let subresources = GpuTextureSubresourceRange::new(
             common.label(),
             0,
@@ -113,7 +119,7 @@ impl GpuTextureViewDescriptor {
             array_layer_count,
             GpuTextureAspect::All,
         )?;
-        Self::new(common, texture, None, parent.dimension(), subresources)
+        Self::new(common, texture, None, dimension, subresources)
     }
 }
 
@@ -230,7 +236,7 @@ mod tests {
 
         assert_eq!(view.texture(), &texture);
         assert_eq!(view.format(), None);
-        assert_eq!(view.dimension(), GpuTextureDimension::D2);
+        assert_eq!(view.dimension(), GpuTextureViewDimension::D2);
         assert_eq!(view.subresources().base_mip_level(), 0);
         assert_eq!(view.subresources().mip_level_count(), 1);
         assert_eq!(view.subresources().base_array_layer(), 0);
@@ -244,6 +250,39 @@ mod tests {
             view.common().reconstruction(),
             texture.descriptor().common().reconstruction()
         );
+    }
+
+    #[test]
+    fn ordinary_full_owned_view_derives_d2_array_for_layered_parent() {
+        let label = GpuResourceLabel::new("layered target").unwrap();
+        let common = GpuResourceCommon::owned(
+            label.clone(),
+            GpuResourceLifetime::Transient,
+            GpuMemoryIntent::Device,
+            GpuReconstruction::SourceBacked,
+            GpuResourceProvenance::new(label.clone(), None, None),
+        )
+        .unwrap();
+        let extent = GpuTextureExtent::new(&label, GpuTextureDimension::D2, 16, 16, 4).unwrap();
+        let usages = GpuTextureUsages::new(&label, [GpuTextureUsage::Sampled]).unwrap();
+        let descriptor = GpuTextureDescriptor::new(
+            common,
+            GpuTextureDimension::D2,
+            extent,
+            1,
+            1,
+            GpuTextureFormat::Rgba8Unorm,
+            usages,
+            GpuTextureInitialization::Uninitialized,
+        )
+        .unwrap();
+        let mut identities = GpuWorkResourceIdAllocator::new();
+        let texture = identities.allocate_texture_handle(descriptor).unwrap();
+
+        let view = GpuTextureViewDescriptor::ordinary_full_owned("layered view", &texture).unwrap();
+
+        assert_eq!(view.dimension(), GpuTextureViewDimension::D2Array);
+        assert_eq!(view.subresources().array_layer_count(), 4);
     }
 
     #[test]
