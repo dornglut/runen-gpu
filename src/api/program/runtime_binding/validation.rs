@@ -1,7 +1,7 @@
 use super::super::contract_diagnostics::{GpuProgramContractCause, GpuProgramContractError};
 use super::super::interface::{
     GpuBindingClass, GpuBindingDeclaration, GpuSamplerClass, GpuStorageTextureAccess,
-    GpuTextureSampleClass, GpuTextureViewDimension,
+    GpuTextureSampleClass,
 };
 use super::super::layout::GpuBindGroupLayoutDescriptor;
 use super::{
