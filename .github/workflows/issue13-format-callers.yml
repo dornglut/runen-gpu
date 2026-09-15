@@ -1,0 +1,43 @@
+name: Issue 13 rustfmt helper
+
+on:
+  push:
+    branches:
+      - issue-13-texture-view-dimension-authority
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    name: Apply bounded rustfmt repair
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out branch head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: issue-13-texture-view-dimension-authority
+          fetch-depth: 0
+
+      - name: Format and assert bounded diff
+        run: |
+          set -euo pipefail
+          rustup toolchain install stable --profile minimal
+          cargo +stable fmt --all
+          git diff --check
+          actual="$(git diff --name-only | sort)"
+          expected="$(printf '%s\n' src/api/access.rs src/backend/wgpu/surface.rs | sort)"
+          if [ "$actual" != "$expected" ]; then
+            printf 'Unexpected rustfmt diff.\nExpected:\n%s\nActual:\n%s\n' "$expected" "$actual" >&2
+            exit 1
+          fi
+          git diff -- src/api/access.rs src/backend/wgpu/surface.rs
+
+      - name: Commit bounded formatting
+        run: |
+          set -euo pipefail
+          git config user.name "Aschenrot"
+          git config user.email "128308156+aschenrot@users.noreply.github.com"
+          git add src/api/access.rs src/backend/wgpu/surface.rs
+          git commit -m "style: format texture-view caller migration"
+          git push origin HEAD:issue-13-texture-view-dimension-authority
