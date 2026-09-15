@@ -253,7 +253,7 @@ fn r32float_transfer_realization_admission_and_sampled_binding_are_backend_prove
                 view_common,
                 &texture,
                 None,
-                GpuTextureDimension::D2,
+                GpuTextureViewDimension::D2,
                 view_subresources,
             )
             .unwrap(),
@@ -284,7 +284,7 @@ fn r32float_transfer_realization_admission_and_sampled_binding_are_backend_prove
     let binding_value = GpuRuntimeBindingValue::new(
         binding_key,
         [GpuRuntimeBindingResource::TextureView(
-            GpuRuntimeTextureViewBinding::new(view.clone(), GpuTextureViewDimension::D2),
+            GpuRuntimeTextureViewBinding::new(view.clone()),
         )],
     )
     .unwrap();

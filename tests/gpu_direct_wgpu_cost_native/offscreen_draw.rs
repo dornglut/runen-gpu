@@ -205,7 +205,7 @@ fn runengpu_fragment(pipeline: &GpuRenderPipelineDescriptor, timestamp: bool) ->
                 common("direct-cost indexed offscreen color target view"),
                 &texture,
                 None,
-                GpuTextureDimension::D2,
+                GpuTextureViewDimension::D2,
                 subresources,
             )
             .unwrap(),

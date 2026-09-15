@@ -1,8 +1,8 @@
 use super::{
     GpuAccessCause, GpuAccessError, GpuBufferHandle, GpuBufferUsage, GpuQuerySetHandle,
     GpuResourceAccessIntent, GpuSamplerHandle, GpuTextureAspect, GpuTextureDimension,
-    GpuTextureHandle, GpuTextureSubresourceRange, GpuTextureUsage, GpuTextureViewDimension,
-    GpuTextureViewHandle, GpuWorkResourceId,
+    GpuTextureHandle, GpuTextureSubresourceRange, GpuTextureUsage, GpuTextureViewHandle,
+    GpuWorkResourceId,
 };
 
 /// A descriptor-bounded byte range.
@@ -823,7 +823,7 @@ mod tests {
         GpuQueryKind, GpuQuerySetDescriptor, GpuReconstruction, GpuResourceCommon,
         GpuResourceLabel, GpuResourceLifetime, GpuResourceProvenance, GpuTextureDescriptor,
         GpuTextureExtent, GpuTextureFormat, GpuTextureInitialization, GpuTextureUsages,
-        GpuTextureViewDescriptor, GpuWorkResourceIdAllocator,
+        GpuTextureViewDescriptor, GpuTextureViewDimension, GpuWorkResourceIdAllocator,
     };
     use std::{
         collections::hash_map::DefaultHasher,

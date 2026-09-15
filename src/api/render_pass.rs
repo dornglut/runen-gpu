@@ -1,8 +1,7 @@
 use super::{
     GpuRenderColorAttachment, GpuRenderDepthStencilAttachment, GpuRenderDraw,
     GpuRenderPipelineDescriptor, GpuScissorRect, GpuTextureDimension, GpuTextureFormat,
-    GpuTextureHandle, GpuTextureViewDimension, GpuTextureViewHandle, GpuWorkOperationCause,
-    GpuWorkOperationError,
+    GpuTextureHandle, GpuTextureViewHandle, GpuWorkOperationCause, GpuWorkOperationError,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -225,7 +224,7 @@ mod tests {
         GpuReconstruction, GpuResourceCommon, GpuResourceLabel, GpuResourceLifetime,
         GpuResourceProvenance, GpuTextureAspect, GpuTextureDescriptor, GpuTextureExtent,
         GpuTextureInitialization, GpuTextureSubresourceRange, GpuTextureUsage, GpuTextureUsages,
-        GpuTextureViewDescriptor, GpuWorkResourceIdAllocator,
+        GpuTextureViewDescriptor, GpuTextureViewDimension, GpuWorkResourceIdAllocator,
     };
     use std::num::NonZeroU64;
 

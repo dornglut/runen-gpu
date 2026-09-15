@@ -256,7 +256,7 @@ fn render_target(scope: &mut GpuResourceScope) -> (GpuTextureHandle, GpuTextureV
                 common("compute-generated indirect target view"),
                 &texture,
                 None,
-                GpuTextureDimension::D2,
+                GpuTextureViewDimension::D2,
                 GpuTextureSubresourceRange::whole(&texture).unwrap(),
             )
             .unwrap(),

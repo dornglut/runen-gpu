@@ -150,7 +150,7 @@ fn render_target(
                 common("native offscreen render target view"),
                 &texture,
                 None,
-                GpuTextureDimension::D2,
+                GpuTextureViewDimension::D2,
                 subresources,
             )
             .unwrap(),
