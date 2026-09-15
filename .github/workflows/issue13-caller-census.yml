@@ -24,9 +24,9 @@ jobs:
         run: |
           set -euo pipefail
           echo '=== GpuTextureViewDescriptor::new ==='
-          rg -n -C 5 'GpuTextureViewDescriptor::new' --glob '*.rs' . || true
+          grep -RIn -C 5 --include='*.rs' 'GpuTextureViewDescriptor::new' . || true
           echo '=== GpuRuntimeTextureViewBinding::new ==='
-          rg -n -C 3 'GpuRuntimeTextureViewBinding::new' --glob '*.rs' . || true
+          grep -RIn -C 3 --include='*.rs' 'GpuRuntimeTextureViewBinding::new' . || true
 
       - name: Compile all targets without execution
         run: |
