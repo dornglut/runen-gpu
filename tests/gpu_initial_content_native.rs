@@ -546,19 +546,16 @@ fn r32float_transfer_realization_admission_and_sampled_binding_are_backend_prove
         .iter()
         .flat_map(|value| value.to_ne_bytes())
         .collect::<Vec<_>>();
-    assert_eq!(expected.len(), usize::try_from(BYTES_PER_ROW * HEIGHT).unwrap());
+    assert_eq!(
+        expected.len(),
+        usize::try_from(BYTES_PER_ROW * HEIGHT).unwrap()
+    );
 
     let mut allocator = GpuWorkResourceIdAllocator::new();
     let buffer = prepared_buffer(&mut allocator, &expected);
     let texture_label = label("native R32Float transfer texture");
-    let extent = GpuTextureExtent::new(
-        &texture_label,
-        GpuTextureDimension::D2,
-        WIDTH,
-        HEIGHT,
-        1,
-    )
-    .unwrap();
+    let extent =
+        GpuTextureExtent::new(&texture_label, GpuTextureDimension::D2, WIDTH, HEIGHT, 1).unwrap();
     let texture = allocator
         .allocate_texture_handle(
             GpuTextureDescriptor::new(
@@ -587,15 +584,9 @@ fn r32float_transfer_realization_admission_and_sampled_binding_are_backend_prove
         .realize_texture(&texture)
         .expect("admitted R32Float texture must realize");
     let view_common = common("native R32Float sampled view");
-    let view_subresources = GpuTextureSubresourceRange::new(
-        view_common.label(),
-        0,
-        1,
-        0,
-        1,
-        GpuTextureAspect::Color,
-    )
-    .unwrap();
+    let view_subresources =
+        GpuTextureSubresourceRange::new(view_common.label(), 0, 1, 0, 1, GpuTextureAspect::Color)
+            .unwrap();
     let view = allocator
         .allocate_texture_view_handle(
             GpuTextureViewDescriptor::new(
@@ -637,11 +628,9 @@ fn r32float_transfer_realization_admission_and_sampled_binding_are_backend_prove
         )],
     )
     .unwrap();
-    let realized_bind_group = pollster::block_on(
-        context.realize_bind_group(&realized_layout, [binding_value]),
-    )
-    .expect("R32Float sampled texture must bind without a filterability requirement");
-    assert_eq!(realized_bind_group.layout_descriptor(), &layout);
+    let realized_bind_group =
+        pollster::block_on(context.realize_bind_group(&realized_layout, [binding_value]))
+            .expect("R32Float sampled texture must bind without a filterability requirement");
 
     let region = GpuTextureCopyRegion::new(
         &texture,

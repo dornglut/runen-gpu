@@ -351,10 +351,7 @@ mod tests {
 
     #[test]
     fn r32float_mapping_preserves_backend_reported_roles() {
-        assert!(known_formats().contains(&(
-            GpuTextureFormat::R32Float,
-            TextureFormat::R32Float
-        )));
+        assert!(known_formats().contains(&(GpuTextureFormat::R32Float, TextureFormat::R32Float)));
 
         let sampled_copy_source = format_capabilities(
             TextureFormat::R32Float,
