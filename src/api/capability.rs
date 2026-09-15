@@ -639,7 +639,26 @@ mod tests {
     use super::*;
 
     fn test_limits() -> GpuLimits {
-        GpuLimits::new(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 256 * 1024 * 1024, 8192, 2048, 256, 16, 2048).unwrap()
+        GpuLimits::new(
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            256 * 1024 * 1024,
+            8192,
+            2048,
+            256,
+            16,
+            2048,
+        )
+        .unwrap()
     }
 
     #[test]
@@ -794,7 +813,26 @@ mod tests {
 
     #[test]
     fn normalized_execution_limits_are_complete_and_consistent() {
-        let limits = GpuLimits::new(1, 2, 3, 4, 5, 8192, 4, 24, 8, 4, 65535, 256 * 1024 * 1024, 8192, 2048, 256, 16, 2048).unwrap();
+        let limits = GpuLimits::new(
+            1,
+            2,
+            3,
+            4,
+            5,
+            8192,
+            4,
+            24,
+            8,
+            4,
+            65535,
+            256 * 1024 * 1024,
+            8192,
+            2048,
+            256,
+            16,
+            2048,
+        )
+        .unwrap();
         assert_eq!(limits.max_texture_dimension_2d(), 8192);
         assert_eq!(limits.max_bind_groups(), 4);
         assert_eq!(limits.max_bind_groups_plus_vertex_buffers(), 24);
@@ -807,7 +845,26 @@ mod tests {
         assert_eq!(limits.max_texture_array_layers(), 256);
         assert_eq!(limits.max_vertex_attributes(), 16);
         assert_eq!(limits.max_vertex_buffer_array_stride(), 2048);
-        let no_dynamic_buffers = GpuLimits::new(1, 2, 3, 4, 5, 8192, 4, 24, 0, 0, 65535, 256 * 1024 * 1024, 8192, 2048, 256, 16, 2048).unwrap();
+        let no_dynamic_buffers = GpuLimits::new(
+            1,
+            2,
+            3,
+            4,
+            5,
+            8192,
+            4,
+            24,
+            0,
+            0,
+            65535,
+            256 * 1024 * 1024,
+            8192,
+            2048,
+            256,
+            16,
+            2048,
+        )
+        .unwrap();
         assert_eq!(
             no_dynamic_buffers.max_dynamic_uniform_buffers_per_pipeline_layout(),
             0
@@ -816,7 +873,28 @@ mod tests {
             no_dynamic_buffers.max_dynamic_storage_buffers_per_pipeline_layout(),
             0
         );
-        assert!(GpuLimits::new(1, 2, 3, 8, 5, 8192, 4, 4, 8, 4, 65535, 256 * 1024 * 1024, 8192, 2048, 256, 16, 2048).is_err());
+        assert!(
+            GpuLimits::new(
+                1,
+                2,
+                3,
+                8,
+                5,
+                8192,
+                4,
+                4,
+                8,
+                4,
+                65535,
+                256 * 1024 * 1024,
+                8192,
+                2048,
+                256,
+                16,
+                2048
+            )
+            .is_err()
+        );
     }
 
     #[test]
@@ -902,7 +980,26 @@ mod tests {
             Some(GpuCapabilityFeature::TimestampQuery)
         );
 
-        let invalid_limit = GpuLimits::new(0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 256 * 1024 * 1024, 8192, 2048, 256, 16, 2048).unwrap_err();
+        let invalid_limit = GpuLimits::new(
+            0,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            256 * 1024 * 1024,
+            8192,
+            2048,
+            256,
+            16,
+            2048,
+        )
+        .unwrap_err();
         assert_eq!(
             invalid_limit.cause(),
             GpuCapabilityAdmissionCause::InvalidLimit

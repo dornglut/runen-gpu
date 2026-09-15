@@ -554,9 +554,7 @@ pub(crate) const fn limit_value(limits: GpuLimits, kind: GpuLimitKind) -> u64 {
         GpuLimitKind::MaxTextureDimension3d => limits.max_texture_dimension_3d() as u64,
         GpuLimitKind::MaxTextureArrayLayers => limits.max_texture_array_layers() as u64,
         GpuLimitKind::MaxVertexAttributes => limits.max_vertex_attributes() as u64,
-        GpuLimitKind::MaxVertexBufferArrayStride => {
-            limits.max_vertex_buffer_array_stride() as u64
-        }
+        GpuLimitKind::MaxVertexBufferArrayStride => limits.max_vertex_buffer_array_stride() as u64,
     }
 }
 
@@ -667,7 +665,13 @@ mod tests {
             8,
             4,
             65_535,
-         256 * 1024 * 1024, 8192, 2048, 256, 16, 2048)
+            256 * 1024 * 1024,
+            8192,
+            2048,
+            256,
+            16,
+            2048,
+        )
         .unwrap()
     }
 
@@ -803,7 +807,13 @@ mod tests {
                 8,
                 4,
                 65_535,
-             256 * 1024 * 1024, 8192, 2048, 256, 16, 2048)
+                256 * 1024 * 1024,
+                8192,
+                2048,
+                256,
+                16,
+                2048,
+            )
             .unwrap(),
             alignments(),
         );
@@ -831,7 +841,13 @@ mod tests {
                 8,
                 4,
                 65_535,
-             256 * 1024 * 1024, 8192, 2048, 256, 16, 2048)
+                256 * 1024 * 1024,
+                8192,
+                2048,
+                256,
+                16,
+                2048,
+            )
             .unwrap(),
             alignments(),
         );

@@ -547,7 +547,13 @@ mod tests {
             native.max_dynamic_uniform_buffers_per_pipeline_layout,
             native.max_dynamic_storage_buffers_per_pipeline_layout,
             native.max_compute_workgroups_per_dimension,
-         256 * 1024 * 1024, 8192, 2048, 256, 16, 2048)
+            256 * 1024 * 1024,
+            8192,
+            2048,
+            256,
+            16,
+            2048,
+        )
         .unwrap()
     }
 
@@ -646,10 +652,22 @@ mod tests {
             budget.max_compute_workgroups_per_dimension()
         );
         assert_eq!(requested.max_buffer_size, budget.max_buffer_size());
-        assert_eq!(requested.max_texture_dimension_1d, budget.max_texture_dimension_1d());
-        assert_eq!(requested.max_texture_dimension_3d, budget.max_texture_dimension_3d());
-        assert_eq!(requested.max_texture_array_layers, budget.max_texture_array_layers());
-        assert_eq!(requested.max_vertex_attributes, budget.max_vertex_attributes());
+        assert_eq!(
+            requested.max_texture_dimension_1d,
+            budget.max_texture_dimension_1d()
+        );
+        assert_eq!(
+            requested.max_texture_dimension_3d,
+            budget.max_texture_dimension_3d()
+        );
+        assert_eq!(
+            requested.max_texture_array_layers,
+            budget.max_texture_array_layers()
+        );
+        assert_eq!(
+            requested.max_vertex_attributes,
+            budget.max_vertex_attributes()
+        );
         assert_eq!(
             requested.max_vertex_buffer_array_stride,
             budget.max_vertex_buffer_array_stride()

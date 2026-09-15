@@ -167,8 +167,7 @@ fn lower_vertex_buffers(
 
     for layout in layouts {
         if layout.array_stride() > u64::from(device_limits.max_vertex_buffer_array_stride())
-            || layout.array_stride()
-                > u64::from(workload_limits.max_vertex_buffer_array_stride())
+            || layout.array_stride() > u64::from(workload_limits.max_vertex_buffer_array_stride())
         {
             return Err(incompatible(
                 request,
