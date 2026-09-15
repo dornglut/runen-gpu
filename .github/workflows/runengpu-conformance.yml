@@ -201,7 +201,7 @@ jobs:
           path: ${{ runner.temp }}/runengpu-proof-artifacts/game-of-life
           if-no-files-found: error
 
-      - name: Run native G5 transfer and G5R initial-content proofs
+      - name: Run native G5 transfer, G5R initial-content, and R32Float proofs
         env:
           RUST_BACKTRACE: '1'
         run: |
@@ -209,6 +209,7 @@ jobs:
           cargo +stable test --test gpu_g5b_native_runtime --locked -- --ignored --nocapture
           cargo +stable test --test gpu_g5b_native_render --locked -- --ignored --nocapture
           cargo +stable test --test gpu_initial_content_native --locked -- --ignored --nocapture
+          cargo +stable test --test gpu_r32float --locked -- --ignored --nocapture
 
       - name: Run graceful execution shutdown proof
         env:
