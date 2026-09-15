@@ -43,29 +43,31 @@ fn common(value: &str) -> GpuResourceCommon {
     .unwrap()
 }
 
-fn sampled_array_texture(
+fn sampled_texture(
     allocator: &mut GpuWorkResourceIdAllocator,
     name: &str,
+    dimension: GpuTextureDimension,
     width: u32,
     height: u32,
-    layers: u32,
+    depth_or_layers: u32,
+    sample_count: u32,
 ) -> GpuTextureHandle {
     let texture_label = label(name);
     allocator
         .allocate_texture_handle(
             GpuTextureDescriptor::new(
                 common(name),
-                GpuTextureDimension::D2,
+                dimension,
                 GpuTextureExtent::new(
                     &texture_label,
-                    GpuTextureDimension::D2,
+                    dimension,
                     width,
                     height,
-                    layers,
+                    depth_or_layers,
                 )
                 .unwrap(),
                 1,
-                1,
+                sample_count,
                 GpuTextureFormat::Rgba8Unorm,
                 GpuTextureUsages::new(&texture_label, [GpuTextureUsage::Sampled]).unwrap(),
                 GpuTextureInitialization::Uninitialized,
@@ -73,6 +75,24 @@ fn sampled_array_texture(
             .unwrap(),
         )
         .unwrap()
+}
+
+fn sampled_array_texture(
+    allocator: &mut GpuWorkResourceIdAllocator,
+    name: &str,
+    width: u32,
+    height: u32,
+    layers: u32,
+) -> GpuTextureHandle {
+    sampled_texture(
+        allocator,
+        name,
+        GpuTextureDimension::D2,
+        width,
+        height,
+        layers,
+        1,
+    )
 }
 
 fn texture_view(
@@ -107,12 +127,8 @@ fn dimension_pipeline() -> GpuComputePipelineDescriptor {
             .with_texture_sample_class(GpuTextureSampleClass::FloatFilterable)
     });
     let program = GpuProgramDescriptor::new(source, [entry_point.clone()], refinements).unwrap();
-    GpuComputePipelineDescriptor::new(
-        program,
-        entry_point,
-        GpuPipelineConfiguration::default(),
-    )
-    .unwrap()
+    GpuComputePipelineDescriptor::new(program, entry_point, GpuPipelineConfiguration::default())
+        .unwrap()
 }
 
 fn texture_binding(binding: u32, view: &GpuTextureViewHandle) -> GpuRuntimeBindingValue {
@@ -257,6 +273,95 @@ fn malformed_cube_layer_ranges_are_rejected_before_realization() {
     assert_eq!(
         cube_array_error.cause(),
         GpuResourceDescriptorCause::IncompatibleViewDimension
+    );
+}
+
+#[test]
+fn incompatible_parent_shape_and_multisample_views_are_rejected_before_realization() {
+    let mut allocator = GpuWorkResourceIdAllocator::new();
+    let d1_texture = sampled_texture(
+        &mut allocator,
+        "D1 parent",
+        GpuTextureDimension::D1,
+        4,
+        1,
+        1,
+        1,
+    );
+    let parent_error = texture_view(
+        &mut allocator,
+        &d1_texture,
+        "D2 view of D1 parent",
+        GpuTextureViewDimension::D2,
+        0,
+        1,
+    )
+    .unwrap_err();
+    assert_eq!(
+        parent_error.cause(),
+        GpuResourceDescriptorCause::IncompatibleViewDimension
+    );
+
+    let non_square = sampled_array_texture(&mut allocator, "non-square cube parent", 4, 2, 12);
+    let cube_error = texture_view(
+        &mut allocator,
+        &non_square,
+        "non-square Cube view",
+        GpuTextureViewDimension::Cube,
+        0,
+        6,
+    )
+    .unwrap_err();
+    assert_eq!(
+        cube_error.cause(),
+        GpuResourceDescriptorCause::IncompatibleViewDimension
+    );
+    let cube_array_error = texture_view(
+        &mut allocator,
+        &non_square,
+        "non-square CubeArray view",
+        GpuTextureViewDimension::CubeArray,
+        0,
+        12,
+    )
+    .unwrap_err();
+    assert_eq!(
+        cube_array_error.cause(),
+        GpuResourceDescriptorCause::IncompatibleViewDimension
+    );
+
+    let multisampled = sampled_texture(
+        &mut allocator,
+        "multisampled parent",
+        GpuTextureDimension::D2,
+        4,
+        4,
+        1,
+        4,
+    );
+    let multisample_error = texture_view(
+        &mut allocator,
+        &multisampled,
+        "multisampled D2Array view",
+        GpuTextureViewDimension::D2Array,
+        0,
+        1,
+    )
+    .unwrap_err();
+    assert_eq!(
+        multisample_error.cause(),
+        GpuResourceDescriptorCause::IncompatibleViewDimension
+    );
+    assert!(
+        texture_view(
+            &mut allocator,
+            &multisampled,
+            "multisampled D2 view",
+            GpuTextureViewDimension::D2,
+            0,
+            1,
+        )
+        .is_ok()
     );
 }
 
