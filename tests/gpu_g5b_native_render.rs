@@ -61,16 +61,20 @@ fn native_render_context() -> GpuContext {
 }
 
 fn admitted_render_source() -> GpuAdmittedProgramSource {
+    admitted_render_source_from("g5b.native.offscreen-render", OFFSCREEN_RENDER_WGSL)
+}
+
+fn admitted_render_source_from(key: &str, wgsl: &str) -> GpuAdmittedProgramSource {
     let identity = GpuProgramSourceIdentity::new(
         GpuProgramSourceOwnerId::allocate().expect("native render source owner should allocate"),
-        GpuProgramSourceKey::new("g5b.native.offscreen-render").unwrap(),
+        GpuProgramSourceKey::new(key).unwrap(),
         GpuProgramSourceRevision::try_from_raw(1).unwrap(),
     );
     let mut sources = GpuProgramSourceRegistry::new(4, 16 * 1024).unwrap();
     sources
         .admit_wgsl(
             identity,
-            OFFSCREEN_RENDER_WGSL,
+            wgsl,
             GpuProgramSourceProvenance::new("g5b-native-offscreen-render-proof", None).unwrap(),
         )
         .unwrap()
@@ -106,6 +110,51 @@ fn render_pipeline() -> GpuRenderPipelineDescriptor {
         GpuPipelineConfiguration::default(),
     )
     .unwrap()
+}
+
+fn render_pipeline_with_vertex_input(
+    key: &str,
+    wgsl: &str,
+    vertex_input: GpuVertexInputStateDescriptor,
+) -> GpuRenderPipelineDescriptor {
+    let vertex = GpuEntryPointName::new("vs_main").unwrap();
+    let fragment = GpuEntryPointName::new("fs_main").unwrap();
+    let program = GpuProgramDescriptor::new(
+        admitted_render_source_from(key, wgsl),
+        [vertex.clone(), fragment.clone()],
+        std::iter::empty::<GpuBindingLayoutRefinement>(),
+    )
+    .unwrap();
+    let color_target = GpuColorTargetStateDescriptor::new(
+        GpuTextureFormat::Rgba8Unorm,
+        GpuBlendMode::Replace,
+        GpuColorWriteMask::ALL,
+    )
+    .unwrap();
+    let state = GpuRenderPipelineStateDescriptor::new(
+        vertex_input,
+        Some(GpuFragmentOutputStateDescriptor::new([color_target])),
+        GpuPrimitiveStateDescriptor::default(),
+        None,
+        GpuMultisampleStateDescriptor::default(),
+    )
+    .unwrap();
+    GpuRenderPipelineDescriptor::new(
+        program,
+        GpuRenderEntryPoints::new(vertex, Some(fragment)),
+        state,
+        GpuPipelineConfiguration::default(),
+    )
+    .unwrap()
+}
+
+fn vertex_input_wgsl(attribute_count: u32) -> String {
+    let fields = (0..attribute_count)
+        .map(|location| format!("    @location({location}) value_{location}: f32,\n"))
+        .collect::<String>();
+    format!(
+        "struct VertexInput {{\n{fields}}}\n\n@vertex\nfn vs_main(input: VertexInput) -> @builtin(position) vec4f {{\n    return vec4f(input.value_0 * 0.0, 0.0, 0.0, 1.0);\n}}\n\n@fragment\nfn fs_main() -> @location(0) vec4f {{\n    return vec4f(1.0, 0.0, 0.0, 1.0);\n}}\n"
+    )
 }
 
 fn render_target(
@@ -274,6 +323,177 @@ fn progress_to_readback(
         std::thread::yield_now();
     }
     bytes
+}
+
+fn oversized_texture(
+    allocator: &mut GpuWorkResourceIdAllocator,
+    name: &str,
+    dimension: GpuTextureDimension,
+    width: u32,
+    height: u32,
+    depth_or_layers: u32,
+) -> GpuTextureHandle {
+    let texture_label = label(name);
+    allocator
+        .allocate_texture_handle(
+            GpuTextureDescriptor::new(
+                common(name),
+                dimension,
+                GpuTextureExtent::new(&texture_label, dimension, width, height, depth_or_layers)
+                    .unwrap(),
+                1,
+                1,
+                GpuTextureFormat::Rgba8Unorm,
+                GpuTextureUsages::new(&texture_label, [GpuTextureUsage::ColorAttachment]).unwrap(),
+                GpuTextureInitialization::Uninitialized,
+            )
+            .unwrap(),
+        )
+        .unwrap()
+}
+
+fn realize_render_pipeline_error(
+    context: &GpuContext,
+    descriptor: &GpuRenderPipelineDescriptor,
+) -> GpuPipelineRealizationError {
+    let program = pollster::block_on(context.realize_program(descriptor.program())).unwrap();
+    let layout = pollster::block_on(context.realize_pipeline_layout(descriptor.layout())).unwrap();
+    pollster::block_on(context.realize_render_pipeline(descriptor, &program, &layout)).unwrap_err()
+}
+
+#[test]
+#[ignore = "requires a real Vulkan fallback adapter; executed by RunenGPU Native Conformance CI"]
+fn native_normalized_public_resource_limits_reject_before_backend_creation() {
+    let context = native_render_context();
+    let limits = context.device_facts().workload_budget().limits();
+    let mut allocator = GpuWorkResourceIdAllocator::new();
+
+    let buffer_common = common("normalized max buffer size rejection");
+    let buffer = allocator
+        .allocate_buffer_handle(
+            GpuBufferDescriptor::new(
+                buffer_common.clone(),
+                limits.max_buffer_size().checked_add(1).unwrap(),
+                GpuBufferUsages::new(buffer_common.label(), [GpuBufferUsage::CopySource]).unwrap(),
+                GpuBufferInitialization::Uninitialized,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+    let buffer_error = context.realize_buffer(&buffer).unwrap_err();
+    assert_eq!(
+        buffer_error.category(),
+        GpuResourceRealizationErrorCategory::FormatOrAlignmentNotAdmitted
+    );
+
+    let d1 = oversized_texture(
+        &mut allocator,
+        "normalized D1 dimension rejection",
+        GpuTextureDimension::D1,
+        limits.max_texture_dimension_1d().checked_add(1).unwrap(),
+        1,
+        1,
+    );
+    let d1_error = context.realize_texture(&d1).unwrap_err();
+    assert_eq!(
+        d1_error.category(),
+        GpuResourceRealizationErrorCategory::FormatOrAlignmentNotAdmitted
+    );
+
+    let d3 = oversized_texture(
+        &mut allocator,
+        "normalized D3 dimension rejection",
+        GpuTextureDimension::D3,
+        limits.max_texture_dimension_3d().checked_add(1).unwrap(),
+        1,
+        1,
+    );
+    let d3_error = context.realize_texture(&d3).unwrap_err();
+    assert_eq!(
+        d3_error.category(),
+        GpuResourceRealizationErrorCategory::FormatOrAlignmentNotAdmitted
+    );
+
+    let d2_array = oversized_texture(
+        &mut allocator,
+        "normalized D2 array layer rejection",
+        GpuTextureDimension::D2,
+        1,
+        1,
+        limits.max_texture_array_layers().checked_add(1).unwrap(),
+    );
+    let d2_array_error = context.realize_texture(&d2_array).unwrap_err();
+    assert_eq!(
+        d2_array_error.category(),
+        GpuResourceRealizationErrorCategory::FormatOrAlignmentNotAdmitted
+    );
+}
+
+#[test]
+#[ignore = "requires a real Vulkan fallback adapter; executed by RunenGPU Native Conformance CI"]
+fn native_normalized_vertex_limits_reject_before_render_pipeline_creation() {
+    let context = native_render_context();
+    let limits = context.device_facts().workload_budget().limits();
+
+    let attribute_count = limits.max_vertex_attributes().checked_add(1).unwrap();
+    let attribute_stride = u64::from(attribute_count) * 4;
+    assert!(
+        attribute_stride <= u64::from(limits.max_vertex_buffer_array_stride()),
+        "attribute-count proof must isolate the normalized attribute limit"
+    );
+    let attributes = (0..attribute_count)
+        .map(|location| {
+            GpuVertexAttribute::new(location, u64::from(location) * 4, GpuVertexFormat::Float32)
+        })
+        .collect::<Vec<_>>();
+    let attribute_layout = GpuVertexBufferLayoutDescriptor::new(
+        0,
+        attribute_stride,
+        GpuVertexStepMode::Vertex,
+        attributes,
+    )
+    .unwrap();
+    let attribute_pipeline = render_pipeline_with_vertex_input(
+        "g5b.native.normalized-vertex-attribute-limit",
+        &vertex_input_wgsl(attribute_count),
+        GpuVertexInputStateDescriptor::new([attribute_layout]).unwrap(),
+    );
+    let attribute_error = realize_render_pipeline_error(&context, &attribute_pipeline);
+    assert_eq!(
+        attribute_error.category(),
+        GpuPipelineRealizationErrorCategory::FormatOrAlignmentNotAdmitted
+    );
+    assert!(
+        attribute_error
+            .detail()
+            .is_some_and(|detail| detail.contains("vertex attribute count"))
+    );
+
+    let oversized_stride = u64::from(limits.max_vertex_buffer_array_stride())
+        .checked_add(4)
+        .unwrap();
+    let stride_layout = GpuVertexBufferLayoutDescriptor::new(
+        0,
+        oversized_stride,
+        GpuVertexStepMode::Vertex,
+        [GpuVertexAttribute::new(0, 0, GpuVertexFormat::Float32)],
+    )
+    .unwrap();
+    let stride_pipeline = render_pipeline_with_vertex_input(
+        "g5b.native.normalized-vertex-stride-limit",
+        &vertex_input_wgsl(1),
+        GpuVertexInputStateDescriptor::new([stride_layout]).unwrap(),
+    );
+    let stride_error = realize_render_pipeline_error(&context, &stride_pipeline);
+    assert_eq!(
+        stride_error.category(),
+        GpuPipelineRealizationErrorCategory::FormatOrAlignmentNotAdmitted
+    );
+    assert!(
+        stride_error
+            .detail()
+            .is_some_and(|detail| detail.contains("vertex-buffer stride"))
+    );
 }
 
 #[test]

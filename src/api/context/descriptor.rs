@@ -70,6 +70,12 @@ pub enum GpuLimitKind {
     MaxDynamicUniformBuffersPerPipelineLayout,
     MaxDynamicStorageBuffersPerPipelineLayout,
     MaxComputeWorkgroupsPerDimension,
+    MaxBufferSize,
+    MaxTextureDimension1d,
+    MaxTextureDimension3d,
+    MaxTextureArrayLayers,
+    MaxVertexAttributes,
+    MaxVertexBufferArrayStride,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]

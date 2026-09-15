@@ -113,6 +113,12 @@ mod tests {
             0,
             0,
             max_compute_workgroups_per_dimension,
+            256 * 1024 * 1024,
+            8192,
+            2048,
+            256,
+            16,
+            2048,
         )
         .unwrap()
     }

@@ -429,7 +429,7 @@ pub(crate) fn admitted_device_facts(
     ))
 }
 
-const ALL_LIMIT_KINDS: [GpuLimitKind; 11] = [
+const ALL_LIMIT_KINDS: [GpuLimitKind; 17] = [
     GpuLimitKind::MaxUniformBufferBindingSize,
     GpuLimitKind::MaxStorageBufferBindingSize,
     GpuLimitKind::MaxColorAttachments,
@@ -441,6 +441,12 @@ const ALL_LIMIT_KINDS: [GpuLimitKind; 11] = [
     GpuLimitKind::MaxDynamicUniformBuffersPerPipelineLayout,
     GpuLimitKind::MaxDynamicStorageBuffersPerPipelineLayout,
     GpuLimitKind::MaxComputeWorkgroupsPerDimension,
+    GpuLimitKind::MaxBufferSize,
+    GpuLimitKind::MaxTextureDimension1d,
+    GpuLimitKind::MaxTextureDimension3d,
+    GpuLimitKind::MaxTextureArrayLayers,
+    GpuLimitKind::MaxVertexAttributes,
+    GpuLimitKind::MaxVertexBufferArrayStride,
 ];
 
 const ALL_ALIGNMENT_KINDS: [GpuAlignmentKind; 5] = [
@@ -464,6 +470,12 @@ pub(crate) const fn normalized_limit_baseline() -> GpuLimits {
         8,
         4,
         65_535,
+        256 * 1024 * 1024,
+        8192,
+        2048,
+        256,
+        16,
+        2048,
     )
 }
 
@@ -505,6 +517,12 @@ fn effective_workload_budget(
             u32_value(GpuLimitKind::MaxDynamicUniformBuffersPerPipelineLayout)?,
             u32_value(GpuLimitKind::MaxDynamicStorageBuffersPerPipelineLayout)?,
             u32_value(GpuLimitKind::MaxComputeWorkgroupsPerDimension)?,
+            value(GpuLimitKind::MaxBufferSize),
+            u32_value(GpuLimitKind::MaxTextureDimension1d)?,
+            u32_value(GpuLimitKind::MaxTextureDimension3d)?,
+            u32_value(GpuLimitKind::MaxTextureArrayLayers)?,
+            u32_value(GpuLimitKind::MaxVertexAttributes)?,
+            u32_value(GpuLimitKind::MaxVertexBufferArrayStride)?,
         ),
         descriptor.alignments.clone(),
     ))
@@ -531,6 +549,12 @@ pub(crate) const fn limit_value(limits: GpuLimits, kind: GpuLimitKind) -> u64 {
         GpuLimitKind::MaxComputeWorkgroupsPerDimension => {
             limits.max_compute_workgroups_per_dimension() as u64
         }
+        GpuLimitKind::MaxBufferSize => limits.max_buffer_size(),
+        GpuLimitKind::MaxTextureDimension1d => limits.max_texture_dimension_1d() as u64,
+        GpuLimitKind::MaxTextureDimension3d => limits.max_texture_dimension_3d() as u64,
+        GpuLimitKind::MaxTextureArrayLayers => limits.max_texture_array_layers() as u64,
+        GpuLimitKind::MaxVertexAttributes => limits.max_vertex_attributes() as u64,
+        GpuLimitKind::MaxVertexBufferArrayStride => limits.max_vertex_buffer_array_stride() as u64,
     }
 }
 
@@ -641,6 +665,12 @@ mod tests {
             8,
             4,
             65_535,
+            256 * 1024 * 1024,
+            8192,
+            2048,
+            256,
+            16,
+            2048,
         )
         .unwrap()
     }
@@ -777,6 +807,12 @@ mod tests {
                 8,
                 4,
                 65_535,
+                256 * 1024 * 1024,
+                8192,
+                2048,
+                256,
+                16,
+                2048,
             )
             .unwrap(),
             alignments(),
@@ -805,6 +841,12 @@ mod tests {
                 8,
                 4,
                 65_535,
+                256 * 1024 * 1024,
+                8192,
+                2048,
+                256,
+                16,
+                2048,
             )
             .unwrap(),
             alignments(),
@@ -819,6 +861,29 @@ mod tests {
             error.limit_rejection(),
             Some((GpuLimitKind::MaxVertexBuffers, 8, 7))
         );
+    }
+
+    #[test]
+    fn candidate_admission_rejects_each_public_descriptor_limit_below_requested_minimum() {
+        for kind in [
+            GpuLimitKind::MaxBufferSize,
+            GpuLimitKind::MaxTextureDimension1d,
+            GpuLimitKind::MaxTextureDimension3d,
+            GpuLimitKind::MaxTextureArrayLayers,
+            GpuLimitKind::MaxVertexAttributes,
+            GpuLimitKind::MaxVertexBufferArrayStride,
+        ] {
+            let observed = limit_value(limits(), kind);
+            let required = observed.checked_add(1).unwrap();
+            let descriptor = GpuContextDescriptor::new(GpuCapabilityRequirements::new())
+                .require_limit(kind, required);
+            let error = evaluate_candidate(&descriptor, adapter([]), true).unwrap_err();
+            assert_eq!(
+                error.limit_rejection(),
+                Some((kind, required, observed)),
+                "{kind:?}"
+            );
+        }
     }
 
     #[test]

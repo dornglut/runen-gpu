@@ -105,7 +105,6 @@ fn lower_vertex_buffers(
     descriptor: &GpuRenderPipelineDescriptor,
     request: &str,
 ) -> Result<Vec<LoweredVertexBuffer>, GpuPipelineRealizationError> {
-    let state = &context.backend;
     let layouts = descriptor
         .state()
         .vertex_input()
@@ -125,23 +124,13 @@ fn lower_vertex_buffers(
         .unwrap_or(0);
     let positional_count = positional_count_u32 as usize;
 
-    let native_limits = state.device.limits();
-    let normalized_device_limit = context
-        .device_facts()
-        .device_limits()
-        .values()
-        .max_vertex_buffers();
-    let workload_limit = context
-        .device_facts()
-        .workload_budget()
-        .limits()
-        .max_vertex_buffers();
+    let device_limits = context.device_facts().device_limits().values();
+    let workload_limits = context.device_facts().workload_budget().limits();
 
     // The accepted G4B sparse-slot contract remains positional. Empty slots continue to be
     // materialized as present, empty native layouts rather than adopting WGPU 30's new gap form.
-    if positional_count_u32 > normalized_device_limit
-        || positional_count_u32 > workload_limit
-        || positional_count_u32 > native_limits.max_vertex_buffers
+    if positional_count_u32 > device_limits.max_vertex_buffers()
+        || positional_count_u32 > workload_limits.max_vertex_buffers()
     {
         return Err(incompatible(
             request,
@@ -159,10 +148,12 @@ fn lower_vertex_buffers(
             "the vertex attribute count exceeds the normalized u32 limit domain",
         )
     })?;
-    if total_attributes > native_limits.max_vertex_attributes {
+    if total_attributes > device_limits.max_vertex_attributes()
+        || total_attributes > workload_limits.max_vertex_attributes()
+    {
         return Err(incompatible(
             request,
-            "the vertex attribute count exceeds the created-device limit",
+            "the vertex attribute count exceeds an admitted or created-device limit",
         ));
     }
 
@@ -175,10 +166,12 @@ fn lower_vertex_buffers(
         .collect::<Vec<_>>();
 
     for layout in layouts {
-        if layout.array_stride() > u64::from(native_limits.max_vertex_buffer_array_stride) {
+        if layout.array_stride() > u64::from(device_limits.max_vertex_buffer_array_stride())
+            || layout.array_stride() > u64::from(workload_limits.max_vertex_buffer_array_stride())
+        {
             return Err(incompatible(
                 request,
-                "a vertex-buffer stride exceeds the created-device limit",
+                "a vertex-buffer stride exceeds an admitted or created-device limit",
             ));
         }
         let slot = layout.slot() as usize;

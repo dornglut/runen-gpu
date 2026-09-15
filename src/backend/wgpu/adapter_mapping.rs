@@ -47,19 +47,7 @@ pub(super) fn adapter_facts(
     if downlevel.is_webgpu_compliant() && supports_depth_attachment {
         supported.push(GpuCapabilityFeature::DepthAttachment);
     }
-    let adapter_limits = GpuLimits::from_validated_adapter_facts(
-        native_limits.max_uniform_buffer_binding_size,
-        native_limits.max_storage_buffer_binding_size,
-        native_limits.max_color_attachments,
-        native_limits.max_vertex_buffers,
-        native_limits.max_bindings_per_bind_group,
-        native_limits.max_texture_dimension_2d,
-        native_limits.max_bind_groups,
-        native_limits.max_bind_groups_plus_vertex_buffers,
-        native_limits.max_dynamic_uniform_buffers_per_pipeline_layout,
-        native_limits.max_dynamic_storage_buffers_per_pipeline_layout,
-        native_limits.max_compute_workgroups_per_dimension,
-    );
+    let adapter_limits = normalized_limits(&native_limits);
     GpuAdapterFacts::new(
         map_backend(info.backend),
         map_class(info.device_type),
@@ -89,6 +77,28 @@ pub(super) fn adapter_facts(
         info.device,
         info.driver,
         info.driver_info,
+    )
+}
+
+fn normalized_limits(native: &wgpu::Limits) -> GpuLimits {
+    GpuLimits::from_validated_adapter_facts(
+        native.max_uniform_buffer_binding_size,
+        native.max_storage_buffer_binding_size,
+        native.max_color_attachments,
+        native.max_vertex_buffers,
+        native.max_bindings_per_bind_group,
+        native.max_texture_dimension_2d,
+        native.max_bind_groups,
+        native.max_bind_groups_plus_vertex_buffers,
+        native.max_dynamic_uniform_buffers_per_pipeline_layout,
+        native.max_dynamic_storage_buffers_per_pipeline_layout,
+        native.max_compute_workgroups_per_dimension,
+        native.max_buffer_size,
+        native.max_texture_dimension_1d,
+        native.max_texture_dimension_3d,
+        native.max_texture_array_layers,
+        native.max_vertex_attributes,
+        native.max_vertex_buffer_array_stride,
     )
 }
 
@@ -243,7 +253,44 @@ mod tests {
     };
 
     fn test_limits() -> GpuLimits {
-        GpuLimits::new(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1).unwrap()
+        GpuLimits::new(
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            256 * 1024 * 1024,
+            8192,
+            2048,
+            256,
+            16,
+            2048,
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn adapter_limit_mapping_preserves_public_descriptor_limits() {
+        let mut native = wgpu::Limits::defaults();
+        native.max_buffer_size = 123_456_789;
+        native.max_texture_dimension_1d = 4096;
+        native.max_texture_dimension_3d = 1024;
+        native.max_texture_array_layers = 128;
+        native.max_vertex_attributes = 12;
+        native.max_vertex_buffer_array_stride = 1024;
+        let limits = normalized_limits(&native);
+        assert_eq!(limits.max_buffer_size(), 123_456_789);
+        assert_eq!(limits.max_texture_dimension_1d(), 4096);
+        assert_eq!(limits.max_texture_dimension_3d(), 1024);
+        assert_eq!(limits.max_texture_array_layers(), 128);
+        assert_eq!(limits.max_vertex_attributes(), 12);
+        assert_eq!(limits.max_vertex_buffer_array_stride(), 1024);
     }
 
     #[test]

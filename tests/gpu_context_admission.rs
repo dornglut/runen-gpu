@@ -1,8 +1,17 @@
 use runen_gpu::{
-    GpuCapabilityFeature, GpuCapabilityProfile, GpuContext, GpuContextDescriptor,
-    GpuContextRequestErrorCategory,
+    GpuCapabilityFeature, GpuCapabilityProfile, GpuCapabilityRequirements, GpuContext,
+    GpuContextDescriptor, GpuContextRequestErrorCategory, GpuLimitKind,
 };
 use std::collections::BTreeSet;
+
+const PUBLIC_DESCRIPTOR_LIMITS: [GpuLimitKind; 6] = [
+    GpuLimitKind::MaxBufferSize,
+    GpuLimitKind::MaxTextureDimension1d,
+    GpuLimitKind::MaxTextureDimension3d,
+    GpuLimitKind::MaxTextureArrayLayers,
+    GpuLimitKind::MaxVertexAttributes,
+    GpuLimitKind::MaxVertexBufferArrayStride,
+];
 
 #[test]
 fn headless_context_admission_reports_a_real_context_or_a_strict_environment_outcome() {
@@ -85,6 +94,38 @@ fn headless_context_admission_reports_a_real_context_or_a_strict_environment_out
         }
         Err(error) if accepts_environment_absence(error.category()) => {}
         Err(error) => panic!("unexpected native GPU context admission failure: {error}"),
+    }
+}
+
+#[test]
+fn public_descriptor_limit_require_and_permit_constraints_merge_for_every_new_kind() {
+    for kind in PUBLIC_DESCRIPTOR_LIMITS {
+        let left = GpuContextDescriptor::new(GpuCapabilityRequirements::new())
+            .require_limit(kind, 4)
+            .permit_limit(kind, 64);
+        let right = GpuContextDescriptor::new(GpuCapabilityRequirements::new())
+            .require_limit(kind, 8)
+            .permit_limit(kind, 32);
+        let expected = GpuContextDescriptor::new(GpuCapabilityRequirements::new())
+            .require_limit(kind, 8)
+            .permit_limit(kind, 32);
+
+        let merged = left
+            .merge(&right)
+            .expect("compatible normalized limit constraints should merge");
+        assert!(merged.semantically_eq(&expected), "{kind:?}");
+
+        let contradictory = GpuContextDescriptor::new(GpuCapabilityRequirements::new())
+            .require_limit(kind, 33)
+            .permit_limit(kind, 32);
+        let error = contradictory
+            .merge(&GpuContextDescriptor::new(GpuCapabilityRequirements::new()))
+            .expect_err("minimum above permitted maximum must reject");
+        assert_eq!(
+            error.category(),
+            GpuContextRequestErrorCategory::ContradictoryRequest,
+            "{kind:?}"
+        );
     }
 }
 

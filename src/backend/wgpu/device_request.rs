@@ -457,6 +457,12 @@ fn requested_limits(
     limits.max_dynamic_storage_buffers_per_pipeline_layout =
         budget.max_dynamic_storage_buffers_per_pipeline_layout();
     limits.max_compute_workgroups_per_dimension = budget.max_compute_workgroups_per_dimension();
+    limits.max_buffer_size = budget.max_buffer_size();
+    limits.max_texture_dimension_1d = budget.max_texture_dimension_1d();
+    limits.max_texture_dimension_3d = budget.max_texture_dimension_3d();
+    limits.max_texture_array_layers = budget.max_texture_array_layers();
+    limits.max_vertex_attributes = budget.max_vertex_attributes();
+    limits.max_vertex_buffer_array_stride = budget.max_vertex_buffer_array_stride();
     let alignments = contract.selected_alignments();
     limits.min_uniform_buffer_offset_alignment =
         requested_alignment(alignments.uniform_dynamic_offset, "uniform dynamic offset")?;
@@ -497,6 +503,12 @@ fn map_device_limits(native: &Limits) -> GpuDeviceLimits {
             native.max_dynamic_uniform_buffers_per_pipeline_layout,
             native.max_dynamic_storage_buffers_per_pipeline_layout,
             native.max_compute_workgroups_per_dimension,
+            native.max_buffer_size,
+            native.max_texture_dimension_1d,
+            native.max_texture_dimension_3d,
+            native.max_texture_array_layers,
+            native.max_vertex_attributes,
+            native.max_vertex_buffer_array_stride,
         ),
         GpuAlignmentFacts {
             uniform_dynamic_offset: Some(u64::from(native.min_uniform_buffer_offset_alignment)),
@@ -535,6 +547,12 @@ mod tests {
             native.max_dynamic_uniform_buffers_per_pipeline_layout,
             native.max_dynamic_storage_buffers_per_pipeline_layout,
             native.max_compute_workgroups_per_dimension,
+            256 * 1024 * 1024,
+            8192,
+            2048,
+            256,
+            16,
+            2048,
         )
         .unwrap()
     }
@@ -633,6 +651,27 @@ mod tests {
             requested.max_compute_workgroups_per_dimension,
             budget.max_compute_workgroups_per_dimension()
         );
+        assert_eq!(requested.max_buffer_size, budget.max_buffer_size());
+        assert_eq!(
+            requested.max_texture_dimension_1d,
+            budget.max_texture_dimension_1d()
+        );
+        assert_eq!(
+            requested.max_texture_dimension_3d,
+            budget.max_texture_dimension_3d()
+        );
+        assert_eq!(
+            requested.max_texture_array_layers,
+            budget.max_texture_array_layers()
+        );
+        assert_eq!(
+            requested.max_vertex_attributes,
+            budget.max_vertex_attributes()
+        );
+        assert_eq!(
+            requested.max_vertex_buffer_array_stride,
+            budget.max_vertex_buffer_array_stride()
+        );
         assert_eq!(requested.min_uniform_buffer_offset_alignment, 256);
         assert_eq!(requested.min_storage_buffer_offset_alignment, 256);
     }
@@ -642,10 +681,22 @@ mod tests {
         let mut native = Limits::defaults();
         native.max_vertex_buffers = 12;
         native.max_compute_workgroups_per_dimension = 1234;
+        native.max_buffer_size = 123_456_789;
+        native.max_texture_dimension_1d = 4096;
+        native.max_texture_dimension_3d = 1024;
+        native.max_texture_array_layers = 128;
+        native.max_vertex_attributes = 12;
+        native.max_vertex_buffer_array_stride = 1024;
         native.min_uniform_buffer_offset_alignment = 512;
         let facts = map_device_limits(&native);
         assert_eq!(facts.values().max_vertex_buffers(), 12);
         assert_eq!(facts.values().max_compute_workgroups_per_dimension(), 1234);
+        assert_eq!(facts.values().max_buffer_size(), 123_456_789);
+        assert_eq!(facts.values().max_texture_dimension_1d(), 4096);
+        assert_eq!(facts.values().max_texture_dimension_3d(), 1024);
+        assert_eq!(facts.values().max_texture_array_layers(), 128);
+        assert_eq!(facts.values().max_vertex_attributes(), 12);
+        assert_eq!(facts.values().max_vertex_buffer_array_stride(), 1024);
         assert_eq!(facts.alignments().uniform_dynamic_offset, Some(512));
     }
 
