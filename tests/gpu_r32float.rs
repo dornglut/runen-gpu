@@ -384,7 +384,9 @@ fn new_32bit_formats_round_trip_when_adapter_reports_copy_roles() {
 
         let mut requirements = GpuCapabilityRequirements::new();
         requirements
-            .insert(GpuCapabilityRequirement::Required(GpuCapabilityFeature::Copy))
+            .insert(GpuCapabilityRequirement::Required(
+                GpuCapabilityFeature::Copy,
+            ))
             .unwrap();
         let descriptor = GpuContextDescriptor::new(requirements)
             .require_format_role(format, GpuFormatRole::CopySource)
