@@ -1,0 +1,71 @@
+name: One-time RGBA16 surface regression correction
+
+on:
+  push:
+    branches:
+      - r1/rgba16-core-27-20260916
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  correct-surface-boundary:
+    if: github.repository == 'dornglut/runen-gpu'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: true
+      - name: Create exact-head fix and remove one-time workflow
+        env:
+          EXPECTED_HEAD: ${{ github.sha }}
+          GH_TOKEN: ${{ github.token }}
+          TARGET_BRANCH: r1/rgba16-core-27-20260916
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('src/backend/wgpu/surface.rs')
+          source = path.read_text()
+          old = '''fn normalize_texture_format(native: TextureFormat) -> Option<GpuTextureFormat> {
+              known_formats()
+          '''
+          new = '''fn normalize_texture_format(native: TextureFormat) -> Option<GpuTextureFormat> {
+              // RGBA16 intermediate textures do not extend the G7A presentation vocabulary.
+              if matches!(
+                  native,
+                  TextureFormat::Rgba16Uint | TextureFormat::Rgba16Sint | TextureFormat::Rgba16Float
+              ) {
+                  return None;
+              }
+              known_formats()
+          '''
+          assert source.count(old) == 1, 'surface normalization anchor drifted'
+          source = source.replace(old, new, 1)
+          old_test = 'formats: vec![TextureFormat::Bgra8UnormSrgb, TextureFormat::Rgba16Float],'
+          new_test = '''formats: vec![
+                          TextureFormat::Bgra8UnormSrgb,
+                          TextureFormat::Rgba16Uint,
+                          TextureFormat::Rgba16Sint,
+                          TextureFormat::Rgba16Float,
+                      ],'''
+          assert source.count(old_test) == 1, 'surface regression anchor drifted'
+          source = source.replace(old_test, new_test, 1)
+          path.write_text(source)
+          PY
+          rm .github/workflows/r1-rgba16-fix-once.yml
+          git diff --check
+          git diff --stat
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- src/backend/wgpu/surface.rs .github/workflows/r1-rgba16-fix-once.yml
+          git commit -m 'Keep RGBA16 intermediate formats out of surface capabilities (#27)'
+          git fetch origin "refs/heads/${TARGET_BRANCH}"
+          test "$(git rev-parse FETCH_HEAD)" = "$EXPECTED_HEAD"
+          git push origin "HEAD:refs/heads/${TARGET_BRANCH}"
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/workflows/validation.yml/dispatches" -f ref="$TARGET_BRANCH"
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/workflows/runengpu-conformance.yml/dispatches" -f ref="$TARGET_BRANCH"
