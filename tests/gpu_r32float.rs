@@ -354,3 +354,123 @@ fn r32float_transfer_realization_admission_and_sampled_binding_are_backend_prove
     drop(realized_view);
     drop(realized_texture);
 }
+
+#[test]
+#[ignore = "requires a real Vulkan fallback adapter; executed by RunenGPU Native Conformance CI"]
+fn new_32bit_formats_round_trip_when_adapter_reports_copy_roles() {
+    const WIDTH: u32 = 64;
+    const HEIGHT: u32 = 2;
+
+    let context = native_r32float_context();
+    let mut allocator = GpuWorkResourceIdAllocator::new();
+    let mut exercised = 0;
+    for format in [
+        GpuTextureFormat::R32Sint,
+        GpuTextureFormat::Rg32Uint,
+        GpuTextureFormat::Rg32Sint,
+        GpuTextureFormat::Rg32Float,
+        GpuTextureFormat::Rgba32Uint,
+        GpuTextureFormat::Rgba32Sint,
+        GpuTextureFormat::Rgba32Float,
+    ] {
+        let facts = context
+            .adapter_facts()
+            .supported()
+            .format(format)
+            .expect("every normalized 32-bit format must have enumerated adapter facts");
+        if !facts.copy_source || !facts.copy_destination {
+            println!("{format:?}: copy roles not both advertised; native round-trip skipped");
+            continue;
+        }
+
+        let bytes_per_row = WIDTH * format.bytes_per_texel();
+        let expected = (0..bytes_per_row * HEIGHT)
+            .map(|index| (index % 251) as u8)
+            .collect::<Vec<_>>();
+        let buffer = copy_buffer(&mut allocator, expected.len() as u64);
+        let texture_name = format!("native {format:?} transfer texture");
+        let texture_label = label(&texture_name);
+        let extent =
+            GpuTextureExtent::new(&texture_label, GpuTextureDimension::D2, WIDTH, HEIGHT, 1)
+                .unwrap();
+        let texture = allocator
+            .allocate_texture_handle(
+                GpuTextureDescriptor::new(
+                    common(&texture_name),
+                    GpuTextureDimension::D2,
+                    extent,
+                    1,
+                    1,
+                    format,
+                    GpuTextureUsages::new(
+                        &texture_label,
+                        [GpuTextureUsage::CopySource, GpuTextureUsage::CopyDestination],
+                    )
+                    .unwrap(),
+                    GpuTextureInitialization::Uninitialized,
+                )
+                .unwrap(),
+            )
+            .unwrap();
+        let realized_texture = context
+            .realize_texture(&texture)
+            .expect("adapter-admitted 32-bit copy texture must realize");
+
+        let source_name = format!("native {format:?} upload bytes");
+        let buffer_region =
+            GpuBufferRegion::new(&buffer, GpuBufferRange::whole(&buffer).unwrap()).unwrap();
+        let upload = GpuUploadOperation::new(
+            buffer_region.into(),
+            PreparedGpuData::<TransferData>::from_pod_transfer(
+                &source_name,
+                expected.as_slice(),
+                provenance(&source_name),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        let texture_region = GpuTextureCopyRegion::new(
+            &texture,
+            0,
+            GpuTextureOrigin::new(0, 0, 0),
+            GpuTextureAspect::Color,
+            GpuCopyExtent::new(WIDTH, HEIGHT, 1).unwrap(),
+        )
+        .unwrap();
+        let layout = GpuBufferTextureLayout::new(&buffer, 0, bytes_per_row, HEIGHT).unwrap();
+        let copy = GpuCopyOperation::buffer_to_texture(layout, texture_region.clone()).unwrap();
+        let readback_id = GpuReadbackId::allocate().unwrap();
+        let readback = GpuReadbackOperation::new(texture_region.into(), readback_id).unwrap();
+        let graph_name = format!("native {format:?} copy round-trip");
+        let mut builder = GpuWorkFragmentBuilder::new(label(&graph_name), provenance(&graph_name));
+        builder.declare_resource(buffer.into()).unwrap();
+        builder.declare_resource(texture.into()).unwrap();
+        add_operation(
+            &mut builder,
+            &format!("upload {format:?} bytes"),
+            GpuWorkOperation::Upload(upload),
+        );
+        add_operation(
+            &mut builder,
+            &format!("copy bytes into {format:?} texture"),
+            GpuWorkOperation::Copy(copy),
+        );
+        add_operation(
+            &mut builder,
+            &format!("read {format:?} texture bytes"),
+            GpuWorkOperation::Readback(readback),
+        );
+        let graph = GpuPreparedWorkGraph::prepare(label(&graph_name), [builder.finish().unwrap()])
+            .unwrap();
+        let prepared = pollster::block_on(context.prepare_submission(graph)).unwrap();
+        let submission = context.submit_prepared(prepared).unwrap();
+        let bytes = progress_submission_and_readback(&context, &submission, readback_id);
+        assert_eq!(bytes.as_bytes(), expected.as_slice(), "{format:?} round-trip bytes");
+        assert_eq!(bytes.layout().byte_len(), expected.len() as u64);
+        assert_eq!(bytes.texture_format(), Some(format));
+        exercised += 1;
+        println!("{format:?}: copy round-trip PASS ({bytes_per_row} bytes/row)");
+        drop(realized_texture);
+    }
+    println!("observed new 32-bit format copy round-trips: {exercised}/7");
+}
