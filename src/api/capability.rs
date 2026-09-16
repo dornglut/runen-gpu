@@ -1017,7 +1017,9 @@ mod tests {
             GpuCapabilityAdmissionCause::EnabledUnavailable
         );
         assert_eq!(
-            enabled_unavailable.feature(), Some(GpuCapabilityFeature::TimestampQuery));
+            enabled_unavailable.feature(),
+            Some(GpuCapabilityFeature::TimestampQuery)
+        );
 
         let invalid_limit = GpuLimits::new(
             0,

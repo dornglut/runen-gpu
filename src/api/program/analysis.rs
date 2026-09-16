@@ -116,12 +116,12 @@ pub(crate) fn analyze_program(
             operation,
             duplicate.to_string(),
             GpuProgramContractCause::DuplicateEntryPoint,
-            "canonical WGSL must resolve a selected entry-point name unambiguously",
+            "select each entry-point name exactly once",
         ));
     }
 
     let mut selected_indices = Vec::with_capacity(selected_names.len());
-    let mut entry_points = Vec::new();
+    let mut entry_points = Vec::with_capacity(selected_names.len());
     for name in selected_names {
         let mut matches = module
             .entry_points

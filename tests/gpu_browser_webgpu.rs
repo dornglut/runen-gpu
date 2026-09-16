@@ -209,7 +209,11 @@ mod browser {
         .unwrap()
     }
 
-    fn rgba16_add_operation(builder: &mut GpuWorkFragmentBuilder, name: &str, operation: GpuWorkOperation) {
+    fn rgba16_add_operation(
+        builder: &mut GpuWorkFragmentBuilder,
+        name: &str,
+        operation: GpuWorkOperation,
+    ) {
         builder
             .add_node(
                 rgba16_label(name),
@@ -225,7 +229,9 @@ mod browser {
     async fn run_browser_rgba16_copy() {
         let mut requirements = GpuCapabilityRequirements::new();
         requirements
-            .insert(GpuCapabilityRequirement::Required(GpuCapabilityFeature::Copy))
+            .insert(GpuCapabilityRequirement::Required(
+                GpuCapabilityFeature::Copy,
+            ))
             .unwrap();
         let census = GpuContext::request(
             GpuContextDescriptor::new(requirements.clone())
@@ -234,7 +240,10 @@ mod browser {
         )
         .await
         .expect("declared browser-conformance environment must provide WebGPU copy");
-        assert_eq!(census.adapter_facts().backend(), GpuBackendFamily::BrowserWebGpu);
+        assert_eq!(
+            census.adapter_facts().backend(),
+            GpuBackendFamily::BrowserWebGpu
+        );
         let mut exercised_mask = 0_u32;
         for (index, format) in [
             GpuTextureFormat::Rgba16Uint,
@@ -292,7 +301,10 @@ mod browser {
                                 format,
                                 GpuTextureUsages::new(
                                     &texture_label,
-                                    [GpuTextureUsage::CopySource, GpuTextureUsage::CopyDestination],
+                                    [
+                                        GpuTextureUsage::CopySource,
+                                        GpuTextureUsage::CopyDestination,
+                                    ],
                                 )
                                 .unwrap(),
                                 GpuTextureInitialization::Uninitialized,
@@ -331,21 +343,44 @@ mod browser {
                     .unwrap(),
                 )
                 .unwrap();
-                let copy = GpuCopyOperation::texture_to_texture(source_region, destination_region.clone()).unwrap();
+                let copy =
+                    GpuCopyOperation::texture_to_texture(source_region, destination_region.clone())
+                        .unwrap();
                 let readback_id = GpuReadbackId::allocate().unwrap();
-                let readback = GpuReadbackOperation::new(destination_region.into(), readback_id).unwrap();
-                let mut builder = GpuWorkFragmentBuilder::new(rgba16_label(&name), rgba16_provenance(&name));
+                let readback =
+                    GpuReadbackOperation::new(destination_region.into(), readback_id).unwrap();
+                let mut builder =
+                    GpuWorkFragmentBuilder::new(rgba16_label(&name), rgba16_provenance(&name));
                 builder.declare_resource(source.into()).unwrap();
                 builder.declare_resource(destination.into()).unwrap();
-                rgba16_add_operation(&mut builder, &format!("upload {name}"), GpuWorkOperation::Upload(upload));
-                rgba16_add_operation(&mut builder, &format!("copy {name}"), GpuWorkOperation::Copy(copy));
-                rgba16_add_operation(&mut builder, &format!("readback {name}"), GpuWorkOperation::Readback(readback));
-                let graph = GpuPreparedWorkGraph::prepare(rgba16_label(&name), [builder.finish().unwrap()]).unwrap();
+                rgba16_add_operation(
+                    &mut builder,
+                    &format!("upload {name}"),
+                    GpuWorkOperation::Upload(upload),
+                );
+                rgba16_add_operation(
+                    &mut builder,
+                    &format!("copy {name}"),
+                    GpuWorkOperation::Copy(copy),
+                );
+                rgba16_add_operation(
+                    &mut builder,
+                    &format!("readback {name}"),
+                    GpuWorkOperation::Readback(readback),
+                );
+                let graph =
+                    GpuPreparedWorkGraph::prepare(rgba16_label(&name), [builder.finish().unwrap()])
+                        .unwrap();
                 let prepared = context.prepare_submission(graph).await.unwrap();
                 let submission = context.submit_prepared(prepared).unwrap();
-                let readbacks = wait_for_terminal_readbacks(&context, &submission, &[readback_id]).await;
+                let readbacks =
+                    wait_for_terminal_readbacks(&context, &submission, &[readback_id]).await;
                 assert_eq!(readbacks.len(), 1);
-                assert_eq!(readbacks[0].as_bytes(), expected.as_slice(), "{format:?} {width}px browser content");
+                assert_eq!(
+                    readbacks[0].as_bytes(),
+                    expected.as_slice(),
+                    "{format:?} {width}px browser content"
+                );
                 assert_eq!(readbacks[0].layout().byte_len(), expected.len() as u64);
                 assert_eq!(readbacks[0].texture_format(), Some(format));
                 assert_execution_drained(&context);

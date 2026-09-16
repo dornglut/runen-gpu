@@ -2,9 +2,24 @@ use runen_gpu::*;
 use std::time::{Duration, Instant};
 
 const FORMATS: [(GpuTextureFormat, &str, &str, GpuShaderIoScalarClass); 3] = [
-    (GpuTextureFormat::Rgba16Uint, "rgba16uint", "vec4<u32>(1u, 2u, 3u, 4u)", GpuShaderIoScalarClass::Uint),
-    (GpuTextureFormat::Rgba16Sint, "rgba16sint", "vec4<i32>(-1, 2, -3, 4)", GpuShaderIoScalarClass::Sint),
-    (GpuTextureFormat::Rgba16Float, "rgba16float", "vec4<f32>(1.0, -2.0, 3.0, 0.5)", GpuShaderIoScalarClass::Float),
+    (
+        GpuTextureFormat::Rgba16Uint,
+        "rgba16uint",
+        "vec4<u32>(1u, 2u, 3u, 4u)",
+        GpuShaderIoScalarClass::Uint,
+    ),
+    (
+        GpuTextureFormat::Rgba16Sint,
+        "rgba16sint",
+        "vec4<i32>(-1, 2, -3, 4)",
+        GpuShaderIoScalarClass::Sint,
+    ),
+    (
+        GpuTextureFormat::Rgba16Float,
+        "rgba16float",
+        "vec4<f32>(1.0, -2.0, 3.0, 0.5)",
+        GpuShaderIoScalarClass::Float,
+    ),
 ];
 
 fn label(value: &str) -> GpuResourceLabel {
@@ -27,8 +42,26 @@ fn common(value: &str) -> GpuResourceCommon {
 }
 
 fn test_limits() -> GpuLimits {
-    GpuLimits::new(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 256 * 1024 * 1024, 8192, 2048, 256, 16, 2048)
-        .unwrap()
+    GpuLimits::new(
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        256 * 1024 * 1024,
+        8192,
+        2048,
+        256,
+        16,
+        2048,
+    )
+    .unwrap()
 }
 
 #[test]
@@ -70,7 +103,8 @@ fn rgba16_structural_normalization_preserves_observed_roles() {
         block_copy_size: Some(999),
     };
     for (format, _, _, _) in FORMATS {
-        let normalized = GpuCapabilities::from_normalized_facts([], test_limits(), [(format, supplied)]);
+        let normalized =
+            GpuCapabilities::from_normalized_facts([], test_limits(), [(format, supplied)]);
         let facts = normalized.format(format).unwrap();
         assert_eq!(facts.block_dimensions, Some((1, 1)));
         assert_eq!(facts.block_copy_size, Some(8));
@@ -142,7 +176,14 @@ fn rgba16_fragment_io_and_integer_blending_follow_scalar_class() {
         assert_eq!(output.value_type().vector_width().get(), 4);
         assert!(target.has_blendable_alpha_channel());
         if format != GpuTextureFormat::Rgba16Float {
-            assert!(GpuColorTargetStateDescriptor::new(format, GpuBlendMode::Alpha, GpuColorWriteMask::ALL).is_err());
+            assert!(
+                GpuColorTargetStateDescriptor::new(
+                    format,
+                    GpuBlendMode::Alpha,
+                    GpuColorWriteMask::ALL
+                )
+                .is_err()
+            );
         }
     }
 }
@@ -152,14 +193,16 @@ fn rgba16_prepared_texture_uses_eight_byte_rows() {
     for (format, _, _, _) in FORMATS {
         let name = format!("prepared {format:?}");
         let texture_label = label(&name);
-        let extent = GpuTextureExtent::new(&texture_label, GpuTextureDimension::D2, 3, 2, 1).unwrap();
+        let extent =
+            GpuTextureExtent::new(&texture_label, GpuTextureDimension::D2, 3, 2, 1).unwrap();
         let data = PreparedGpuData::<TransferData>::from_pod_transfer(
             &name,
             &[0_u8; 48],
             provenance(&name),
         )
         .unwrap();
-        let prepared = GpuPreparedTextureData::new(&texture_label, data, format, extent, 24, 0).unwrap();
+        let prepared =
+            GpuPreparedTextureData::new(&texture_label, data, format, extent, 24, 0).unwrap();
         assert_eq!(prepared.bytes_per_row(), 24);
         assert_eq!(prepared.data().layout().byte_len(), 48);
         let descriptor = GpuTextureDescriptor::new(
@@ -190,7 +233,11 @@ fn add_operation(builder: &mut GpuWorkFragmentBuilder, name: &str, operation: Gp
         .unwrap();
 }
 
-fn wait_for_readback(context: &GpuContext, submission: &GpuSubmission, id: GpuReadbackId) -> GpuReadbackBytes {
+fn wait_for_readback(
+    context: &GpuContext,
+    submission: &GpuSubmission,
+    id: GpuReadbackId,
+) -> GpuReadbackBytes {
     let readback = submission.readback(id).unwrap().clone();
     let deadline = Instant::now() + Duration::from_secs(15);
     let bytes = loop {
@@ -213,7 +260,10 @@ fn wait_for_readback(context: &GpuContext, submission: &GpuSubmission, id: GpuRe
             GpuSubmissionStatus::Failed(error) => panic!("RGBA16 submission failed: {error:?}"),
             GpuSubmissionStatus::Accepted => {}
         }
-        assert!(Instant::now() < deadline, "RGBA16 submission did not finish");
+        assert!(
+            Instant::now() < deadline,
+            "RGBA16 submission did not finish"
+        );
         std::thread::yield_now();
     }
     bytes
@@ -224,7 +274,9 @@ fn wait_for_readback(context: &GpuContext, submission: &GpuSubmission, id: GpuRe
 fn rgba16_native_copy_round_trips_per_observed_format() {
     let mut requirements = GpuCapabilityRequirements::new();
     requirements
-        .insert(GpuCapabilityRequirement::Required(GpuCapabilityFeature::Copy))
+        .insert(GpuCapabilityRequirement::Required(
+            GpuCapabilityFeature::Copy,
+        ))
         .unwrap();
     let census = pollster::block_on(GpuContext::request(
         GpuContextDescriptor::new(requirements.clone())
@@ -236,7 +288,11 @@ fn rgba16_native_copy_round_trips_per_observed_format() {
 
     let mut exercised = 0;
     for (format, _, _, _) in FORMATS {
-        let facts = census.adapter_facts().supported().format(format).expect("RGBA16 must be enumerated");
+        let facts = census
+            .adapter_facts()
+            .supported()
+            .format(format)
+            .expect("RGBA16 must be enumerated");
         if !facts.copy_source || !facts.copy_destination {
             println!("{format:?}: SKIP (copy roles not both advertised)");
             continue;
@@ -281,7 +337,10 @@ fn rgba16_native_copy_round_trips_per_observed_format() {
                             format,
                             GpuTextureUsages::new(
                                 &resource_label,
-                                [GpuTextureUsage::CopySource, GpuTextureUsage::CopyDestination],
+                                [
+                                    GpuTextureUsage::CopySource,
+                                    GpuTextureUsage::CopyDestination,
+                                ],
                             )
                             .unwrap(),
                             GpuTextureInitialization::Uninitialized,
@@ -320,23 +379,46 @@ fn rgba16_native_copy_round_trips_per_observed_format() {
                 .unwrap(),
             )
             .unwrap();
-            let copy = GpuCopyOperation::texture_to_texture(source_region, destination_region.clone()).unwrap();
+            let copy =
+                GpuCopyOperation::texture_to_texture(source_region, destination_region.clone())
+                    .unwrap();
             let readback_id = GpuReadbackId::allocate().unwrap();
-            let readback = GpuReadbackOperation::new(destination_region.into(), readback_id).unwrap();
+            let readback =
+                GpuReadbackOperation::new(destination_region.into(), readback_id).unwrap();
             let mut builder = GpuWorkFragmentBuilder::new(label(&name), provenance(&name));
             builder.declare_resource(source.into()).unwrap();
             builder.declare_resource(destination.into()).unwrap();
-            add_operation(&mut builder, &format!("upload {name}"), GpuWorkOperation::Upload(upload));
-            add_operation(&mut builder, &format!("copy {name}"), GpuWorkOperation::Copy(copy));
-            add_operation(&mut builder, &format!("readback {name}"), GpuWorkOperation::Readback(readback));
-            let graph = GpuPreparedWorkGraph::prepare(label(&name), [builder.finish().unwrap()]).unwrap();
+            add_operation(
+                &mut builder,
+                &format!("upload {name}"),
+                GpuWorkOperation::Upload(upload),
+            );
+            add_operation(
+                &mut builder,
+                &format!("copy {name}"),
+                GpuWorkOperation::Copy(copy),
+            );
+            add_operation(
+                &mut builder,
+                &format!("readback {name}"),
+                GpuWorkOperation::Readback(readback),
+            );
+            let graph =
+                GpuPreparedWorkGraph::prepare(label(&name), [builder.finish().unwrap()]).unwrap();
             let prepared = pollster::block_on(context.prepare_submission(graph)).unwrap();
             let submission = context.submit_prepared(prepared).unwrap();
             let bytes = wait_for_readback(&context, &submission, readback_id);
-            assert_eq!(bytes.as_bytes(), expected.as_slice(), "{format:?} {width}px content");
+            assert_eq!(
+                bytes.as_bytes(),
+                expected.as_slice(),
+                "{format:?} {width}px content"
+            );
             assert_eq!(bytes.layout().byte_len(), expected.len() as u64);
             assert_eq!(bytes.texture_format(), Some(format));
-            println!("{format:?}: PASS {width}x{height}, {} bytes per logical row", width * 8);
+            println!(
+                "{format:?}: PASS {width}x{height}, {} bytes per logical row",
+                width * 8
+            );
             drop(realized_destination);
             drop(realized_source);
             exercised += 1;
