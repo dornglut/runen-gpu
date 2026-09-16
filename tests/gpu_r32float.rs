@@ -361,8 +361,7 @@ fn new_32bit_formats_round_trip_when_adapter_reports_copy_roles() {
     const WIDTH: u32 = 64;
     const HEIGHT: u32 = 2;
 
-    let context = native_r32float_context();
-    let mut allocator = GpuWorkResourceIdAllocator::new();
+    let census_context = native_r32float_context();
     let mut exercised = 0;
     for format in [
         GpuTextureFormat::R32Sint,
@@ -373,7 +372,7 @@ fn new_32bit_formats_round_trip_when_adapter_reports_copy_roles() {
         GpuTextureFormat::Rgba32Sint,
         GpuTextureFormat::Rgba32Float,
     ] {
-        let facts = context
+        let facts = census_context
             .adapter_facts()
             .supported()
             .format(format)
@@ -383,6 +382,25 @@ fn new_32bit_formats_round_trip_when_adapter_reports_copy_roles() {
             continue;
         }
 
+        let mut requirements = GpuCapabilityRequirements::new();
+        requirements
+            .insert(GpuCapabilityRequirement::Required(GpuCapabilityFeature::Copy))
+            .unwrap();
+        let descriptor = GpuContextDescriptor::new(requirements)
+            .require_format_role(format, GpuFormatRole::CopySource)
+            .require_format_role(format, GpuFormatRole::CopyDestination)
+            .with_fallback_policy(GpuSoftwareFallbackPolicy::Require)
+            .with_allowed_backends([GpuBackendFamily::Vulkan])
+            .with_label("native 32-bit format copy-role proof");
+        let context = pollster::block_on(GpuContext::request(descriptor))
+            .expect("observed 32-bit copy roles must be explicitly admitted by the context");
+        let admitted = context
+            .adapter_facts()
+            .supported()
+            .format(format)
+            .expect("admitted 32-bit format must have adapter facts");
+        assert!(admitted.copy_source && admitted.copy_destination);
+        let mut allocator = GpuWorkResourceIdAllocator::new();
         let bytes_per_row = WIDTH * format.bytes_per_texel();
         let expected = (0..bytes_per_row * HEIGHT)
             .map(|index| (index % 251) as u8)
@@ -404,7 +422,10 @@ fn new_32bit_formats_round_trip_when_adapter_reports_copy_roles() {
                     format,
                     GpuTextureUsages::new(
                         &texture_label,
-                        [GpuTextureUsage::CopySource, GpuTextureUsage::CopyDestination],
+                        [
+                            GpuTextureUsage::CopySource,
+                            GpuTextureUsage::CopyDestination,
+                        ],
                     )
                     .unwrap(),
                     GpuTextureInitialization::Uninitialized,
@@ -460,12 +481,16 @@ fn new_32bit_formats_round_trip_when_adapter_reports_copy_roles() {
             &format!("read {format:?} texture bytes"),
             GpuWorkOperation::Readback(readback),
         );
-        let graph = GpuPreparedWorkGraph::prepare(label(&graph_name), [builder.finish().unwrap()])
-            .unwrap();
+        let graph =
+            GpuPreparedWorkGraph::prepare(label(&graph_name), [builder.finish().unwrap()]).unwrap();
         let prepared = pollster::block_on(context.prepare_submission(graph)).unwrap();
         let submission = context.submit_prepared(prepared).unwrap();
         let bytes = progress_submission_and_readback(&context, &submission, readback_id);
-        assert_eq!(bytes.as_bytes(), expected.as_slice(), "{format:?} round-trip bytes");
+        assert_eq!(
+            bytes.as_bytes(),
+            expected.as_slice(),
+            "{format:?} round-trip bytes"
+        );
         assert_eq!(bytes.layout().byte_len(), expected.len() as u64);
         assert_eq!(bytes.texture_format(), Some(format));
         exercised += 1;
