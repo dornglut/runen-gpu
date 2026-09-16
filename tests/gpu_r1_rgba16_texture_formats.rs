@@ -1,0 +1,428 @@
+use runen_gpu::*;
+use std::time::{Duration, Instant};
+
+const FORMATS: [(GpuTextureFormat, &str, &str, GpuShaderIoScalarClass); 3] = [
+    (
+        GpuTextureFormat::Rgba16Uint,
+        "rgba16uint",
+        "vec4<u32>(1u, 2u, 3u, 4u)",
+        GpuShaderIoScalarClass::Uint,
+    ),
+    (
+        GpuTextureFormat::Rgba16Sint,
+        "rgba16sint",
+        "vec4<i32>(-1, 2, -3, 4)",
+        GpuShaderIoScalarClass::Sint,
+    ),
+    (
+        GpuTextureFormat::Rgba16Float,
+        "rgba16float",
+        "vec4<f32>(1.0, -2.0, 3.0, 0.5)",
+        GpuShaderIoScalarClass::Float,
+    ),
+];
+
+fn label(value: &str) -> GpuResourceLabel {
+    GpuResourceLabel::new(value).unwrap()
+}
+
+fn provenance(value: &str) -> GpuResourceProvenance {
+    GpuResourceProvenance::new(label(value), None, None)
+}
+
+fn common(value: &str) -> GpuResourceCommon {
+    GpuResourceCommon::owned(
+        label(value),
+        GpuResourceLifetime::Transient,
+        GpuMemoryIntent::Device,
+        GpuReconstruction::SourceBacked,
+        provenance(value),
+    )
+    .unwrap()
+}
+
+fn test_limits() -> GpuLimits {
+    GpuLimits::new(
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        256 * 1024 * 1024,
+        8192,
+        2048,
+        256,
+        16,
+        2048,
+    )
+    .unwrap()
+}
+
+#[test]
+fn rgba16_public_metadata_and_copy_geometry_are_exact() {
+    for (format, _, _, _) in FORMATS {
+        assert_eq!(format.bytes_per_texel(), 8);
+        assert!(!format.is_depth());
+        assert!(!format.is_srgb());
+        let normalized = GpuCapabilities::from_normalized_facts(
+            [],
+            test_limits(),
+            [(format, GpuTextureFormatCapabilities::none())],
+        );
+        let facts = normalized.format(format).unwrap();
+        assert_eq!(facts.block_dimensions, Some((1, 1)));
+        assert_eq!(facts.block_copy_size, Some(8));
+        assert!(!facts.sampled);
+        assert!(!facts.filterable);
+        assert!(!facts.storage_read);
+        assert!(!facts.storage_write);
+        assert!(!facts.color_attachment);
+        assert!(!facts.copy_source);
+        assert!(!facts.copy_destination);
+    }
+}
+
+#[test]
+fn rgba16_structural_normalization_preserves_observed_roles() {
+    let supplied = GpuTextureFormatCapabilities {
+        sampled: true,
+        filterable: false,
+        storage_read: false,
+        storage_write: true,
+        color_attachment: false,
+        depth_stencil: false,
+        copy_source: true,
+        copy_destination: false,
+        block_dimensions: Some((17, 19)),
+        block_copy_size: Some(999),
+    };
+    for (format, _, _, _) in FORMATS {
+        let normalized =
+            GpuCapabilities::from_normalized_facts([], test_limits(), [(format, supplied)]);
+        let facts = normalized.format(format).unwrap();
+        assert_eq!(facts.block_dimensions, Some((1, 1)));
+        assert_eq!(facts.block_copy_size, Some(8));
+        assert_eq!(facts.sampled, supplied.sampled);
+        assert_eq!(facts.filterable, supplied.filterable);
+        assert_eq!(facts.storage_read, supplied.storage_read);
+        assert_eq!(facts.storage_write, supplied.storage_write);
+        assert_eq!(facts.color_attachment, supplied.color_attachment);
+        assert_eq!(facts.depth_stencil, supplied.depth_stencil);
+        assert_eq!(facts.copy_source, supplied.copy_source);
+        assert_eq!(facts.copy_destination, supplied.copy_destination);
+    }
+}
+
+#[test]
+fn rgba16_wgsl_admits_actual_typed_storage_writes() {
+    for (format, wgsl_format, value, _) in FORMATS {
+        let source_text = format!(
+            "@group(0) @binding(0) var image: texture_storage_2d<{wgsl_format}, write>;\n\
+             @compute @workgroup_size(1) fn write_value() {{\n\
+                 textureStore(image, vec2<i32>(0, 0), {value});\n\
+             }}\n"
+        );
+        let owner = GpuProgramSourceOwnerId::allocate().unwrap();
+        let identity = GpuProgramSourceIdentity::new(
+            owner,
+            GpuProgramSourceKey::new("r1.rgba16.typed-storage").unwrap(),
+            GpuProgramSourceRevision::try_from_raw(1).unwrap(),
+        );
+        let mut registry = GpuProgramSourceRegistry::new(2, 16 * 1024).unwrap();
+        let source = registry
+            .admit_wgsl(
+                identity,
+                &source_text,
+                GpuProgramSourceProvenance::new("r1-rgba16-format-test", None).unwrap(),
+            )
+            .unwrap();
+        let program = GpuProgramDescriptor::new(
+            source,
+            [GpuEntryPointName::new("write_value").unwrap()],
+            std::iter::empty::<GpuBindingLayoutRefinement>(),
+        )
+        .unwrap();
+        let bound_format = program
+            .interface()
+            .binding(GpuBindingKey::try_new(0, 0).unwrap())
+            .unwrap()
+            .kind()
+            .storage_texture_format()
+            .unwrap();
+        assert_eq!(bound_format, format);
+    }
+}
+
+#[test]
+fn rgba16_fragment_io_and_integer_blending_follow_scalar_class() {
+    for (format, _, _, class) in FORMATS {
+        let target = GpuColorTargetStateDescriptor::new(
+            format,
+            GpuBlendMode::Replace,
+            GpuColorWriteMask::ALL,
+        )
+        .unwrap();
+        let signature = GpuFragmentOutputStateDescriptor::new([target])
+            .expected_signature(GpuEntryPointName::new("fragment_main").unwrap())
+            .unwrap();
+        let output = signature.locations().next().unwrap();
+        assert_eq!(output.value_type().scalar_class(), class);
+        assert_eq!(output.value_type().vector_width().get(), 4);
+        assert!(target.has_blendable_alpha_channel());
+        if format != GpuTextureFormat::Rgba16Float {
+            assert!(
+                GpuColorTargetStateDescriptor::new(
+                    format,
+                    GpuBlendMode::Alpha,
+                    GpuColorWriteMask::ALL
+                )
+                .is_err()
+            );
+        }
+    }
+}
+
+#[test]
+fn rgba16_prepared_texture_uses_eight_byte_rows() {
+    for (format, _, _, _) in FORMATS {
+        let name = format!("prepared {format:?}");
+        let texture_label = label(&name);
+        let extent =
+            GpuTextureExtent::new(&texture_label, GpuTextureDimension::D2, 3, 2, 1).unwrap();
+        let data = PreparedGpuData::<TransferData>::from_pod_transfer(
+            &name,
+            &[0_u8; 48],
+            provenance(&name),
+        )
+        .unwrap();
+        let prepared =
+            GpuPreparedTextureData::new(&texture_label, data, format, extent, 24, 0).unwrap();
+        assert_eq!(prepared.bytes_per_row(), 24);
+        assert_eq!(prepared.data().layout().byte_len(), 48);
+        let descriptor = GpuTextureDescriptor::new(
+            common(&name),
+            GpuTextureDimension::D2,
+            extent,
+            1,
+            1,
+            format,
+            GpuTextureUsages::new(&texture_label, [GpuTextureUsage::CopyDestination]).unwrap(),
+            GpuTextureInitialization::Prepared(prepared),
+        )
+        .unwrap();
+        assert_eq!(descriptor.format(), format);
+    }
+}
+
+fn add_operation(builder: &mut GpuWorkFragmentBuilder, name: &str, operation: GpuWorkOperation) {
+    builder
+        .add_node(
+            label(name),
+            operation,
+            [],
+            GpuCapabilityRequirements::new(),
+            GpuExecutionPreference::TransferPreferred,
+            provenance(name),
+        )
+        .unwrap();
+}
+
+fn wait_for_readback(
+    context: &GpuContext,
+    submission: &GpuSubmission,
+    id: GpuReadbackId,
+) -> GpuReadbackBytes {
+    let readback = submission.readback(id).unwrap().clone();
+    let deadline = Instant::now() + Duration::from_secs(15);
+    let bytes = loop {
+        context.progress();
+        match readback.status() {
+            GpuReadbackStatus::Ready(bytes) => break bytes,
+            GpuReadbackStatus::Failed(error) => panic!("RGBA16 readback failed: {error:?}"),
+            GpuReadbackStatus::Pending => {}
+        }
+        if let GpuSubmissionStatus::Failed(error) = submission.status() {
+            panic!("RGBA16 submission failed: {error:?}");
+        }
+        assert!(Instant::now() < deadline, "RGBA16 readback timed out");
+        std::thread::yield_now();
+    };
+    loop {
+        context.progress();
+        match submission.status() {
+            GpuSubmissionStatus::Completed => break,
+            GpuSubmissionStatus::Failed(error) => panic!("RGBA16 submission failed: {error:?}"),
+            GpuSubmissionStatus::Accepted => {}
+        }
+        assert!(
+            Instant::now() < deadline,
+            "RGBA16 submission did not finish"
+        );
+        std::thread::yield_now();
+    }
+    bytes
+}
+
+#[test]
+#[ignore = "requires a Vulkan software adapter; executed by RunenGPU native Conformance CI"]
+fn rgba16_native_copy_round_trips_per_observed_format() {
+    let mut requirements = GpuCapabilityRequirements::new();
+    requirements
+        .insert(GpuCapabilityRequirement::Required(
+            GpuCapabilityFeature::Copy,
+        ))
+        .unwrap();
+    let census = pollster::block_on(GpuContext::request(
+        GpuContextDescriptor::new(requirements.clone())
+            .with_fallback_policy(GpuSoftwareFallbackPolicy::Require)
+            .with_allowed_backends([GpuBackendFamily::Vulkan])
+            .with_label("RGBA16 native format census"),
+    ))
+    .expect("native Conformance must provide a Vulkan software adapter");
+
+    let mut exercised = 0;
+    for (format, _, _, _) in FORMATS {
+        let facts = census
+            .adapter_facts()
+            .supported()
+            .format(format)
+            .expect("RGBA16 must be enumerated");
+        if !facts.copy_source || !facts.copy_destination {
+            println!("{format:?}: SKIP (copy roles not both advertised)");
+            continue;
+        }
+        let context = pollster::block_on(GpuContext::request(
+            GpuContextDescriptor::new(requirements.clone())
+                .require_format_role(format, GpuFormatRole::CopySource)
+                .require_format_role(format, GpuFormatRole::CopyDestination)
+                .with_fallback_policy(GpuSoftwareFallbackPolicy::Require)
+                .with_allowed_backends([GpuBackendFamily::Vulkan])
+                .with_label("RGBA16 native format copy proof"),
+        ))
+        .expect("observed copy roles must be admitted for the chosen format");
+        let admitted = context.adapter_facts().supported().format(format).unwrap();
+        assert!(admitted.copy_source && admitted.copy_destination);
+        for width in [31_u32, 32] {
+            let height = 2;
+            let name = format!("RGBA16 {format:?} {width}x{height}");
+            let expected = (0..width * height * 8)
+                .map(|index| (index % 251) as u8)
+                .collect::<Vec<_>>();
+            let mut allocator = GpuWorkResourceIdAllocator::new();
+            let mut texture = |suffix: &str| {
+                let resource_name = format!("{name} {suffix}");
+                let resource_label = label(&resource_name);
+                let extent = GpuTextureExtent::new(
+                    &resource_label,
+                    GpuTextureDimension::D2,
+                    width,
+                    height,
+                    1,
+                )
+                .unwrap();
+                allocator
+                    .allocate_texture_handle(
+                        GpuTextureDescriptor::new(
+                            common(&resource_name),
+                            GpuTextureDimension::D2,
+                            extent,
+                            1,
+                            1,
+                            format,
+                            GpuTextureUsages::new(
+                                &resource_label,
+                                [
+                                    GpuTextureUsage::CopySource,
+                                    GpuTextureUsage::CopyDestination,
+                                ],
+                            )
+                            .unwrap(),
+                            GpuTextureInitialization::Uninitialized,
+                        )
+                        .unwrap(),
+                    )
+                    .unwrap()
+            };
+            let source = texture("source");
+            let destination = texture("destination");
+            let realized_source = context.realize_texture(&source).unwrap();
+            let realized_destination = context.realize_texture(&destination).unwrap();
+            let source_region = GpuTextureCopyRegion::new(
+                &source,
+                0,
+                GpuTextureOrigin::new(0, 0, 0),
+                GpuTextureAspect::Color,
+                GpuCopyExtent::new(width, height, 1).unwrap(),
+            )
+            .unwrap();
+            let destination_region = GpuTextureCopyRegion::new(
+                &destination,
+                0,
+                GpuTextureOrigin::new(0, 0, 0),
+                GpuTextureAspect::Color,
+                GpuCopyExtent::new(width, height, 1).unwrap(),
+            )
+            .unwrap();
+            let upload = GpuUploadOperation::new(
+                source_region.clone().into(),
+                PreparedGpuData::<TransferData>::from_pod_transfer(
+                    &name,
+                    expected.as_slice(),
+                    provenance(&name),
+                )
+                .unwrap(),
+            )
+            .unwrap();
+            let copy =
+                GpuCopyOperation::texture_to_texture(source_region, destination_region.clone())
+                    .unwrap();
+            let readback_id = GpuReadbackId::allocate().unwrap();
+            let readback =
+                GpuReadbackOperation::new(destination_region.into(), readback_id).unwrap();
+            let mut builder = GpuWorkFragmentBuilder::new(label(&name), provenance(&name));
+            builder.declare_resource(source.into()).unwrap();
+            builder.declare_resource(destination.into()).unwrap();
+            add_operation(
+                &mut builder,
+                &format!("upload {name}"),
+                GpuWorkOperation::Upload(upload),
+            );
+            add_operation(
+                &mut builder,
+                &format!("copy {name}"),
+                GpuWorkOperation::Copy(copy),
+            );
+            add_operation(
+                &mut builder,
+                &format!("readback {name}"),
+                GpuWorkOperation::Readback(readback),
+            );
+            let graph =
+                GpuPreparedWorkGraph::prepare(label(&name), [builder.finish().unwrap()]).unwrap();
+            let prepared = pollster::block_on(context.prepare_submission(graph)).unwrap();
+            let submission = context.submit_prepared(prepared).unwrap();
+            let bytes = wait_for_readback(&context, &submission, readback_id);
+            assert_eq!(
+                bytes.as_bytes(),
+                expected.as_slice(),
+                "{format:?} {width}px content"
+            );
+            assert_eq!(bytes.layout().byte_len(), expected.len() as u64);
+            assert_eq!(bytes.texture_format(), Some(format));
+            println!(
+                "{format:?}: PASS {width}x{height}, {} bytes per logical row",
+                width * 8
+            );
+            drop(realized_destination);
+            drop(realized_source);
+            exercised += 1;
+        }
+    }
+    println!("RGBA16 native copy proofs: {exercised}/6 exercised; all-skipped is NOT qualified");
+}

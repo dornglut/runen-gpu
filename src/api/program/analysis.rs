@@ -634,6 +634,9 @@ fn storage_texture_format(format: StorageFormat) -> Result<GpuTextureFormat, &'s
         StorageFormat::Rgba32Uint => Ok(GpuTextureFormat::Rgba32Uint),
         StorageFormat::Rgba32Sint => Ok(GpuTextureFormat::Rgba32Sint),
         StorageFormat::Rgba32Float => Ok(GpuTextureFormat::Rgba32Float),
+        StorageFormat::Rgba16Uint => Ok(GpuTextureFormat::Rgba16Uint),
+        StorageFormat::Rgba16Sint => Ok(GpuTextureFormat::Rgba16Sint),
+        StorageFormat::Rgba16Float => Ok(GpuTextureFormat::Rgba16Float),
         _ => Err("storage texture format is outside the accepted RunenGPU format vocabulary"),
     }
 }

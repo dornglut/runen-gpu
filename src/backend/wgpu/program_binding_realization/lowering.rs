@@ -182,6 +182,9 @@ pub(super) const fn texture_format(format: GpuTextureFormat) -> TextureFormat {
         GpuTextureFormat::Rgba32Uint => TextureFormat::Rgba32Uint,
         GpuTextureFormat::Rgba32Sint => TextureFormat::Rgba32Sint,
         GpuTextureFormat::Rgba32Float => TextureFormat::Rgba32Float,
+        GpuTextureFormat::Rgba16Uint => TextureFormat::Rgba16Uint,
+        GpuTextureFormat::Rgba16Sint => TextureFormat::Rgba16Sint,
+        GpuTextureFormat::Rgba16Float => TextureFormat::Rgba16Float,
         GpuTextureFormat::Depth32Float => TextureFormat::Depth32Float,
     }
 }

@@ -160,7 +160,7 @@ pub(super) fn select_device_request_profile(
     }
 }
 
-pub(super) fn known_formats() -> [(GpuTextureFormat, TextureFormat); 15] {
+pub(super) fn known_formats() -> [(GpuTextureFormat, TextureFormat); 18] {
     [
         (GpuTextureFormat::R8Unorm, TextureFormat::R8Unorm),
         (GpuTextureFormat::Rgba8Unorm, TextureFormat::Rgba8Unorm),
@@ -182,6 +182,9 @@ pub(super) fn known_formats() -> [(GpuTextureFormat, TextureFormat); 15] {
         (GpuTextureFormat::Rgba32Uint, TextureFormat::Rgba32Uint),
         (GpuTextureFormat::Rgba32Sint, TextureFormat::Rgba32Sint),
         (GpuTextureFormat::Rgba32Float, TextureFormat::Rgba32Float),
+        (GpuTextureFormat::Rgba16Uint, TextureFormat::Rgba16Uint),
+        (GpuTextureFormat::Rgba16Sint, TextureFormat::Rgba16Sint),
+        (GpuTextureFormat::Rgba16Float, TextureFormat::Rgba16Float),
         (GpuTextureFormat::Depth32Float, TextureFormat::Depth32Float),
     ]
 }
@@ -418,6 +421,51 @@ mod tests {
             (GpuTextureFormat::Rgba32Float, TextureFormat::Rgba32Float),
         ] {
             assert!(known_formats().contains(&pair));
+        }
+    }
+
+    #[test]
+    fn rgba16_format_census_and_optional_roles_follow_backend_facts() {
+        assert_eq!(known_formats().len(), 18);
+        for (format, native) in [
+            (GpuTextureFormat::Rgba16Uint, TextureFormat::Rgba16Uint),
+            (GpuTextureFormat::Rgba16Sint, TextureFormat::Rgba16Sint),
+            (GpuTextureFormat::Rgba16Float, TextureFormat::Rgba16Float),
+        ] {
+            assert!(known_formats().contains(&(format, native)));
+            let absent = format_capabilities(
+                format,
+                wgpu::TextureFormatFeatures {
+                    allowed_usages: TextureUsages::COPY_SRC,
+                    flags: TextureFormatFeatureFlags::empty(),
+                },
+            );
+            assert!(absent.copy_source);
+            assert!(!absent.copy_destination);
+            assert!(!absent.sampled);
+            assert!(!absent.filterable);
+            assert!(!absent.storage_read);
+            assert!(!absent.storage_write);
+            assert!(!absent.color_attachment);
+            assert!(!absent.depth_stencil);
+            let observed = format_capabilities(
+                format,
+                wgpu::TextureFormatFeatures {
+                    allowed_usages: TextureUsages::TEXTURE_BINDING
+                        | TextureUsages::STORAGE_BINDING
+                        | TextureUsages::RENDER_ATTACHMENT
+                        | TextureUsages::COPY_DST,
+                    flags: TextureFormatFeatureFlags::FILTERABLE
+                        | TextureFormatFeatureFlags::STORAGE_READ_WRITE,
+                },
+            );
+            assert!(observed.sampled);
+            assert!(observed.filterable);
+            assert!(observed.storage_read);
+            assert!(observed.storage_write);
+            assert!(observed.color_attachment);
+            assert!(observed.copy_destination);
+            assert!(!observed.copy_source);
         }
     }
 
