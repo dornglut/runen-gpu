@@ -224,6 +224,9 @@ pub enum GpuTextureFormat {
     Rgba32Uint,
     Rgba32Sint,
     Rgba32Float,
+    Rgba16Uint,
+    Rgba16Sint,
+    Rgba16Float,
     Depth32Float,
 }
 
@@ -1014,9 +1017,7 @@ mod tests {
             GpuCapabilityAdmissionCause::EnabledUnavailable
         );
         assert_eq!(
-            enabled_unavailable.feature(),
-            Some(GpuCapabilityFeature::TimestampQuery)
-        );
+            enabled_unavailable.feature(), Some(GpuCapabilityFeature::TimestampQuery));
 
         let invalid_limit = GpuLimits::new(
             0,

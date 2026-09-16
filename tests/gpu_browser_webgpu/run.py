@@ -86,14 +86,15 @@ const done = arguments[arguments.length - 1];
     const module = await import("./gpu_browser_webgpu.js");
     const wasm = await module.default();
     if (typeof wasm.runengpu_browser_start !== "function" ||
-        typeof wasm.runengpu_browser_poll !== "function") {
+        typeof wasm.runengpu_browser_poll !== "function" ||
+        typeof wasm.runengpu_browser_rgba16_exercised_mask !== "function") {
       throw new Error("RunenGPU browser proof control exports are absent");
     }
     wasm.runengpu_browser_start();
     for (let tick = 0; tick < 5000; tick += 1) {
       const status = wasm.runengpu_browser_poll();
       if (status === 1) {
-        done({ok: true});
+        done({ok: true, rgba16Mask: wasm.runengpu_browser_rgba16_exercised_mask()});
         return;
       }
       if (status !== 0) {
@@ -205,6 +206,16 @@ def main() -> int:
             raise RuntimeError(
                 f"actual-browser RunenGPU proof failed: {value.get('error', value)!s}"
             )
+        mask = value.get("rgba16Mask")
+        if not isinstance(mask, int) or mask < 0 or mask > 7:
+            raise RuntimeError(f"actual-browser RGBA16 proof did not report valid execution evidence: {mask!r}")
+        for index, format_name in enumerate(("Rgba16Uint", "Rgba16Sint", "Rgba16Float")):
+            if mask & (1 << index):
+                print(f"RunenGPU actual-browser {format_name}: EXERCISED (31px and 32px copy round trips)")
+            else:
+                print(f"RunenGPU actual-browser {format_name}: SKIPPED (copy roles not both advertised)")
+        if mask == 0:
+            print("RunenGPU actual-browser RGBA16: NOT QUALIFIED (all three formats skipped)")
         print("RunenGPU actual-browser WebGPU conformance: PASS")
         return 0
     except Exception:
