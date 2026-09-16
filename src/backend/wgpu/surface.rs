@@ -746,6 +746,13 @@ fn lower_configuration(configuration: &GpuSurfaceConfiguration) -> SurfaceConfig
 }
 
 fn normalize_texture_format(native: TextureFormat) -> Option<GpuTextureFormat> {
+    // RGBA16 intermediate textures do not extend the G7A presentation vocabulary.
+    if matches!(
+        native,
+        TextureFormat::Rgba16Uint | TextureFormat::Rgba16Sint | TextureFormat::Rgba16Float
+    ) {
+        return None;
+    }
     known_formats()
         .into_iter()
         .find_map(|(normalized, candidate)| (candidate == native).then_some(normalized))
@@ -1058,7 +1065,12 @@ mod tests {
     #[test]
     fn capability_normalization_keeps_only_explicit_g7a_vocabulary() {
         let native = wgpu::SurfaceCapabilities {
-            formats: vec![TextureFormat::Bgra8UnormSrgb, TextureFormat::Rgba16Float],
+            formats: vec![
+                TextureFormat::Bgra8UnormSrgb,
+                TextureFormat::Rgba16Uint,
+                TextureFormat::Rgba16Sint,
+                TextureFormat::Rgba16Float,
+            ],
             format_capabilities: Vec::new(),
             present_modes: vec![PresentMode::AutoVsync, PresentMode::Fifo],
             alpha_modes: vec![CompositeAlphaMode::Auto, CompositeAlphaMode::Opaque],
