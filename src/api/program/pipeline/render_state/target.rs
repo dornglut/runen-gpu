@@ -83,7 +83,10 @@ impl GpuColorTargetStateDescriptor {
             ));
         }
         if blend == GpuBlendMode::Alpha
-            && texture_format::scalar_class(format) == GpuTextureScalarClass::Uint
+            && matches!(
+                texture_format::scalar_class(format),
+                GpuTextureScalarClass::Sint | GpuTextureScalarClass::Uint
+            )
         {
             return Err(invalid_attachment_state(
                 format!("color_format={format:?}, blend={blend:?}"),
@@ -116,6 +119,7 @@ impl GpuColorTargetStateDescriptor {
     pub fn shader_io_type(self) -> GpuShaderIoValueType {
         let class = match texture_format::scalar_class(self.format) {
             GpuTextureScalarClass::Float => GpuShaderIoScalarClass::Float,
+            GpuTextureScalarClass::Sint => GpuShaderIoScalarClass::Sint,
             GpuTextureScalarClass::Uint => GpuShaderIoScalarClass::Uint,
         };
         let width = texture_format::component_count(self.format);
@@ -267,10 +271,52 @@ mod tests {
                 false,
             ),
             (
+                GpuTextureFormat::R32Sint,
+                GpuShaderIoScalarClass::Sint,
+                1,
+                false,
+            ),
+            (
                 GpuTextureFormat::R32Float,
                 GpuShaderIoScalarClass::Float,
                 1,
                 false,
+            ),
+            (
+                GpuTextureFormat::Rg32Uint,
+                GpuShaderIoScalarClass::Uint,
+                2,
+                false,
+            ),
+            (
+                GpuTextureFormat::Rg32Sint,
+                GpuShaderIoScalarClass::Sint,
+                2,
+                false,
+            ),
+            (
+                GpuTextureFormat::Rg32Float,
+                GpuShaderIoScalarClass::Float,
+                2,
+                false,
+            ),
+            (
+                GpuTextureFormat::Rgba32Uint,
+                GpuShaderIoScalarClass::Uint,
+                4,
+                true,
+            ),
+            (
+                GpuTextureFormat::Rgba32Sint,
+                GpuShaderIoScalarClass::Sint,
+                4,
+                true,
+            ),
+            (
+                GpuTextureFormat::Rgba32Float,
+                GpuShaderIoScalarClass::Float,
+                4,
+                true,
             ),
         ] {
             let target = target(format);
@@ -290,14 +336,29 @@ mod tests {
             )
             .is_err()
         );
-        assert!(
-            GpuColorTargetStateDescriptor::new(
-                GpuTextureFormat::R32Uint,
-                GpuBlendMode::Alpha,
-                GpuColorWriteMask::ALL,
-            )
-            .is_err()
-        );
+        for format in [
+            GpuTextureFormat::R32Uint,
+            GpuTextureFormat::R32Sint,
+            GpuTextureFormat::Rgba32Uint,
+            GpuTextureFormat::Rgba32Sint,
+        ] {
+            assert!(
+                GpuColorTargetStateDescriptor::new(
+                    format,
+                    GpuBlendMode::Alpha,
+                    GpuColorWriteMask::ALL,
+                )
+                .is_err()
+            );
+            assert!(
+                GpuColorTargetStateDescriptor::new(
+                    format,
+                    GpuBlendMode::Replace,
+                    GpuColorWriteMask::ALL,
+                )
+                .is_ok()
+            );
+        }
         assert!(
             GpuColorTargetStateDescriptor::new(
                 GpuTextureFormat::Rgba8Unorm,

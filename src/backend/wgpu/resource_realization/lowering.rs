@@ -320,7 +320,14 @@ pub(super) const fn map_texture_format(format: GpuTextureFormat) -> TextureForma
         GpuTextureFormat::Bgra8Unorm => TextureFormat::Bgra8Unorm,
         GpuTextureFormat::Bgra8UnormSrgb => TextureFormat::Bgra8UnormSrgb,
         GpuTextureFormat::R32Uint => TextureFormat::R32Uint,
+        GpuTextureFormat::R32Sint => TextureFormat::R32Sint,
         GpuTextureFormat::R32Float => TextureFormat::R32Float,
+        GpuTextureFormat::Rg32Uint => TextureFormat::Rg32Uint,
+        GpuTextureFormat::Rg32Sint => TextureFormat::Rg32Sint,
+        GpuTextureFormat::Rg32Float => TextureFormat::Rg32Float,
+        GpuTextureFormat::Rgba32Uint => TextureFormat::Rgba32Uint,
+        GpuTextureFormat::Rgba32Sint => TextureFormat::Rgba32Sint,
+        GpuTextureFormat::Rgba32Float => TextureFormat::Rgba32Float,
         GpuTextureFormat::Depth32Float => TextureFormat::Depth32Float,
     }
 }
@@ -567,6 +574,17 @@ mod tests {
             map_texture_usage(GpuTextureUsage::StorageRead),
             TextureUsages::STORAGE_BINDING
         );
+        for (normalized, native) in [
+            (GpuTextureFormat::R32Sint, TextureFormat::R32Sint),
+            (GpuTextureFormat::Rg32Uint, TextureFormat::Rg32Uint),
+            (GpuTextureFormat::Rg32Sint, TextureFormat::Rg32Sint),
+            (GpuTextureFormat::Rg32Float, TextureFormat::Rg32Float),
+            (GpuTextureFormat::Rgba32Uint, TextureFormat::Rgba32Uint),
+            (GpuTextureFormat::Rgba32Sint, TextureFormat::Rgba32Sint),
+            (GpuTextureFormat::Rgba32Float, TextureFormat::Rgba32Float),
+        ] {
+            assert_eq!(map_texture_format(normalized), native);
+        }
         assert_eq!(
             map_texture_format(GpuTextureFormat::R32Float),
             TextureFormat::R32Float
@@ -585,5 +603,6 @@ mod tests {
         );
         assert!(texture_format::paired_view_format(GpuTextureFormat::R32Uint).is_none());
         assert!(texture_format::paired_view_format(GpuTextureFormat::R32Float).is_none());
+        assert!(texture_format::paired_view_format(GpuTextureFormat::Rgba32Float).is_none());
     }
 }
