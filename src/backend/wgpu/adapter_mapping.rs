@@ -161,31 +161,33 @@ pub(super) fn select_device_request_profile(
 }
 
 /// Closed G7A presentation vocabulary retained for the surface owner.
-/// Ordinary texture-format growth must use `texture_formats()` and cannot expand this set.
-pub(super) fn known_formats() -> [(GpuTextureFormat, TextureFormat); 15] {
-    [
-        (GpuTextureFormat::R8Unorm, TextureFormat::R8Unorm),
-        (GpuTextureFormat::Rgba8Unorm, TextureFormat::Rgba8Unorm),
-        (
-            GpuTextureFormat::Rgba8UnormSrgb,
-            TextureFormat::Rgba8UnormSrgb,
-        ),
-        (GpuTextureFormat::Bgra8Unorm, TextureFormat::Bgra8Unorm),
-        (
-            GpuTextureFormat::Bgra8UnormSrgb,
-            TextureFormat::Bgra8UnormSrgb,
-        ),
-        (GpuTextureFormat::R32Uint, TextureFormat::R32Uint),
-        (GpuTextureFormat::R32Sint, TextureFormat::R32Sint),
-        (GpuTextureFormat::R32Float, TextureFormat::R32Float),
-        (GpuTextureFormat::Rg32Uint, TextureFormat::Rg32Uint),
-        (GpuTextureFormat::Rg32Sint, TextureFormat::Rg32Sint),
-        (GpuTextureFormat::Rg32Float, TextureFormat::Rg32Float),
-        (GpuTextureFormat::Rgba32Uint, TextureFormat::Rgba32Uint),
-        (GpuTextureFormat::Rgba32Sint, TextureFormat::Rgba32Sint),
-        (GpuTextureFormat::Rgba32Float, TextureFormat::Rgba32Float),
-        (GpuTextureFormat::Depth32Float, TextureFormat::Depth32Float),
-    ]
+/// Ordinary texture-format growth is enumerated by `texture_formats()` and cannot expand this set.
+pub(super) fn known_formats() -> Vec<(GpuTextureFormat, TextureFormat)> {
+    texture_formats()
+        .into_iter()
+        .filter(|(format, _)| is_g7a_presentation_format(*format))
+        .collect()
+}
+
+const fn is_g7a_presentation_format(format: GpuTextureFormat) -> bool {
+    matches!(
+        format,
+        GpuTextureFormat::R8Unorm
+            | GpuTextureFormat::Rgba8Unorm
+            | GpuTextureFormat::Rgba8UnormSrgb
+            | GpuTextureFormat::Bgra8Unorm
+            | GpuTextureFormat::Bgra8UnormSrgb
+            | GpuTextureFormat::R32Uint
+            | GpuTextureFormat::R32Sint
+            | GpuTextureFormat::R32Float
+            | GpuTextureFormat::Rg32Uint
+            | GpuTextureFormat::Rg32Sint
+            | GpuTextureFormat::Rg32Float
+            | GpuTextureFormat::Rgba32Uint
+            | GpuTextureFormat::Rgba32Sint
+            | GpuTextureFormat::Rgba32Float
+            | GpuTextureFormat::Depth32Float
+    )
 }
 
 fn texture_formats() -> [(GpuTextureFormat, TextureFormat); 21] {
@@ -441,7 +443,8 @@ mod tests {
     #[test]
     fn presentation_format_census_is_closed_against_texture_growth() {
         assert_eq!(known_formats().len(), 15);
-        assert!(known_formats().contains(&(GpuTextureFormat::Rgba32Float, TextureFormat::Rgba32Float)));
+        assert!(known_formats()
+            .contains(&(GpuTextureFormat::Rgba32Float, TextureFormat::Rgba32Float)));
         for pair in [
             (GpuTextureFormat::Rgba8Snorm, TextureFormat::Rgba8Snorm),
             (GpuTextureFormat::Rgba8Uint, TextureFormat::Rgba8Uint),
