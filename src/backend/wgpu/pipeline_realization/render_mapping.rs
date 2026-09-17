@@ -98,6 +98,9 @@ pub(super) const fn texture_format(value: GpuTextureFormat) -> TextureFormat {
         GpuTextureFormat::R8Unorm => TextureFormat::R8Unorm,
         GpuTextureFormat::Rgba8Unorm => TextureFormat::Rgba8Unorm,
         GpuTextureFormat::Rgba8UnormSrgb => TextureFormat::Rgba8UnormSrgb,
+        GpuTextureFormat::Rgba8Snorm => TextureFormat::Rgba8Snorm,
+        GpuTextureFormat::Rgba8Uint => TextureFormat::Rgba8Uint,
+        GpuTextureFormat::Rgba8Sint => TextureFormat::Rgba8Sint,
         GpuTextureFormat::Bgra8Unorm => TextureFormat::Bgra8Unorm,
         GpuTextureFormat::Bgra8UnormSrgb => TextureFormat::Bgra8UnormSrgb,
         GpuTextureFormat::R32Uint => TextureFormat::R32Uint,
@@ -137,6 +140,9 @@ mod tests {
             CompareFunction::LessEqual
         );
         for (normalized, native) in [
+            (GpuTextureFormat::Rgba8Snorm, TextureFormat::Rgba8Snorm),
+            (GpuTextureFormat::Rgba8Uint, TextureFormat::Rgba8Uint),
+            (GpuTextureFormat::Rgba8Sint, TextureFormat::Rgba8Sint),
             (GpuTextureFormat::R32Sint, TextureFormat::R32Sint),
             (GpuTextureFormat::Rg32Uint, TextureFormat::Rg32Uint),
             (GpuTextureFormat::Rg32Sint, TextureFormat::Rg32Sint),

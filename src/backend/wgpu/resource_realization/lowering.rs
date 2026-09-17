@@ -317,6 +317,9 @@ pub(super) const fn map_texture_format(format: GpuTextureFormat) -> TextureForma
         GpuTextureFormat::R8Unorm => TextureFormat::R8Unorm,
         GpuTextureFormat::Rgba8Unorm => TextureFormat::Rgba8Unorm,
         GpuTextureFormat::Rgba8UnormSrgb => TextureFormat::Rgba8UnormSrgb,
+        GpuTextureFormat::Rgba8Snorm => TextureFormat::Rgba8Snorm,
+        GpuTextureFormat::Rgba8Uint => TextureFormat::Rgba8Uint,
+        GpuTextureFormat::Rgba8Sint => TextureFormat::Rgba8Sint,
         GpuTextureFormat::Bgra8Unorm => TextureFormat::Bgra8Unorm,
         GpuTextureFormat::Bgra8UnormSrgb => TextureFormat::Bgra8UnormSrgb,
         GpuTextureFormat::R32Uint => TextureFormat::R32Uint,
@@ -578,6 +581,9 @@ mod tests {
             TextureUsages::STORAGE_BINDING
         );
         for (normalized, native) in [
+            (GpuTextureFormat::Rgba8Snorm, TextureFormat::Rgba8Snorm),
+            (GpuTextureFormat::Rgba8Uint, TextureFormat::Rgba8Uint),
+            (GpuTextureFormat::Rgba8Sint, TextureFormat::Rgba8Sint),
             (GpuTextureFormat::R32Sint, TextureFormat::R32Sint),
             (GpuTextureFormat::Rg32Uint, TextureFormat::Rg32Uint),
             (GpuTextureFormat::Rg32Sint, TextureFormat::Rg32Sint),
@@ -609,6 +615,7 @@ mod tests {
         );
         assert!(texture_format::paired_view_format(GpuTextureFormat::R32Uint).is_none());
         assert!(texture_format::paired_view_format(GpuTextureFormat::R32Float).is_none());
+        assert!(texture_format::paired_view_format(GpuTextureFormat::Rgba8Snorm).is_none());
         assert!(texture_format::paired_view_format(GpuTextureFormat::Rgba32Float).is_none());
         assert!(texture_format::paired_view_format(GpuTextureFormat::Rgba16Float).is_none());
     }
