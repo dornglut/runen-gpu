@@ -239,13 +239,13 @@ fn assert_fragment_io_and_integer_blending_follow_scalar_class(
             .expected_signature(GpuEntryPointName::new("fragment_main").unwrap())
             .unwrap();
         let output = signature.locations().next().unwrap();
-        assert_eq!(
-            output.value_type().scalar_class(),
-            class
-        );
+        assert_eq!(output.value_type().scalar_class(), class);
         assert_eq!(output.value_type().vector_width().get(), 4);
         assert!(target.has_blendable_alpha_channel());
-        if matches!(class, GpuShaderIoScalarClass::Uint | GpuShaderIoScalarClass::Sint) {
+        if matches!(
+            class,
+            GpuShaderIoScalarClass::Uint | GpuShaderIoScalarClass::Sint
+        ) {
             assert!(
                 GpuColorTargetStateDescriptor::new(
                     format,
@@ -287,7 +287,8 @@ fn assert_prepared_texture_rows(
         )
         .unwrap();
         let prepared =
-            GpuPreparedTextureData::new(&texture_label, data, format, extent, row_bytes, 0).unwrap();
+            GpuPreparedTextureData::new(&texture_label, data, format, extent, row_bytes, 0)
+                .unwrap();
         assert_eq!(prepared.bytes_per_row(), row_bytes);
         assert_eq!(prepared.data().layout().byte_len(), byte_len as u64);
         let descriptor = GpuTextureDescriptor::new(
@@ -502,11 +503,8 @@ fn run_native_copy_family(
                 &format!("readback {name}"),
                 GpuWorkOperation::Readback(readback),
             );
-            let graph = GpuPreparedWorkGraph::prepare(
-                label(&name),
-                [builder.finish().unwrap()],
-            )
-            .unwrap();
+            let graph =
+                GpuPreparedWorkGraph::prepare(label(&name), [builder.finish().unwrap()]).unwrap();
             let prepared = pollster::block_on(context.prepare_submission(graph)).unwrap();
             let submission = context.submit_prepared(prepared).unwrap();
             let bytes = wait_for_readback(&context, &submission, readback_id, family);
