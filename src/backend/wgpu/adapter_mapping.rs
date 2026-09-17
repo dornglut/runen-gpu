@@ -443,8 +443,10 @@ mod tests {
     #[test]
     fn presentation_format_census_is_closed_against_texture_growth() {
         assert_eq!(known_formats().len(), 15);
-        assert!(known_formats()
-            .contains(&(GpuTextureFormat::Rgba32Float, TextureFormat::Rgba32Float)));
+        assert!(
+            known_formats()
+                .contains(&(GpuTextureFormat::Rgba32Float, TextureFormat::Rgba32Float))
+        );
         for pair in [
             (GpuTextureFormat::Rgba8Snorm, TextureFormat::Rgba8Snorm),
             (GpuTextureFormat::Rgba8Uint, TextureFormat::Rgba8Uint),
