@@ -87,14 +87,19 @@ const done = arguments[arguments.length - 1];
     const wasm = await module.default();
     if (typeof wasm.runengpu_browser_start !== "function" ||
         typeof wasm.runengpu_browser_poll !== "function" ||
-        typeof wasm.runengpu_browser_rgba16_exercised_mask !== "function") {
+        typeof wasm.runengpu_browser_rgba16_exercised_mask !== "function" ||
+        typeof wasm.runengpu_browser_rgba8_exercised_mask !== "function") {
       throw new Error("RunenGPU browser proof control exports are absent");
     }
     wasm.runengpu_browser_start();
     for (let tick = 0; tick < 5000; tick += 1) {
       const status = wasm.runengpu_browser_poll();
       if (status === 1) {
-        done({ok: true, rgba16Mask: wasm.runengpu_browser_rgba16_exercised_mask()});
+        done({
+          ok: true,
+          rgba16Mask: wasm.runengpu_browser_rgba16_exercised_mask(),
+          rgba8Mask: wasm.runengpu_browser_rgba8_exercised_mask(),
+        });
         return;
       }
       if (status !== 0) {
@@ -108,6 +113,31 @@ const done = arguments[arguments.length - 1];
   }
 })();
 """
+
+
+def report_format_family(
+    value: dict[str, object],
+    mask_key: str,
+    family: str,
+    format_names: tuple[str, str, str],
+    widths: str,
+) -> None:
+    mask = value.get(mask_key)
+    if not isinstance(mask, int) or mask < 0 or mask > 7:
+        raise RuntimeError(
+            f"actual-browser {family} proof did not report valid execution evidence: {mask!r}"
+        )
+    for index, format_name in enumerate(format_names):
+        if mask & (1 << index):
+            print(
+                f"RunenGPU actual-browser {format_name}: EXERCISED ({widths} copy round trips)"
+            )
+        else:
+            print(
+                f"RunenGPU actual-browser {format_name}: SKIPPED (copy roles not both advertised)"
+            )
+    if mask == 0:
+        print(f"RunenGPU actual-browser {family}: NOT QUALIFIED (all three formats skipped)")
 
 
 def main() -> int:
@@ -206,16 +236,20 @@ def main() -> int:
             raise RuntimeError(
                 f"actual-browser RunenGPU proof failed: {value.get('error', value)!s}"
             )
-        mask = value.get("rgba16Mask")
-        if not isinstance(mask, int) or mask < 0 or mask > 7:
-            raise RuntimeError(f"actual-browser RGBA16 proof did not report valid execution evidence: {mask!r}")
-        for index, format_name in enumerate(("Rgba16Uint", "Rgba16Sint", "Rgba16Float")):
-            if mask & (1 << index):
-                print(f"RunenGPU actual-browser {format_name}: EXERCISED (31px and 32px copy round trips)")
-            else:
-                print(f"RunenGPU actual-browser {format_name}: SKIPPED (copy roles not both advertised)")
-        if mask == 0:
-            print("RunenGPU actual-browser RGBA16: NOT QUALIFIED (all three formats skipped)")
+        report_format_family(
+            value,
+            "rgba16Mask",
+            "RGBA16",
+            ("Rgba16Uint", "Rgba16Sint", "Rgba16Float"),
+            "31px and 32px",
+        )
+        report_format_family(
+            value,
+            "rgba8Mask",
+            "RGBA8",
+            ("Rgba8Snorm", "Rgba8Uint", "Rgba8Sint"),
+            "63px and 64px",
+        )
         print("RunenGPU actual-browser WebGPU conformance: PASS")
         return 0
     except Exception:

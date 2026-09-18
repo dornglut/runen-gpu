@@ -624,6 +624,9 @@ fn storage_texture_format(format: StorageFormat) -> Result<GpuTextureFormat, &'s
     match format {
         StorageFormat::R8Unorm => Ok(GpuTextureFormat::R8Unorm),
         StorageFormat::Rgba8Unorm => Ok(GpuTextureFormat::Rgba8Unorm),
+        StorageFormat::Rgba8Snorm => Ok(GpuTextureFormat::Rgba8Snorm),
+        StorageFormat::Rgba8Uint => Ok(GpuTextureFormat::Rgba8Uint),
+        StorageFormat::Rgba8Sint => Ok(GpuTextureFormat::Rgba8Sint),
         StorageFormat::Bgra8Unorm => Ok(GpuTextureFormat::Bgra8Unorm),
         StorageFormat::R32Uint => Ok(GpuTextureFormat::R32Uint),
         StorageFormat::R32Sint => Ok(GpuTextureFormat::R32Sint),
