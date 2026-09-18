@@ -4,8 +4,10 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import functools
 import http.server
+import io
 import json
 import pathlib
 import shutil
@@ -53,8 +55,9 @@ def request_json(
     decoded = json.loads(raw.decode("utf-8")) if raw else {}
     if isinstance(decoded, dict):
         value = decoded.get("value")
-        if isinstance(value, dict) and value.get("error"):
-            raise RuntimeError(f"WebDriver error: {value}")
+        if isinstance(value, dict):
+            if value.get("error"):
+                raise RuntimeError(f"WebDriver error: {value}")
     return decoded
 
 
@@ -123,7 +126,7 @@ def report_format_family(
     widths: str,
 ) -> None:
     mask = value.get(mask_key)
-    if not isinstance(mask, int) or mask < 0 or mask > 7:
+    if type(mask) is not int or mask < 0 or mask > 7:
         raise RuntimeError(
             f"actual-browser {family} proof did not report valid execution evidence: {mask!r}"
         )
@@ -137,11 +140,48 @@ def report_format_family(
                 f"RunenGPU actual-browser {format_name}: SKIPPED (copy roles not both advertised)"
             )
     if mask == 0:
-        print(f"RunenGPU actual-browser {family}: NOT QUALIFIED (all three formats skipped)")
+        message = f"RunenGPU actual-browser {family}: NOT QUALIFIED (all three formats skipped)"
+        print(message)
+        raise RuntimeError(message)
+
+
+def verify_format_reporter() -> None:
+    """Exercise fail-closed qualification through the runner's existing CI invocation."""
+    names = ("Rgba8Snorm", "Rgba8Uint", "Rgba8Sint")
+    for mask, expected_exercised in ((0, 0), (1, 1), (5, 2), (7, 3)):
+        captured = io.StringIO()
+        failed = False
+        try:
+            with contextlib.redirect_stdout(captured):
+                report_format_family({"mask": mask}, "mask", "RGBA8", names, "63px and 64px")
+        except RuntimeError as error:
+            if mask != 0 or "NOT QUALIFIED" not in str(error):
+                raise AssertionError(f"unexpected reporter failure for mask {mask}") from error
+            failed = True
+        if failed != (mask == 0):
+            raise AssertionError(f"incorrect reporter qualification for mask {mask}")
+        transcript = captured.getvalue()
+        if transcript.count(": EXERCISED (") != expected_exercised:
+            raise AssertionError(f"incorrect exercised evidence for mask {mask}")
+        if transcript.count(": SKIPPED (") != 3 - expected_exercised:
+            raise AssertionError(f"incorrect skipped evidence for mask {mask}")
+        if ("NOT QUALIFIED" in transcript) != (mask == 0):
+            raise AssertionError(f"incorrect not-qualified evidence for mask {mask}")
+
+    for invalid in ({}, {"mask": -1}, {"mask": 8}, {"mask": "1"}, {"mask": True}):
+        try:
+            report_format_family(invalid, "mask", "RGBA8", names, "63px and 64px")
+        except RuntimeError as error:
+            if "valid execution evidence" not in str(error):
+                raise AssertionError(f"incorrect invalid-mask failure: {invalid!r}") from error
+        else:
+            raise AssertionError(f"invalid mask was accepted: {invalid!r}")
+    print("RunenGPU actual-browser RGBA reporter regression: PASS")
 
 
 def main() -> int:
     args = parse_args()
+    verify_format_reporter()
     out_dir = args.out_dir.resolve()
     js_path = out_dir / "gpu_browser_webgpu.js"
     wasm_path = out_dir / "gpu_browser_webgpu_bg.wasm"
