@@ -527,12 +527,31 @@ fn run_native_copy_family(
     exercised
 }
 
+fn assert_native_copy_family_qualified(exercised: usize, family: &str) {
+    assert!(
+        exercised > 0,
+        "{family} native copy proof NOT QUALIFIED: all formats skipped"
+    );
+}
+
+#[test]
+fn native_copy_family_qualification_fails_closed_without_gpu() {
+    for family in ["RGBA8", "RGBA16"] {
+        assert!(
+            std::panic::catch_unwind(|| assert_native_copy_family_qualified(0, family)).is_err()
+        );
+        assert_native_copy_family_qualified(1, family);
+        assert_native_copy_family_qualified(6, family);
+    }
+}
+
 #[test]
 #[ignore = "requires a Vulkan software adapter; executed by RunenGPU native Conformance CI"]
 fn rgba16_native_copy_round_trips_per_observed_format() {
     let formats = RGBA16_FORMATS.map(|entry| entry.0);
     let exercised = run_native_copy_family(&formats, &[31, 32], 8, "RGBA16");
     println!("RGBA16 native copy proofs: {exercised}/6 exercised; all-skipped is NOT qualified");
+    assert_native_copy_family_qualified(exercised, "RGBA16");
 }
 
 #[test]
@@ -541,4 +560,5 @@ fn rgba8_native_copy_round_trips_per_observed_format() {
     let formats = RGBA8_FORMATS.map(|entry| entry.0);
     let exercised = run_native_copy_family(&formats, &[63, 64], 4, "RGBA8");
     println!("RGBA8 native copy proofs: {exercised}/6 exercised; all-skipped is NOT qualified");
+    assert_native_copy_family_qualified(exercised, "RGBA8");
 }
