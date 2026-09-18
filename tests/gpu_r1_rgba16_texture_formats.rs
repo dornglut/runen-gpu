@@ -169,7 +169,7 @@ fn assert_wgsl_admits_actual_typed_storage_writes(
     source_key: &str,
     provenance_name: &str,
 ) {
-    for (format, wgsl_format, value, _) in formats.iter().copied() {
+    for (format, wgsl_format, value, _) in formats {
         let source_text = format!(
             "@group(0) @binding(0) var image: texture_storage_2d<{wgsl_format}, write>;\n\
              @compute @workgroup_size(1) fn write_value() {{\n\
