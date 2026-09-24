@@ -6,7 +6,7 @@ use crate::{
     GpuBindingClass, GpuBindingDeclaration, GpuBufferAccess, GpuBufferAccessKind, GpuBufferRange,
     GpuPipelineLayoutDescriptor, GpuProgramContractCause, GpuProgramContractError,
     GpuResourceAccess, GpuSamplerUse, GpuStorageBufferAccess, GpuStorageTextureAccess,
-    GpuTextureAccess, GpuTextureAccessKind, GpuTextureAccessResource, GpuTextureAspect,
+    GpuTextureAccess, GpuTextureAccessKind, GpuTextureAccessResource,
 };
 use core::hash::{Hash, Hasher};
 use std::collections::BTreeMap;

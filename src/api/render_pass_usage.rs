@@ -1,6 +1,6 @@
 use super::{
     GpuBufferAccessKind, GpuDepthStencilAccess, GpuResourceAccess, GpuTextureAccessKind,
-    GpuTextureAspect, GpuWorkOperationCause, GpuWorkOperationError,
+    GpuWorkOperationCause, GpuWorkOperationError,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
