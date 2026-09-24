@@ -477,6 +477,15 @@ fn sampled_texture_class_matches(
     }
 }
 
+fn incompatible(label: impl Into<String>, correction: &'static str) -> GpuProgramContractError {
+    GpuProgramContractError::invalid(
+        "validate runtime GPU binding compatibility",
+        label,
+        GpuProgramContractCause::RuntimeBindingIncompatible,
+        correction,
+    )
+}
+
 #[cfg(test)]
 mod r1_r_rg8_sampled_class_tests {
     use super::*;
@@ -517,13 +526,4 @@ mod r1_r_rg8_sampled_class_tests {
             GpuTextureSampleClass::Uint
         ));
     }
-}
-
-fn incompatible(label: impl Into<String>, correction: &'static str) -> GpuProgramContractError {
-    GpuProgramContractError::invalid(
-        "validate runtime GPU binding compatibility",
-        label,
-        GpuProgramContractCause::RuntimeBindingIncompatible,
-        correction,
-    )
 }
