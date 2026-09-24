@@ -17,15 +17,15 @@ pub(crate) enum GpuTextureAspectClass {
 
 impl GpuTextureAspectClass {
     const fn supports(self, aspect: GpuTextureAspect) -> bool {
-        match (self, aspect) {
+        matches!(
+            (self, aspect),
             (_, GpuTextureAspect::All)
-            | (Self::Color, GpuTextureAspect::Color)
-            | (Self::Depth, GpuTextureAspect::DepthOnly)
-            | (Self::Stencil, GpuTextureAspect::StencilOnly)
-            | (Self::DepthStencil, GpuTextureAspect::DepthOnly)
-            | (Self::DepthStencil, GpuTextureAspect::StencilOnly) => true,
-            _ => false,
-        }
+                | (Self::Color, GpuTextureAspect::Color)
+                | (Self::Depth, GpuTextureAspect::DepthOnly)
+                | (Self::Stencil, GpuTextureAspect::StencilOnly)
+                | (Self::DepthStencil, GpuTextureAspect::DepthOnly)
+                | (Self::DepthStencil, GpuTextureAspect::StencilOnly)
+        )
     }
 
     const fn canonical(self, aspect: GpuTextureAspect) -> Option<GpuTextureAspect> {
