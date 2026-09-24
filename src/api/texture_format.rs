@@ -24,12 +24,12 @@ impl GpuTextureAspectClass {
     }
 
     const fn supports(self, aspect: GpuTextureAspect) -> bool {
-        matches!(
-            aspect,
-            GpuTextureAspect::All
-                | GpuTextureAspect::Color if self.color
-        ) || matches!(aspect, GpuTextureAspect::DepthOnly if self.depth)
-            || matches!(aspect, GpuTextureAspect::StencilOnly if self.stencil)
+        match aspect {
+            GpuTextureAspect::All => true,
+            GpuTextureAspect::Color => self.color,
+            GpuTextureAspect::DepthOnly => self.depth,
+            GpuTextureAspect::StencilOnly => self.stencil,
+        }
     }
 
     const fn canonical(self, aspect: GpuTextureAspect) -> Option<GpuTextureAspect> {
