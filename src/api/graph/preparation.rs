@@ -4,7 +4,7 @@ use super::super::{
     GpuWorkGraphErrorContext, GpuWorkGraphErrorSource, GpuWorkResourceId,
 };
 use super::{
-    authoring::{GpuWorkFragment, GpuWorkNode, GpuWorkOutput},
+    authoring::{GpuGraphExplicitOrder, GpuWorkFragment, GpuWorkNode, GpuWorkOutput},
     composition::{
         bind_imports, collect_output_bindings, topological_fragment_order,
         validate_boundary_access_intents,
@@ -13,8 +13,8 @@ use super::{
     dependency::{GpuDependencyReason, GpuWorkDependency},
     diagnostics::{GpuPreparedWorkDiagnostic, GraphErrorOrigin, graph_error},
     hazards::{
-        add_explicit_orders, infer_cross_fragment_hazards, infer_fragment_hazards,
-        topological_node_order,
+        add_explicit_orders, add_graph_explicit_orders, infer_cross_fragment_hazards,
+        infer_fragment_hazards, topological_node_order,
     },
     identity::GpuPreparedWorkNodeId,
     initial_content::{GpuPreparedInitialContent, derive_prepared_initial_content},
@@ -77,7 +77,19 @@ impl GpuPreparedWorkGraph {
         label: GpuResourceLabel,
         fragments: impl IntoIterator<Item = GpuWorkFragment>,
     ) -> Result<Self, GpuWorkGraphError> {
-        Self::prepare_with_retained_coverage(label, fragments, &[])
+        Self::prepare_with_orders(
+            label,
+            fragments,
+            std::iter::empty::<GpuGraphExplicitOrder>(),
+        )
+    }
+
+    pub fn prepare_with_orders(
+        label: GpuResourceLabel,
+        fragments: impl IntoIterator<Item = GpuWorkFragment>,
+        graph_orders: impl IntoIterator<Item = GpuGraphExplicitOrder>,
+    ) -> Result<Self, GpuWorkGraphError> {
+        Self::prepare_with_retained_coverage_and_orders(label, fragments, graph_orders, &[])
     }
 
     pub(crate) fn prepare_with_retained_coverage(
@@ -85,12 +97,21 @@ impl GpuPreparedWorkGraph {
         fragments: impl IntoIterator<Item = GpuWorkFragment>,
         retained_coverage: &[GpuRetainedInitializationSeed],
     ) -> Result<Self, GpuWorkGraphError> {
-        Self::prepare_with_retained_coverage_and_reconstruction(
+        Self::prepare_with_retained_coverage_and_orders(
             label,
             fragments,
+            std::iter::empty::<GpuGraphExplicitOrder>(),
             retained_coverage,
-            &[],
         )
+    }
+
+    pub(crate) fn prepare_with_retained_coverage_and_orders(
+        label: GpuResourceLabel,
+        fragments: impl IntoIterator<Item = GpuWorkFragment>,
+        graph_orders: impl IntoIterator<Item = GpuGraphExplicitOrder>,
+        retained_coverage: &[GpuRetainedInitializationSeed],
+    ) -> Result<Self, GpuWorkGraphError> {
+        Self::prepare_core(label, fragments, graph_orders, retained_coverage, &[])
     }
 
     pub(crate) fn prepare_with_retained_coverage_and_reconstruction(
@@ -99,6 +120,23 @@ impl GpuPreparedWorkGraph {
         retained_coverage: &[GpuRetainedInitializationSeed],
         reconstruction_targets: &[GpuResourceRef],
     ) -> Result<Self, GpuWorkGraphError> {
+        Self::prepare_core(
+            label,
+            fragments,
+            std::iter::empty::<GpuGraphExplicitOrder>(),
+            retained_coverage,
+            reconstruction_targets,
+        )
+    }
+
+    fn prepare_core(
+        label: GpuResourceLabel,
+        fragments: impl IntoIterator<Item = GpuWorkFragment>,
+        graph_orders: impl IntoIterator<Item = GpuGraphExplicitOrder>,
+        retained_coverage: &[GpuRetainedInitializationSeed],
+        reconstruction_targets: &[GpuResourceRef],
+    ) -> Result<Self, GpuWorkGraphError> {
+        let graph_orders = graph_orders.into_iter().collect::<Vec<_>>();
         let fragments = fragments.into_iter().collect::<Vec<_>>();
         let graph_label = label.as_str();
         let mut declared_resources = BTreeMap::<GpuWorkResourceId, GpuResourceRef>::new();
@@ -200,6 +238,7 @@ impl GpuPreparedWorkGraph {
         infer_fragment_hazards(graph_label, &fragments, &mut inferred_edges)?;
         infer_cross_fragment_hazards(graph_label, &fragments, &relations, &mut inferred_edges)?;
         add_explicit_orders(graph_label, &fragments, &mut inferred_edges)?;
+        add_graph_explicit_orders(graph_label, &fragments, &graph_orders, &mut inferred_edges)?;
         let topological_order =
             topological_node_order(graph_label, &fragments, &node_locations, &inferred_edges)?;
         let fragment_order = topological_fragment_order(graph_label, &fragments, &import_bindings)?;

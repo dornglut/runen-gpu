@@ -4,6 +4,7 @@ mod buffer_coverage_intersection;
 mod composition;
 mod explainability;
 mod explainability_initialization;
+mod graph_explicit_order;
 mod hazards;
 mod initial_content;
 mod initialization;
