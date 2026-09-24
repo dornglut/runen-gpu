@@ -231,9 +231,9 @@ impl GpuWorkOperation {
                 GpuResourceAccess::Query(operation.source_access().clone()),
                 GpuResourceAccess::Buffer(operation.destination_access().clone()),
             ]),
-            Self::TimestampMarker(operation) => Ok(vec![GpuResourceAccess::Query(
-                operation.access().clone(),
-            )]),
+            Self::TimestampMarker(operation) => {
+                Ok(vec![GpuResourceAccess::Query(operation.access().clone())])
+            }
             Self::Present(operation) => Ok(vec![GpuResourceAccess::Texture(
                 operation.source_access().clone(),
             )]),
