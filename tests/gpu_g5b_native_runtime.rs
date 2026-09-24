@@ -1254,6 +1254,148 @@ fn native_zero_dispatch_timestamp_writes_and_resolve_execute_without_extra_stagi
     assert_eq!(stats.pending_readbacks(), 0);
 }
 
+
+fn timestamp_marker_graph() -> (GpuPreparedWorkGraph, GpuReadbackId) {
+    let mut allocator = GpuWorkResourceIdAllocator::new();
+    let query_set = timestamp_query_set(&mut allocator, "native timestamp marker query set");
+    let destination =
+        timestamp_resolve_buffer(&mut allocator, "native timestamp marker resolve", 16);
+    let work = compute_buffer(&mut allocator, "native timestamp marker work", 4);
+
+    let start = GpuTimestampMarkerOperation::new(&query_set, 0).unwrap();
+    let end = GpuTimestampMarkerOperation::new(&query_set, 1).unwrap();
+    let clear = GpuClearOperation::buffer_zero(GpuBufferRegion::whole(&work).unwrap()).unwrap();
+    let resolve = GpuQueryResolveOperation::new(
+        &query_set,
+        GpuQueryRange::new(&query_set, 0, 2).unwrap(),
+        &destination,
+        0,
+    )
+    .unwrap();
+    let readback_id = GpuReadbackId::allocate().unwrap();
+    let readback = GpuReadbackOperation::new(
+        GpuBufferRegion::whole(&destination).unwrap().into(),
+        readback_id,
+    )
+    .unwrap();
+
+    let name = "native ordered timestamp marker";
+    let mut builder = GpuWorkFragmentBuilder::new(label(name), provenance(name));
+    builder
+        .declare_resource(GpuResourceRef::QuerySet(query_set))
+        .unwrap();
+    builder
+        .declare_resource(GpuResourceRef::Buffer(destination))
+        .unwrap();
+    builder
+        .declare_resource(GpuResourceRef::Buffer(work))
+        .unwrap();
+
+    let start_id = builder
+        .add_node(
+            label("timestamp marker start"),
+            GpuWorkOperation::TimestampMarker(start),
+            [],
+            GpuCapabilityRequirements::new(),
+            GpuExecutionPreference::Automatic,
+            provenance("timestamp marker start"),
+        )
+        .unwrap();
+    let clear_id = builder
+        .operation("timestamp marker bounded work", clear)
+        .unwrap();
+    let end_id = builder
+        .add_node(
+            label("timestamp marker end"),
+            GpuWorkOperation::TimestampMarker(end),
+            [],
+            GpuCapabilityRequirements::new(),
+            GpuExecutionPreference::Automatic,
+            provenance("timestamp marker end"),
+        )
+        .unwrap();
+    builder
+        .add_explicit_order(
+            GpuExplicitOrder::new(
+                &start_id,
+                &clear_id,
+                "start timestamp must precede bounded work",
+            )
+            .unwrap(),
+        )
+        .unwrap();
+    builder
+        .add_explicit_order(
+            GpuExplicitOrder::new(
+                &clear_id,
+                &end_id,
+                "end timestamp must follow bounded work",
+            )
+            .unwrap(),
+        )
+        .unwrap();
+    builder
+        .operation("timestamp marker resolve", resolve)
+        .unwrap();
+    builder
+        .operation("timestamp marker readback", readback)
+        .unwrap();
+
+    (
+        GpuPreparedWorkGraph::prepare(
+            label("native ordered timestamp marker graph"),
+            [builder.finish().unwrap()],
+        )
+        .unwrap(),
+        readback_id,
+    )
+}
+
+#[test]
+#[ignore = "requires a real Vulkan fallback adapter; executed by RunenGPU Native Conformance CI"]
+fn native_ordered_timestamp_markers_bracket_work_without_pipeline_or_attachment() {
+    let context = native_timestamp_context(GpuExecutionPolicy::default());
+    let (graph, readback_id) = timestamp_marker_graph();
+
+    let prepared = pollster::block_on(context.prepare_submission(graph)).unwrap();
+    let submission = context.submit_prepared(prepared).unwrap();
+    assert_eq!(context.execution_stats().upload_bytes_in_flight(), 0);
+    assert_eq!(
+        context.execution_stats().readback_bytes_in_flight(),
+        TIMESTAMP_RESOLVE_BYTES
+    );
+
+    let readback = submission
+        .readback(readback_id)
+        .expect("accepted timestamp-marker readback must remain observable")
+        .clone();
+    let bytes = progress_to_readback(&context, &submission, &readback);
+    let mut chunks = bytes.as_bytes().chunks_exact(8);
+    assert!(chunks.remainder().is_empty());
+    let timestamps = chunks
+        .by_ref()
+        .map(|bytes| u64::from_ne_bytes(bytes.try_into().unwrap()))
+        .collect::<Vec<_>>();
+    assert_eq!(timestamps.len(), 2);
+    assert!(
+        timestamps[1] >= timestamps[0],
+        "ordered end timestamp must not precede the ordered start timestamp"
+    );
+    assert!(
+        context
+            .timestamp_period_ns()
+            .is_some_and(|period| period.is_finite() && period > 0.0),
+        "timestamp-capable context must publish a finite positive timestamp period"
+    );
+
+    let stats = context.execution_stats();
+    assert_eq!(stats.prepared_submissions(), 0);
+    assert_eq!(stats.in_flight_submissions(), 0);
+    assert_eq!(stats.upload_bytes_in_flight(), 0);
+    assert_eq!(stats.readback_bytes_in_flight(), 0);
+    assert_eq!(stats.pending_readbacks(), 0);
+}
+
 #[test]
 #[ignore = "requires a real Vulkan fallback adapter; executed by RunenGPU Native Conformance CI"]
 fn native_query_resolve_rejects_private_wgpu_offset_alignment_before_acceptance() {

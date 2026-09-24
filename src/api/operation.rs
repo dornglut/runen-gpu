@@ -2,7 +2,7 @@ use super::work::{
     GpuBufferTextureLayout, GpuClearOperation, GpuColorAttachmentLoad, GpuComputeOperation,
     GpuCopyOperation, GpuDepthAttachmentLoad, GpuDrawIntent, GpuPresentOperation,
     GpuQueryResolveOperation, GpuRenderColorAttachment, GpuRenderDepthStencilAttachment,
-    GpuTextureCopyRegion, GpuTimestampWrites,
+    GpuTextureCopyRegion, GpuTimestampMarkerOperation, GpuTimestampWrites,
 };
 use super::{
     GpuBufferAccess, GpuBufferAccessKind, GpuBufferRange, GpuCapabilityFeature,
@@ -20,6 +20,7 @@ pub enum GpuWorkNodeKind {
     Copy,
     Clear,
     Resolve,
+    TimestampMarker,
     Present,
     Upload,
     Readback,
@@ -184,6 +185,7 @@ pub enum GpuWorkOperation {
     Copy(GpuCopyOperation),
     Clear(GpuClearOperation),
     Resolve(GpuQueryResolveOperation),
+    TimestampMarker(GpuTimestampMarkerOperation),
     Present(GpuPresentOperation),
     Upload(GpuUploadOperation),
     Readback(GpuReadbackOperation),
@@ -197,6 +199,7 @@ impl GpuWorkOperation {
             Self::Copy(_) => GpuWorkNodeKind::Copy,
             Self::Clear(_) => GpuWorkNodeKind::Clear,
             Self::Resolve(_) => GpuWorkNodeKind::Resolve,
+            Self::TimestampMarker(_) => GpuWorkNodeKind::TimestampMarker,
             Self::Present(_) => GpuWorkNodeKind::Present,
             Self::Upload(_) => GpuWorkNodeKind::Upload,
             Self::Readback(_) => GpuWorkNodeKind::Readback,
@@ -228,6 +231,9 @@ impl GpuWorkOperation {
                 GpuResourceAccess::Query(operation.source_access().clone()),
                 GpuResourceAccess::Buffer(operation.destination_access().clone()),
             ]),
+            Self::TimestampMarker(operation) => Ok(vec![GpuResourceAccess::Query(
+                operation.access().clone(),
+            )]),
             Self::Present(operation) => Ok(vec![GpuResourceAccess::Texture(
                 operation.source_access().clone(),
             )]),
@@ -241,6 +247,7 @@ impl GpuWorkOperation {
             Self::Compute(_)
             | Self::Render(_)
             | Self::Resolve(_)
+            | Self::TimestampMarker(_)
             | Self::Present(_)
             | Self::Upload(_)
             | Self::Readback(_) => self.derived_accesses().map(|_| ()),
@@ -282,7 +289,7 @@ impl GpuWorkOperation {
             Self::Copy(_) | Self::Clear(_) | Self::Upload(_) | Self::Readback(_) => {
                 GpuCapabilityFeature::Copy
             }
-            Self::Resolve(_) => GpuCapabilityFeature::TimestampQuery,
+            Self::Resolve(_) | Self::TimestampMarker(_) => GpuCapabilityFeature::TimestampQuery,
             Self::Present(_) => GpuCapabilityFeature::Presentation,
         };
         requirements.insert(GpuCapabilityRequirement::Required(primary))?;
@@ -324,6 +331,7 @@ impl GpuWorkOperation {
             Self::Copy(_)
             | Self::Clear(_)
             | Self::Resolve(_)
+            | Self::TimestampMarker(_)
             | Self::Present(_)
             | Self::Upload(_)
             | Self::Readback(_) => {}
