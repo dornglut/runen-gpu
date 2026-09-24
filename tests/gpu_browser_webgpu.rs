@@ -20,6 +20,8 @@ mod browser {
         static RGBA8_EXERCISED_MASK: RefCell<u32> = RefCell::new(0);
         static R8_NEW_EXERCISED_MASK: RefCell<u32> = RefCell::new(0);
         static RG8_EXERCISED_MASK: RefCell<u32> = RefCell::new(0);
+        static R16_EXERCISED_MASK: RefCell<u32> = RefCell::new(0);
+        static RG16_EXERCISED_MASK: RefCell<u32> = RefCell::new(0);
     }
 
     struct YieldOnce(bool);
@@ -454,6 +456,36 @@ mod browser {
         RG8_EXERCISED_MASK.with(|slot| *slot.borrow_mut() = mask);
     }
 
+    async fn run_browser_r16_copy() {
+        let mask = run_browser_format_copy(
+            &[
+                GpuTextureFormat::R16Uint,
+                GpuTextureFormat::R16Sint,
+                GpuTextureFormat::R16Float,
+            ],
+            &[127, 128],
+            2,
+            "R16",
+        )
+        .await;
+        R16_EXERCISED_MASK.with(|slot| *slot.borrow_mut() = mask);
+    }
+
+    async fn run_browser_rg16_copy() {
+        let mask = run_browser_format_copy(
+            &[
+                GpuTextureFormat::Rg16Uint,
+                GpuTextureFormat::Rg16Sint,
+                GpuTextureFormat::Rg16Float,
+            ],
+            &[63, 64],
+            4,
+            "RG16",
+        )
+        .await;
+        RG16_EXERCISED_MASK.with(|slot| *slot.borrow_mut() = mask);
+    }
+
     async fn run_browser_webgpu_conformance() {
         run_browser_prefix_scan().await;
         run_browser_offscreen_indexed().await;
@@ -461,6 +493,8 @@ mod browser {
         run_browser_rgba8_copy().await;
         run_browser_r8_new_copy().await;
         run_browser_rg8_copy().await;
+        run_browser_r16_copy().await;
+        run_browser_rg16_copy().await;
     }
 
     #[unsafe(no_mangle)]
@@ -510,6 +544,16 @@ mod browser {
     #[unsafe(no_mangle)]
     pub extern "C" fn runengpu_browser_rg8_exercised_mask() -> u32 {
         RG8_EXERCISED_MASK.with(|mask| *mask.borrow())
+    }
+
+    #[unsafe(no_mangle)]
+    pub extern "C" fn runengpu_browser_r16_exercised_mask() -> u32 {
+        R16_EXERCISED_MASK.with(|mask| *mask.borrow())
+    }
+
+    #[unsafe(no_mangle)]
+    pub extern "C" fn runengpu_browser_rg16_exercised_mask() -> u32 {
+        RG16_EXERCISED_MASK.with(|mask| *mask.borrow())
     }
 }
 

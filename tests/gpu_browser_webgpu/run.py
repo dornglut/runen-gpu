@@ -93,7 +93,9 @@ const done = arguments[arguments.length - 1];
         typeof wasm.runengpu_browser_rgba16_exercised_mask !== "function" ||
         typeof wasm.runengpu_browser_rgba8_exercised_mask !== "function" ||
         typeof wasm.runengpu_browser_r8_new_exercised_mask !== "function" ||
-        typeof wasm.runengpu_browser_rg8_exercised_mask !== "function") {
+        typeof wasm.runengpu_browser_rg8_exercised_mask !== "function" ||
+        typeof wasm.runengpu_browser_r16_exercised_mask !== "function" ||
+        typeof wasm.runengpu_browser_rg16_exercised_mask !== "function") {
       throw new Error("RunenGPU browser proof control exports are absent");
     }
     wasm.runengpu_browser_start();
@@ -106,6 +108,8 @@ const done = arguments[arguments.length - 1];
           rgba8Mask: wasm.runengpu_browser_rgba8_exercised_mask(),
           r8NewMask: wasm.runengpu_browser_r8_new_exercised_mask(),
           rg8Mask: wasm.runengpu_browser_rg8_exercised_mask(),
+          r16Mask: wasm.runengpu_browser_r16_exercised_mask(),
+          rg16Mask: wasm.runengpu_browser_rg16_exercised_mask(),
         });
         return;
       }
@@ -158,6 +162,8 @@ def verify_format_reporter() -> None:
         ("RGBA16", ("Rgba16Uint", "Rgba16Sint", "Rgba16Float"), (0, 1, 5, 7)),
         ("R8-new", ("R8Snorm", "R8Uint", "R8Sint"), (0, 1, 5, 7)),
         ("RG8", ("Rg8Unorm", "Rg8Snorm", "Rg8Uint", "Rg8Sint"), (0, 1, 9, 15)),
+        ("R16", ("R16Uint", "R16Sint", "R16Float"), (0, 1, 5, 7)),
+        ("RG16", ("Rg16Uint", "Rg16Sint", "Rg16Float"), (0, 1, 5, 7)),
     )
     for family, names, masks in families:
         full_mask = (1 << len(names)) - 1
@@ -330,6 +336,20 @@ def main() -> int:
             "RG8",
             ("Rg8Unorm", "Rg8Snorm", "Rg8Uint", "Rg8Sint"),
             "127px and 128px",
+        )
+        report_format_family(
+            value,
+            "r16Mask",
+            "R16",
+            ("R16Uint", "R16Sint", "R16Float"),
+            "127px and 128px",
+        )
+        report_format_family(
+            value,
+            "rg16Mask",
+            "RG16",
+            ("Rg16Uint", "Rg16Sint", "Rg16Float"),
+            "63px and 64px",
         )
         print("RunenGPU actual-browser WebGPU conformance: PASS")
         return 0
