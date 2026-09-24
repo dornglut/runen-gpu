@@ -1,6 +1,6 @@
 use super::{
     GpuCapabilityAdmissionCause, GpuCapabilityAdmissionError, GpuCapabilityRequirementCause,
-    GpuCapabilityRequirementError,
+    GpuCapabilityRequirementError, GpuTextureAspect,
 };
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -247,8 +247,12 @@ pub enum GpuTextureFormat {
 }
 
 impl GpuTextureFormat {
-    pub const fn bytes_per_texel(self) -> u32 {
-        super::texture_format::bytes_per_texel(self)
+    pub const fn block_dimensions(self) -> (u32, u32) {
+        super::texture_format::block_dimensions(self)
+    }
+
+    pub const fn copy_block_size(self, aspect: GpuTextureAspect) -> Option<u32> {
+        super::texture_format::copy_block_size(self, aspect)
     }
 
     pub const fn is_depth(self) -> bool {
@@ -691,10 +695,14 @@ mod tests {
     }
 
     #[test]
-    fn r32float_is_one_four_byte_non_depth_non_srgb_texel() {
-        assert_eq!(GpuTextureFormat::R32Float.bytes_per_texel(), 4);
-        assert!(!GpuTextureFormat::R32Float.is_depth());
-        assert!(!GpuTextureFormat::R32Float.is_srgb());
+    fn r32float_exposes_truthful_block_copy_structure() {
+        let format = GpuTextureFormat::R32Float;
+        assert_eq!(format.block_dimensions(), (1, 1));
+        assert_eq!(format.copy_block_size(GpuTextureAspect::All), Some(4));
+        assert_eq!(format.copy_block_size(GpuTextureAspect::Color), Some(4));
+        assert_eq!(format.copy_block_size(GpuTextureAspect::DepthOnly), None);
+        assert!(!format.is_depth());
+        assert!(!format.is_srgb());
     }
 
     #[test]

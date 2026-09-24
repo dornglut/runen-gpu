@@ -123,10 +123,13 @@ fn progress_submission_and_readback(
 }
 
 #[test]
-fn r32float_is_public_backend_neutral_and_four_bytes_per_texel() {
+fn r32float_is_public_backend_neutral_with_four_byte_copy_blocks() {
     let format = GpuTextureFormat::R32Float;
 
-    assert_eq!(format.bytes_per_texel(), 4);
+    assert_eq!(format.block_dimensions(), (1, 1));
+    assert_eq!(format.copy_block_size(GpuTextureAspect::All), Some(4));
+    assert_eq!(format.copy_block_size(GpuTextureAspect::Color), Some(4));
+    assert_eq!(format.copy_block_size(GpuTextureAspect::DepthOnly), None);
     assert!(!format.is_depth());
     assert!(!format.is_srgb());
 }

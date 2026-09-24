@@ -57,10 +57,19 @@ fn test_limits() -> GpuLimits {
 
 fn assert_public_metadata(
     formats: &[(GpuTextureFormat, GpuShaderIoScalarClass)],
-    bytes_per_texel: u32,
+    copy_block_bytes: u32,
 ) {
     for (format, _) in formats.iter().copied() {
-        assert_eq!(format.bytes_per_texel(), bytes_per_texel);
+        assert_eq!(format.block_dimensions(), (1, 1));
+        assert_eq!(
+            format.copy_block_size(GpuTextureAspect::All),
+            Some(copy_block_bytes)
+        );
+        assert_eq!(
+            format.copy_block_size(GpuTextureAspect::Color),
+            Some(copy_block_bytes)
+        );
+        assert_eq!(format.copy_block_size(GpuTextureAspect::DepthOnly), None);
         assert!(!format.is_depth());
         assert!(!format.is_srgb());
         let normalized = GpuCapabilities::from_normalized_facts(
@@ -70,7 +79,7 @@ fn assert_public_metadata(
         );
         let facts = normalized.format(format).unwrap();
         assert_eq!(facts.block_dimensions, Some((1, 1)));
-        assert_eq!(facts.block_copy_size, Some(bytes_per_texel));
+        assert_eq!(facts.block_copy_size, Some(copy_block_bytes));
         assert!(!facts.sampled);
         assert!(!facts.filterable);
         assert!(!facts.storage_read);
@@ -93,7 +102,7 @@ fn rg16_public_metadata_and_copy_geometry_are_exact() {
 
 fn assert_structural_normalization_preserves_observed_roles(
     formats: &[(GpuTextureFormat, GpuShaderIoScalarClass)],
-    bytes_per_texel: u32,
+    copy_block_bytes: u32,
 ) {
     let supplied = GpuTextureFormatCapabilities {
         sampled: true,
@@ -112,7 +121,7 @@ fn assert_structural_normalization_preserves_observed_roles(
             GpuCapabilities::from_normalized_facts([], test_limits(), [(format, supplied)]);
         let facts = normalized.format(format).unwrap();
         assert_eq!(facts.block_dimensions, Some((1, 1)));
-        assert_eq!(facts.block_copy_size, Some(bytes_per_texel));
+        assert_eq!(facts.block_copy_size, Some(copy_block_bytes));
         assert_eq!(facts.sampled, supplied.sampled);
         assert_eq!(facts.filterable, supplied.filterable);
         assert_eq!(facts.storage_read, supplied.storage_read);
@@ -280,7 +289,7 @@ fn rg16_fragment_io_and_integer_blending_follow_scalar_class() {
 
 fn assert_prepared_texture_rows(
     formats: &[(GpuTextureFormat, GpuShaderIoScalarClass)],
-    bytes_per_texel: u32,
+    copy_block_bytes: u32,
     family: &str,
 ) {
     for (format, _) in formats.iter().copied() {
@@ -288,7 +297,7 @@ fn assert_prepared_texture_rows(
         let texture_label = label(&name);
         let extent =
             GpuTextureExtent::new(&texture_label, GpuTextureDimension::D2, 3, 2, 1).unwrap();
-        let row_bytes = 3 * bytes_per_texel;
+        let row_bytes = 3 * copy_block_bytes;
         let byte_len = (row_bytes * 2) as usize;
         let data = PreparedGpuData::<TransferData>::from_pod_transfer(
             &name,
@@ -379,7 +388,7 @@ fn wait_for_readback(
 fn run_native_copy_family(
     formats: &[GpuTextureFormat],
     widths: &[u32],
-    bytes_per_texel: u32,
+    copy_block_bytes: u32,
     family: &str,
 ) -> usize {
     let mut requirements = GpuCapabilityRequirements::new();
@@ -436,7 +445,7 @@ fn run_native_copy_family(
         for width in widths.iter().copied() {
             let height = 2;
             let name = format!("{family} {format:?} {width}x{height}");
-            let expected = (0..width * height * bytes_per_texel)
+            let expected = (0..width * height * copy_block_bytes)
                 .map(|index| (index % 251) as u8)
                 .collect::<Vec<_>>();
             let mut allocator = GpuWorkResourceIdAllocator::new();
@@ -542,7 +551,7 @@ fn run_native_copy_family(
             assert_eq!(bytes.texture_format(), Some(format));
             println!(
                 "{format:?}: PASS {width}x{height}, {} bytes per logical row",
-                width * bytes_per_texel
+                width * copy_block_bytes
             );
             drop(realized_destination);
             drop(realized_source);

@@ -84,7 +84,7 @@ fn inspect() {{
 }
 
 #[test]
-fn baseline_32bit_formats_expose_exact_public_pixel_sizes() {
+fn baseline_32bit_formats_expose_exact_public_copy_block_sizes() {
     for (format, bytes) in [
         (GpuTextureFormat::R32Sint, 4),
         (GpuTextureFormat::Rg32Uint, 8),
@@ -94,7 +94,10 @@ fn baseline_32bit_formats_expose_exact_public_pixel_sizes() {
         (GpuTextureFormat::Rgba32Sint, 16),
         (GpuTextureFormat::Rgba32Float, 16),
     ] {
-        assert_eq!(format.bytes_per_texel(), bytes);
+        assert_eq!(format.block_dimensions(), (1, 1));
+        assert_eq!(format.copy_block_size(GpuTextureAspect::All), Some(bytes));
+        assert_eq!(format.copy_block_size(GpuTextureAspect::Color), Some(bytes));
+        assert_eq!(format.copy_block_size(GpuTextureAspect::DepthOnly), None);
         assert!(!format.is_depth());
         assert!(!format.is_srgb());
     }
