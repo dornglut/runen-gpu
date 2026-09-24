@@ -406,7 +406,10 @@ fn new_32bit_formats_round_trip_when_adapter_reports_copy_roles() {
             .expect("admitted 32-bit format must have adapter facts");
         assert!(admitted.copy_source && admitted.copy_destination);
         let mut allocator = GpuWorkResourceIdAllocator::new();
-        let bytes_per_row = WIDTH * format.bytes_per_texel();
+        let bytes_per_row = WIDTH
+            * format
+                .copy_block_size(GpuTextureAspect::Color)
+                .expect("32-bit color format must have a copy block size");
         let expected = (0..bytes_per_row * HEIGHT)
             .map(|index| (index % 251) as u8)
             .collect::<Vec<_>>();
