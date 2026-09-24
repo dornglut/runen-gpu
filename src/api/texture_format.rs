@@ -11,18 +11,24 @@ pub(crate) enum GpuTextureScalarClass {
 pub(crate) enum GpuTextureAspectClass {
     Color,
     Depth,
+    // These normalized states are intentionally staged before their public formats land.
+    #[cfg_attr(not(test), allow(dead_code))]
     Stencil,
+    #[cfg_attr(not(test), allow(dead_code))]
     DepthStencil,
 }
 
 impl GpuTextureAspectClass {
     const fn supports(self, aspect: GpuTextureAspect) -> bool {
-        match aspect {
-            GpuTextureAspect::All => true,
-            GpuTextureAspect::Color => self == Self::Color,
-            GpuTextureAspect::DepthOnly => self == Self::Depth || self == Self::DepthStencil,
-            GpuTextureAspect::StencilOnly => self == Self::Stencil || self == Self::DepthStencil,
-        }
+        matches!(
+            (self, aspect),
+            (_, GpuTextureAspect::All)
+                | (Self::Color, GpuTextureAspect::Color)
+                | (Self::Depth, GpuTextureAspect::DepthOnly)
+                | (Self::Stencil, GpuTextureAspect::StencilOnly)
+                | (Self::DepthStencil, GpuTextureAspect::DepthOnly)
+                | (Self::DepthStencil, GpuTextureAspect::StencilOnly)
+        )
     }
 
     const fn canonical(self, aspect: GpuTextureAspect) -> Option<GpuTextureAspect> {
@@ -39,11 +45,11 @@ impl GpuTextureAspectClass {
     }
 
     const fn has_depth(self) -> bool {
-        self == Self::Depth || self == Self::DepthStencil
+        matches!(self, Self::Depth | Self::DepthStencil)
     }
 
     const fn has_stencil(self) -> bool {
-        self == Self::Stencil || self == Self::DepthStencil
+        matches!(self, Self::Stencil | Self::DepthStencil)
     }
 }
 
