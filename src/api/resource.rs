@@ -936,13 +936,14 @@ fn validate_texture_format_usages(
     format: GpuTextureFormat,
     usages: &GpuTextureUsages,
 ) -> Result<(), GpuResourceDescriptorError> {
-    let depth_format = texture_format::supports_aspect(format, GpuTextureAspect::DepthOnly);
+    let depth_stencil_format = texture_format::supports_aspect(format, GpuTextureAspect::DepthOnly)
+        || texture_format::supports_aspect(format, GpuTextureAspect::StencilOnly);
     let depth_usage = usages.contains(GpuTextureUsage::DepthStencilAttachment);
     let color_usage = usages.contains(GpuTextureUsage::ColorAttachment);
     let storage_usage = usages.contains(GpuTextureUsage::StorageRead)
         || usages.contains(GpuTextureUsage::StorageWrite);
-    if (depth_format && (color_usage || storage_usage))
-        || (!depth_format && depth_usage)
+    if (depth_stencil_format && (color_usage || storage_usage))
+        || (!depth_stencil_format && depth_usage)
         || (format.is_srgb() && storage_usage)
     {
         return Err(GpuResourceDescriptorError::invalid(

@@ -159,10 +159,12 @@ pub(super) fn lower_texture(
             "texture extent exceeds an admitted or created-device dimension or array-layer limit",
         ));
     }
-    if descriptor.dimension() != GpuTextureDimension::D2 && descriptor.format().is_depth() {
+    if descriptor.dimension() != GpuTextureDimension::D2
+        && (descriptor.format().is_depth() || descriptor.format().is_stencil())
+    {
         return Err(incompatible(
             identity,
-            "the private backend supports normalized depth textures only in two dimensions",
+            "the private backend supports normalized depth/stencil textures only in two dimensions",
         ));
     }
     if descriptor.dimension() == GpuTextureDimension::D1

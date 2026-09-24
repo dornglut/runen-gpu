@@ -187,10 +187,10 @@ impl GpuSurfaceConfiguration {
                 "provide a nonzero surface width and height",
             ));
         }
-        if format.is_depth() {
+        if format.is_depth() || format.is_stencil() {
             return Err(GpuSurfaceConfigurationError::new(
                 GpuSurfaceConfigurationCause::InvalidFormat,
-                "choose a normalized color format for presentation",
+                "choose a normalized color-only format for presentation",
             ));
         }
         if desired_maximum_frame_latency == 0 {

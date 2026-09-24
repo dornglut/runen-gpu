@@ -6,7 +6,7 @@ use crate::{
     GpuBindingClass, GpuBindingDeclaration, GpuBufferAccess, GpuBufferAccessKind, GpuBufferRange,
     GpuPipelineLayoutDescriptor, GpuProgramContractCause, GpuProgramContractError,
     GpuResourceAccess, GpuSamplerUse, GpuStorageBufferAccess, GpuStorageTextureAccess,
-    GpuTextureAccess, GpuTextureAccessKind, GpuTextureAccessResource, GpuTextureAspect,
+    GpuTextureAccess, GpuTextureAccessKind, GpuTextureAccessResource,
 };
 use core::hash::{Hash, Hasher};
 use std::collections::BTreeMap;
@@ -225,11 +225,9 @@ fn binding_accesses_overlap(left: &GpuResourceAccess, right: &GpuResourceAccess)
             left.range().overlaps(right.range())
         }
         (GpuResourceAccess::Texture(left), GpuResourceAccess::Texture(right)) => {
-            let parent_aspect = if left.normalized_texture().descriptor().format().is_depth() {
-                GpuTextureAspect::DepthOnly
-            } else {
-                GpuTextureAspect::Color
-            };
+            let parent_aspect = super::super::super::texture_format::whole_aspect(
+                left.normalized_texture().descriptor().format(),
+            );
             left.normalized_subresources()
                 .overlaps(right.normalized_subresources(), parent_aspect)
         }

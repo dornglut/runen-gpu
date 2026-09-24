@@ -76,7 +76,7 @@ impl GpuColorTargetStateDescriptor {
         blend: GpuBlendMode,
         write_mask: GpuColorWriteMask,
     ) -> Result<Self, GpuProgramContractError> {
-        if format.is_depth() {
+        if format.is_depth() || format.is_stencil() {
             return Err(invalid_attachment_state(
                 format!("color_format={format:?}"),
                 "use a color-attachment format for a color target",
@@ -123,7 +123,7 @@ impl GpuColorTargetStateDescriptor {
             GpuTextureScalarClass::Uint => GpuShaderIoScalarClass::Uint,
         };
         let width = texture_format::component_count(self.format);
-        debug_assert!(!self.format.is_depth());
+        debug_assert!(!self.format.is_depth() && !self.format.is_stencil());
         GpuShaderIoValueType::try_new(class, width)
             .expect("normalized color targets always map to valid shader IO")
     }
