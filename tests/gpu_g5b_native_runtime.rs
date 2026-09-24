@@ -1369,7 +1369,7 @@ fn native_ordered_timestamp_markers_bracket_work_without_pipeline_or_attachment(
     assert!(chunks.remainder().is_empty());
     let timestamps = chunks
         .by_ref()
-        .map(|bytes| u64::from_ne_bytes(bytes.try_into().unwrap()))
+        .map(|bytes| u64::from_le_bytes(bytes.try_into().unwrap()))
         .collect::<Vec<_>>();
     assert_eq!(timestamps.len(), 2);
     assert!(
