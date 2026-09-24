@@ -8,46 +8,52 @@ pub(crate) enum GpuTextureScalarClass {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum GpuTextureAspectClass {
-    Color,
-    Depth,
-    Stencil,
-    DepthStencil,
+pub(crate) struct GpuTextureAspectClass {
+    color: bool,
+    depth: bool,
+    stencil: bool,
 }
 
 impl GpuTextureAspectClass {
-    const fn supports(self, aspect: GpuTextureAspect) -> bool {
-        match (self, aspect) {
-            (_, GpuTextureAspect::All)
-            | (Self::Color, GpuTextureAspect::Color)
-            | (Self::Depth, GpuTextureAspect::DepthOnly)
-            | (Self::Stencil, GpuTextureAspect::StencilOnly)
-            | (Self::DepthStencil, GpuTextureAspect::DepthOnly | GpuTextureAspect::StencilOnly) => {
-                true
-            }
-            _ => false,
+    const fn new(color: bool, depth: bool, stencil: bool) -> Self {
+        Self {
+            color,
+            depth,
+            stencil,
         }
+    }
+
+    const fn supports(self, aspect: GpuTextureAspect) -> bool {
+        matches!(
+            aspect,
+            GpuTextureAspect::All
+                | GpuTextureAspect::Color if self.color
+        ) || matches!(aspect, GpuTextureAspect::DepthOnly if self.depth)
+            || matches!(aspect, GpuTextureAspect::StencilOnly if self.stencil)
     }
 
     const fn canonical(self, aspect: GpuTextureAspect) -> Option<GpuTextureAspect> {
         if !self.supports(aspect) {
             return None;
         }
-        match (self, aspect) {
-            (Self::Color, GpuTextureAspect::All) => Some(GpuTextureAspect::Color),
-            (Self::Depth, GpuTextureAspect::All) => Some(GpuTextureAspect::DepthOnly),
-            (Self::Stencil, GpuTextureAspect::All) => Some(GpuTextureAspect::StencilOnly),
-            (Self::DepthStencil, GpuTextureAspect::All) => Some(GpuTextureAspect::All),
-            (_, explicit) => Some(explicit),
+        match aspect {
+            GpuTextureAspect::All => match (self.color, self.depth, self.stencil) {
+                (true, false, false) => Some(GpuTextureAspect::Color),
+                (false, true, false) => Some(GpuTextureAspect::DepthOnly),
+                (false, false, true) => Some(GpuTextureAspect::StencilOnly),
+                (false, true, true) => Some(GpuTextureAspect::All),
+                _ => None,
+            },
+            explicit => Some(explicit),
         }
     }
 
     const fn has_depth(self) -> bool {
-        matches!(self, Self::Depth | Self::DepthStencil)
+        self.depth
     }
 
     const fn has_stencil(self) -> bool {
-        matches!(self, Self::Stencil | Self::DepthStencil)
+        self.stencil
     }
 }
 
@@ -68,7 +74,7 @@ struct GpuTextureFormatSemantics {
 const fn semantics(format: GpuTextureFormat) -> GpuTextureFormatSemantics {
     match format {
         GpuTextureFormat::R8Unorm => GpuTextureFormatSemantics {
-            aspect_class: GpuTextureAspectClass::Color,
+            aspect_class: GpuTextureAspectClass::new(true, false, false),
             block_dimensions: (1, 1),
             color_copy_block_size: Some(1),
             depth_copy_block_size: None,
@@ -80,7 +86,7 @@ const fn semantics(format: GpuTextureFormat) -> GpuTextureFormatSemantics {
             has_alpha: false,
         },
         GpuTextureFormat::R8Snorm => GpuTextureFormatSemantics {
-            aspect_class: GpuTextureAspectClass::Color,
+            aspect_class: GpuTextureAspectClass::new(true, false, false),
             block_dimensions: (1, 1),
             color_copy_block_size: Some(1),
             depth_copy_block_size: None,
@@ -92,7 +98,7 @@ const fn semantics(format: GpuTextureFormat) -> GpuTextureFormatSemantics {
             has_alpha: false,
         },
         GpuTextureFormat::R8Uint => GpuTextureFormatSemantics {
-            aspect_class: GpuTextureAspectClass::Color,
+            aspect_class: GpuTextureAspectClass::new(true, false, false),
             block_dimensions: (1, 1),
             color_copy_block_size: Some(1),
             depth_copy_block_size: None,
@@ -104,7 +110,7 @@ const fn semantics(format: GpuTextureFormat) -> GpuTextureFormatSemantics {
             has_alpha: false,
         },
         GpuTextureFormat::R8Sint => GpuTextureFormatSemantics {
-            aspect_class: GpuTextureAspectClass::Color,
+            aspect_class: GpuTextureAspectClass::new(true, false, false),
             block_dimensions: (1, 1),
             color_copy_block_size: Some(1),
             depth_copy_block_size: None,
@@ -116,7 +122,7 @@ const fn semantics(format: GpuTextureFormat) -> GpuTextureFormatSemantics {
             has_alpha: false,
         },
         GpuTextureFormat::Rg8Unorm => GpuTextureFormatSemantics {
-            aspect_class: GpuTextureAspectClass::Color,
+            aspect_class: GpuTextureAspectClass::new(true, false, false),
             block_dimensions: (1, 1),
             color_copy_block_size: Some(2),
             depth_copy_block_size: None,
@@ -128,7 +134,7 @@ const fn semantics(format: GpuTextureFormat) -> GpuTextureFormatSemantics {
             has_alpha: false,
         },
         GpuTextureFormat::Rg8Snorm => GpuTextureFormatSemantics {
-            aspect_class: GpuTextureAspectClass::Color,
+            aspect_class: GpuTextureAspectClass::new(true, false, false),
             block_dimensions: (1, 1),
             color_copy_block_size: Some(2),
             depth_copy_block_size: None,
@@ -140,7 +146,7 @@ const fn semantics(format: GpuTextureFormat) -> GpuTextureFormatSemantics {
             has_alpha: false,
         },
         GpuTextureFormat::Rg8Uint => GpuTextureFormatSemantics {
-            aspect_class: GpuTextureAspectClass::Color,
+            aspect_class: GpuTextureAspectClass::new(true, false, false),
             block_dimensions: (1, 1),
             color_copy_block_size: Some(2),
             depth_copy_block_size: None,
@@ -152,7 +158,7 @@ const fn semantics(format: GpuTextureFormat) -> GpuTextureFormatSemantics {
             has_alpha: false,
         },
         GpuTextureFormat::Rg8Sint => GpuTextureFormatSemantics {
-            aspect_class: GpuTextureAspectClass::Color,
+            aspect_class: GpuTextureAspectClass::new(true, false, false),
             block_dimensions: (1, 1),
             color_copy_block_size: Some(2),
             depth_copy_block_size: None,
@@ -164,7 +170,7 @@ const fn semantics(format: GpuTextureFormat) -> GpuTextureFormatSemantics {
             has_alpha: false,
         },
         GpuTextureFormat::R16Uint => GpuTextureFormatSemantics {
-            aspect_class: GpuTextureAspectClass::Color,
+            aspect_class: GpuTextureAspectClass::new(true, false, false),
             block_dimensions: (1, 1),
             color_copy_block_size: Some(2),
             depth_copy_block_size: None,
@@ -176,7 +182,7 @@ const fn semantics(format: GpuTextureFormat) -> GpuTextureFormatSemantics {
             has_alpha: false,
         },
         GpuTextureFormat::R16Sint => GpuTextureFormatSemantics {
-            aspect_class: GpuTextureAspectClass::Color,
+            aspect_class: GpuTextureAspectClass::new(true, false, false),
             block_dimensions: (1, 1),
             color_copy_block_size: Some(2),
             depth_copy_block_size: None,
@@ -188,7 +194,7 @@ const fn semantics(format: GpuTextureFormat) -> GpuTextureFormatSemantics {
             has_alpha: false,
         },
         GpuTextureFormat::R16Float => GpuTextureFormatSemantics {
-            aspect_class: GpuTextureAspectClass::Color,
+            aspect_class: GpuTextureAspectClass::new(true, false, false),
             block_dimensions: (1, 1),
             color_copy_block_size: Some(2),
             depth_copy_block_size: None,
@@ -200,7 +206,7 @@ const fn semantics(format: GpuTextureFormat) -> GpuTextureFormatSemantics {
             has_alpha: false,
         },
         GpuTextureFormat::Rg16Uint => GpuTextureFormatSemantics {
-            aspect_class: GpuTextureAspectClass::Color,
+            aspect_class: GpuTextureAspectClass::new(true, false, false),
             block_dimensions: (1, 1),
             color_copy_block_size: Some(4),
             depth_copy_block_size: None,
@@ -212,7 +218,7 @@ const fn semantics(format: GpuTextureFormat) -> GpuTextureFormatSemantics {
             has_alpha: false,
         },
         GpuTextureFormat::Rg16Sint => GpuTextureFormatSemantics {
-            aspect_class: GpuTextureAspectClass::Color,
+            aspect_class: GpuTextureAspectClass::new(true, false, false),
             block_dimensions: (1, 1),
             color_copy_block_size: Some(4),
             depth_copy_block_size: None,
@@ -224,7 +230,7 @@ const fn semantics(format: GpuTextureFormat) -> GpuTextureFormatSemantics {
             has_alpha: false,
         },
         GpuTextureFormat::Rg16Float => GpuTextureFormatSemantics {
-            aspect_class: GpuTextureAspectClass::Color,
+            aspect_class: GpuTextureAspectClass::new(true, false, false),
             block_dimensions: (1, 1),
             color_copy_block_size: Some(4),
             depth_copy_block_size: None,
@@ -236,7 +242,7 @@ const fn semantics(format: GpuTextureFormat) -> GpuTextureFormatSemantics {
             has_alpha: false,
         },
         GpuTextureFormat::Rgba8Unorm => GpuTextureFormatSemantics {
-            aspect_class: GpuTextureAspectClass::Color,
+            aspect_class: GpuTextureAspectClass::new(true, false, false),
             block_dimensions: (1, 1),
             color_copy_block_size: Some(4),
             depth_copy_block_size: None,
@@ -248,7 +254,7 @@ const fn semantics(format: GpuTextureFormat) -> GpuTextureFormatSemantics {
             has_alpha: true,
         },
         GpuTextureFormat::Rgba8UnormSrgb => GpuTextureFormatSemantics {
-            aspect_class: GpuTextureAspectClass::Color,
+            aspect_class: GpuTextureAspectClass::new(true, false, false),
             block_dimensions: (1, 1),
             color_copy_block_size: Some(4),
             depth_copy_block_size: None,
@@ -260,7 +266,7 @@ const fn semantics(format: GpuTextureFormat) -> GpuTextureFormatSemantics {
             has_alpha: true,
         },
         GpuTextureFormat::Rgba8Snorm => GpuTextureFormatSemantics {
-            aspect_class: GpuTextureAspectClass::Color,
+            aspect_class: GpuTextureAspectClass::new(true, false, false),
             block_dimensions: (1, 1),
             color_copy_block_size: Some(4),
             depth_copy_block_size: None,
@@ -272,7 +278,7 @@ const fn semantics(format: GpuTextureFormat) -> GpuTextureFormatSemantics {
             has_alpha: true,
         },
         GpuTextureFormat::Rgba8Uint => GpuTextureFormatSemantics {
-            aspect_class: GpuTextureAspectClass::Color,
+            aspect_class: GpuTextureAspectClass::new(true, false, false),
             block_dimensions: (1, 1),
             color_copy_block_size: Some(4),
             depth_copy_block_size: None,
@@ -284,7 +290,7 @@ const fn semantics(format: GpuTextureFormat) -> GpuTextureFormatSemantics {
             has_alpha: true,
         },
         GpuTextureFormat::Rgba8Sint => GpuTextureFormatSemantics {
-            aspect_class: GpuTextureAspectClass::Color,
+            aspect_class: GpuTextureAspectClass::new(true, false, false),
             block_dimensions: (1, 1),
             color_copy_block_size: Some(4),
             depth_copy_block_size: None,
@@ -296,7 +302,7 @@ const fn semantics(format: GpuTextureFormat) -> GpuTextureFormatSemantics {
             has_alpha: true,
         },
         GpuTextureFormat::Bgra8Unorm => GpuTextureFormatSemantics {
-            aspect_class: GpuTextureAspectClass::Color,
+            aspect_class: GpuTextureAspectClass::new(true, false, false),
             block_dimensions: (1, 1),
             color_copy_block_size: Some(4),
             depth_copy_block_size: None,
@@ -308,7 +314,7 @@ const fn semantics(format: GpuTextureFormat) -> GpuTextureFormatSemantics {
             has_alpha: true,
         },
         GpuTextureFormat::Bgra8UnormSrgb => GpuTextureFormatSemantics {
-            aspect_class: GpuTextureAspectClass::Color,
+            aspect_class: GpuTextureAspectClass::new(true, false, false),
             block_dimensions: (1, 1),
             color_copy_block_size: Some(4),
             depth_copy_block_size: None,
@@ -320,7 +326,7 @@ const fn semantics(format: GpuTextureFormat) -> GpuTextureFormatSemantics {
             has_alpha: true,
         },
         GpuTextureFormat::R32Uint => GpuTextureFormatSemantics {
-            aspect_class: GpuTextureAspectClass::Color,
+            aspect_class: GpuTextureAspectClass::new(true, false, false),
             block_dimensions: (1, 1),
             color_copy_block_size: Some(4),
             depth_copy_block_size: None,
@@ -332,7 +338,7 @@ const fn semantics(format: GpuTextureFormat) -> GpuTextureFormatSemantics {
             has_alpha: false,
         },
         GpuTextureFormat::R32Sint => GpuTextureFormatSemantics {
-            aspect_class: GpuTextureAspectClass::Color,
+            aspect_class: GpuTextureAspectClass::new(true, false, false),
             block_dimensions: (1, 1),
             color_copy_block_size: Some(4),
             depth_copy_block_size: None,
@@ -344,7 +350,7 @@ const fn semantics(format: GpuTextureFormat) -> GpuTextureFormatSemantics {
             has_alpha: false,
         },
         GpuTextureFormat::R32Float => GpuTextureFormatSemantics {
-            aspect_class: GpuTextureAspectClass::Color,
+            aspect_class: GpuTextureAspectClass::new(true, false, false),
             block_dimensions: (1, 1),
             color_copy_block_size: Some(4),
             depth_copy_block_size: None,
@@ -356,7 +362,7 @@ const fn semantics(format: GpuTextureFormat) -> GpuTextureFormatSemantics {
             has_alpha: false,
         },
         GpuTextureFormat::Rg32Uint => GpuTextureFormatSemantics {
-            aspect_class: GpuTextureAspectClass::Color,
+            aspect_class: GpuTextureAspectClass::new(true, false, false),
             block_dimensions: (1, 1),
             color_copy_block_size: Some(8),
             depth_copy_block_size: None,
@@ -368,7 +374,7 @@ const fn semantics(format: GpuTextureFormat) -> GpuTextureFormatSemantics {
             has_alpha: false,
         },
         GpuTextureFormat::Rg32Sint => GpuTextureFormatSemantics {
-            aspect_class: GpuTextureAspectClass::Color,
+            aspect_class: GpuTextureAspectClass::new(true, false, false),
             block_dimensions: (1, 1),
             color_copy_block_size: Some(8),
             depth_copy_block_size: None,
@@ -380,7 +386,7 @@ const fn semantics(format: GpuTextureFormat) -> GpuTextureFormatSemantics {
             has_alpha: false,
         },
         GpuTextureFormat::Rg32Float => GpuTextureFormatSemantics {
-            aspect_class: GpuTextureAspectClass::Color,
+            aspect_class: GpuTextureAspectClass::new(true, false, false),
             block_dimensions: (1, 1),
             color_copy_block_size: Some(8),
             depth_copy_block_size: None,
@@ -392,7 +398,7 @@ const fn semantics(format: GpuTextureFormat) -> GpuTextureFormatSemantics {
             has_alpha: false,
         },
         GpuTextureFormat::Rgba32Uint => GpuTextureFormatSemantics {
-            aspect_class: GpuTextureAspectClass::Color,
+            aspect_class: GpuTextureAspectClass::new(true, false, false),
             block_dimensions: (1, 1),
             color_copy_block_size: Some(16),
             depth_copy_block_size: None,
@@ -404,7 +410,7 @@ const fn semantics(format: GpuTextureFormat) -> GpuTextureFormatSemantics {
             has_alpha: true,
         },
         GpuTextureFormat::Rgba32Sint => GpuTextureFormatSemantics {
-            aspect_class: GpuTextureAspectClass::Color,
+            aspect_class: GpuTextureAspectClass::new(true, false, false),
             block_dimensions: (1, 1),
             color_copy_block_size: Some(16),
             depth_copy_block_size: None,
@@ -416,7 +422,7 @@ const fn semantics(format: GpuTextureFormat) -> GpuTextureFormatSemantics {
             has_alpha: true,
         },
         GpuTextureFormat::Rgba32Float => GpuTextureFormatSemantics {
-            aspect_class: GpuTextureAspectClass::Color,
+            aspect_class: GpuTextureAspectClass::new(true, false, false),
             block_dimensions: (1, 1),
             color_copy_block_size: Some(16),
             depth_copy_block_size: None,
@@ -428,7 +434,7 @@ const fn semantics(format: GpuTextureFormat) -> GpuTextureFormatSemantics {
             has_alpha: true,
         },
         GpuTextureFormat::Rgba16Uint => GpuTextureFormatSemantics {
-            aspect_class: GpuTextureAspectClass::Color,
+            aspect_class: GpuTextureAspectClass::new(true, false, false),
             block_dimensions: (1, 1),
             color_copy_block_size: Some(8),
             depth_copy_block_size: None,
@@ -440,7 +446,7 @@ const fn semantics(format: GpuTextureFormat) -> GpuTextureFormatSemantics {
             has_alpha: true,
         },
         GpuTextureFormat::Rgba16Sint => GpuTextureFormatSemantics {
-            aspect_class: GpuTextureAspectClass::Color,
+            aspect_class: GpuTextureAspectClass::new(true, false, false),
             block_dimensions: (1, 1),
             color_copy_block_size: Some(8),
             depth_copy_block_size: None,
@@ -452,7 +458,7 @@ const fn semantics(format: GpuTextureFormat) -> GpuTextureFormatSemantics {
             has_alpha: true,
         },
         GpuTextureFormat::Rgba16Float => GpuTextureFormatSemantics {
-            aspect_class: GpuTextureAspectClass::Color,
+            aspect_class: GpuTextureAspectClass::new(true, false, false),
             block_dimensions: (1, 1),
             color_copy_block_size: Some(8),
             depth_copy_block_size: None,
@@ -464,7 +470,7 @@ const fn semantics(format: GpuTextureFormat) -> GpuTextureFormatSemantics {
             has_alpha: true,
         },
         GpuTextureFormat::Depth32Float => GpuTextureFormatSemantics {
-            aspect_class: GpuTextureAspectClass::Depth,
+            aspect_class: GpuTextureAspectClass::new(false, true, false),
             block_dimensions: (1, 1),
             color_copy_block_size: None,
             depth_copy_block_size: Some(4),
@@ -1119,7 +1125,7 @@ mod tests {
     #[test]
     fn aspect_identity_is_independent_from_copy_footprint() {
         let synthetic = GpuTextureFormatSemantics {
-            aspect_class: GpuTextureAspectClass::Depth,
+            aspect_class: GpuTextureAspectClass::new(false, true, false),
             block_dimensions: (1, 1),
             color_copy_block_size: None,
             depth_copy_block_size: None,
@@ -1140,7 +1146,7 @@ mod tests {
 
     #[test]
     fn depth_stencil_aspect_authority_distinguishes_selected_aspects() {
-        let class = GpuTextureAspectClass::DepthStencil;
+        let class = GpuTextureAspectClass::new(false, true, true);
         assert!(class.supports(GpuTextureAspect::All));
         assert!(class.supports(GpuTextureAspect::DepthOnly));
         assert!(class.supports(GpuTextureAspect::StencilOnly));
