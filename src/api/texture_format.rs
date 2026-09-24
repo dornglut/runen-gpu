@@ -17,15 +17,12 @@ pub(crate) enum GpuTextureAspectClass {
 
 impl GpuTextureAspectClass {
     const fn supports(self, aspect: GpuTextureAspect) -> bool {
-        matches!(
-            (self, aspect),
-            (_, GpuTextureAspect::All)
-                | (Self::Color, GpuTextureAspect::Color)
-                | (Self::Depth, GpuTextureAspect::DepthOnly)
-                | (Self::Stencil, GpuTextureAspect::StencilOnly)
-                | (Self::DepthStencil, GpuTextureAspect::DepthOnly)
-                | (Self::DepthStencil, GpuTextureAspect::StencilOnly)
-        )
+        match aspect {
+            GpuTextureAspect::All => true,
+            GpuTextureAspect::Color => self == Self::Color,
+            GpuTextureAspect::DepthOnly => self == Self::Depth || self == Self::DepthStencil,
+            GpuTextureAspect::StencilOnly => self == Self::Stencil || self == Self::DepthStencil,
+        }
     }
 
     const fn canonical(self, aspect: GpuTextureAspect) -> Option<GpuTextureAspect> {
@@ -42,11 +39,11 @@ impl GpuTextureAspectClass {
     }
 
     const fn has_depth(self) -> bool {
-        matches!(self, Self::Depth | Self::DepthStencil)
+        self == Self::Depth || self == Self::DepthStencil
     }
 
     const fn has_stencil(self) -> bool {
-        matches!(self, Self::Stencil | Self::DepthStencil)
+        self == Self::Stencil || self == Self::DepthStencil
     }
 }
 
