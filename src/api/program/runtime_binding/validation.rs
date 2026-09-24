@@ -484,17 +484,29 @@ mod r1_r_rg8_sampled_class_tests {
     #[test]
     fn normalized_scalar_class_drives_sampled_texture_structure() {
         for (format, class) in [
-            (GpuTextureFormat::R8Snorm, GpuTextureSampleClass::FloatUnfilterable),
+            (
+                GpuTextureFormat::R8Snorm,
+                GpuTextureSampleClass::FloatUnfilterable,
+            ),
             (GpuTextureFormat::R8Uint, GpuTextureSampleClass::Uint),
             (GpuTextureFormat::R8Sint, GpuTextureSampleClass::Sint),
-            (GpuTextureFormat::Rg8Unorm, GpuTextureSampleClass::FloatUnfilterable),
-            (GpuTextureFormat::Rg8Snorm, GpuTextureSampleClass::FloatUnfilterable),
+            (
+                GpuTextureFormat::Rg8Unorm,
+                GpuTextureSampleClass::FloatUnfilterable,
+            ),
+            (
+                GpuTextureFormat::Rg8Snorm,
+                GpuTextureSampleClass::FloatUnfilterable,
+            ),
             (GpuTextureFormat::Rg8Uint, GpuTextureSampleClass::Uint),
             (GpuTextureFormat::Rg8Sint, GpuTextureSampleClass::Sint),
             (GpuTextureFormat::R32Uint, GpuTextureSampleClass::Uint),
             (GpuTextureFormat::R32Sint, GpuTextureSampleClass::Sint),
         ] {
-            assert!(sampled_texture_class_matches(format, class), "{format:?} {class:?}");
+            assert!(
+                sampled_texture_class_matches(format, class),
+                "{format:?} {class:?}"
+            );
         }
         assert!(!sampled_texture_class_matches(
             GpuTextureFormat::R8Uint,

@@ -425,7 +425,11 @@ mod browser {
 
     async fn run_browser_r8_new_copy() {
         let mask = run_browser_format_copy(
-            &[GpuTextureFormat::R8Snorm, GpuTextureFormat::R8Uint, GpuTextureFormat::R8Sint],
+            &[
+                GpuTextureFormat::R8Snorm,
+                GpuTextureFormat::R8Uint,
+                GpuTextureFormat::R8Sint,
+            ],
             &[255, 256],
             1,
             "R8-new",

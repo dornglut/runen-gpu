@@ -685,7 +685,9 @@ mod r1_r_rg8_mapping_tests {
         ] {
             assert!(!is_g7a_presentation_format(format));
             assert_eq!(
-                texture_formats().into_iter().find(|(value, _)| *value == format),
+                texture_formats()
+                    .into_iter()
+                    .find(|(value, _)| *value == format),
                 Some((format, wgpu_format))
             );
         }
