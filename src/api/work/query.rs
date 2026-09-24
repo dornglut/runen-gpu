@@ -104,7 +104,6 @@ impl GpuTimestampWrites {
     }
 }
 
-
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct GpuTimestampMarkerOperation {
     query_set: GpuQuerySetHandle,
@@ -281,14 +280,17 @@ impl GpuQueryResolveOperation {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::{
-        GpuCapabilityFeature, GpuCapabilityRequirement, GpuMemoryIntent, GpuQuerySetDescriptor,
-        GpuReconstruction, GpuResourceCommon, GpuResourceLabel, GpuResourceLifetime,
-        GpuResourceProvenance, GpuWorkOperation, GpuWorkResourceIdAllocator,
+        GpuBufferDescriptor, GpuBufferInitialization, GpuBufferRange, GpuBufferRegion,
+        GpuBufferUsage, GpuBufferUsages, GpuCapabilityFeature, GpuCapabilityRequirement,
+        GpuCapabilityRequirements, GpuClearOperation, GpuDependencyReason, GpuExecutionPreference,
+        GpuExplicitOrder, GpuMemoryIntent, GpuQuerySetDescriptor, GpuReconstruction,
+        GpuResourceCommon, GpuResourceLabel, GpuResourceLifetime, GpuResourceProvenance,
+        GpuResourceRef, GpuWorkFragmentBuilder, GpuWorkOperation, GpuWorkResourceIdAllocator,
+        GpuPreparedWorkGraph,
     };
 
     fn query_set(count: u32) -> GpuQuerySetHandle {
@@ -339,6 +341,139 @@ mod tests {
                     GpuCapabilityRequirement::Required(GpuCapabilityFeature::TimestampQuery)
                 ))
         );
+    }
+
+    #[test]
+    fn timestamp_markers_preserve_explicit_graph_order_around_unrelated_work() {
+        let mut allocator = GpuWorkResourceIdAllocator::new();
+        let queries = allocator
+            .allocate_query_set_handle(
+                GpuQuerySetDescriptor::new(
+                    GpuResourceCommon::owned(
+                        GpuResourceLabel::new("ordered marker queries").unwrap(),
+                        GpuResourceLifetime::Transient,
+                        GpuMemoryIntent::Device,
+                        GpuReconstruction::SourceBacked,
+                        GpuResourceProvenance::new(
+                            GpuResourceLabel::new("ordered marker queries").unwrap(),
+                            None,
+                            None,
+                        ),
+                    )
+                    .unwrap(),
+                    GpuQueryKind::Timestamp,
+                    2,
+                )
+                .unwrap(),
+            )
+            .unwrap();
+        let buffer_label = GpuResourceLabel::new("ordered marker buffer").unwrap();
+        let buffer = allocator
+            .allocate_buffer_handle(
+                GpuBufferDescriptor::new(
+                    GpuResourceCommon::owned(
+                        buffer_label.clone(),
+                        GpuResourceLifetime::Transient,
+                        GpuMemoryIntent::Device,
+                        GpuReconstruction::SourceBacked,
+                        GpuResourceProvenance::new(buffer_label.clone(), None, None),
+                    )
+                    .unwrap(),
+                    4,
+                    GpuBufferUsages::new(&buffer_label, [GpuBufferUsage::CopyDestination]).unwrap(),
+                    GpuBufferInitialization::Uninitialized,
+                )
+                .unwrap(),
+            )
+            .unwrap();
+        let provenance = |name: &str| {
+            GpuResourceProvenance::new(GpuResourceLabel::new(name).unwrap(), None, None)
+        };
+        let mut builder = GpuWorkFragmentBuilder::new(
+            GpuResourceLabel::new("ordered marker fragment").unwrap(),
+            provenance("ordered marker fragment"),
+        );
+        builder
+            .declare_resource(GpuResourceRef::QuerySet(queries.clone()))
+            .unwrap();
+        builder
+            .declare_resource(GpuResourceRef::Buffer(buffer.clone()))
+            .unwrap();
+
+        let start = builder
+            .add_node(
+                GpuResourceLabel::new("start marker").unwrap(),
+                GpuWorkOperation::TimestampMarker(
+                    GpuTimestampMarkerOperation::new(&queries, 0).unwrap(),
+                ),
+                [],
+                GpuCapabilityRequirements::new(),
+                GpuExecutionPreference::Automatic,
+                provenance("start marker"),
+            )
+            .unwrap();
+        let clear = builder
+            .operation(
+                "bounded unrelated clear",
+                GpuClearOperation::buffer_zero(
+                    GpuBufferRegion::new(&buffer, GpuBufferRange::whole(&buffer).unwrap()).unwrap(),
+                )
+                .unwrap(),
+            )
+            .unwrap();
+        let end = builder
+            .add_node(
+                GpuResourceLabel::new("end marker").unwrap(),
+                GpuWorkOperation::TimestampMarker(
+                    GpuTimestampMarkerOperation::new(&queries, 1).unwrap(),
+                ),
+                [],
+                GpuCapabilityRequirements::new(),
+                GpuExecutionPreference::Automatic,
+                provenance("end marker"),
+            )
+            .unwrap();
+        builder
+            .add_explicit_order(
+                GpuExplicitOrder::new(&start, &clear, "start before bounded work").unwrap(),
+            )
+            .unwrap();
+        builder
+            .add_explicit_order(
+                GpuExplicitOrder::new(&clear, &end, "bounded work before end").unwrap(),
+            )
+            .unwrap();
+
+        let graph = GpuPreparedWorkGraph::prepare(
+            GpuResourceLabel::new("ordered marker graph").unwrap(),
+            [builder.finish().unwrap()],
+        )
+        .unwrap();
+        assert_eq!(
+            graph
+                .topological_order()
+                .iter()
+                .map(|id| id.local_node())
+                .collect::<Vec<_>>(),
+            vec![1, 2, 3]
+        );
+        let explicit_edges = graph
+            .dependencies()
+            .iter()
+            .filter(|dependency| {
+                dependency
+                    .reasons()
+                    .iter()
+                    .any(|reason| matches!(reason, GpuDependencyReason::ExplicitNonData { .. }))
+            })
+            .map(|dependency| {
+                (
+                    dependency.before().local_node(),
+                    dependency.after().local_node(),
+                )
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(explicit_edges, vec![(1, 2), (2, 3)]);
     }
 
     #[test]
