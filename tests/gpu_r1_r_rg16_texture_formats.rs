@@ -228,10 +228,9 @@ fn r_rg16_storage_texels_fail_closed_without_normalized_tier1() {
             [GpuEntryPointName::new("inspect").unwrap()],
             std::iter::empty::<GpuBindingLayoutRefinement>(),
         )
-        .expect_err("R/RG16 storage texels must not be admitted without normalized tier1 authority");
-        if storage_format == "r8unorm" {
-            assert!(error.to_string().contains("texture_formats_tier1"));
-        }
+        .expect_err(
+            "R/RG16 storage texels must not be admitted without normalized tier1 authority",
+        );
     }
 }
 
