@@ -22,7 +22,9 @@ impl GpuTextureAspectClass {
             | (Self::Color, GpuTextureAspect::Color)
             | (Self::Depth, GpuTextureAspect::DepthOnly)
             | (Self::Stencil, GpuTextureAspect::StencilOnly)
-            | (Self::DepthStencil, GpuTextureAspect::DepthOnly | GpuTextureAspect::StencilOnly) => true,
+            | (Self::DepthStencil, GpuTextureAspect::DepthOnly | GpuTextureAspect::StencilOnly) => {
+                true
+            }
             _ => false,
         }
     }
@@ -497,7 +499,10 @@ pub(crate) const fn is_stencil(format: GpuTextureFormat) -> bool {
 }
 
 pub(crate) const fn whole_aspect(format: GpuTextureFormat) -> GpuTextureAspect {
-    match semantics(format).aspect_class.canonical(GpuTextureAspect::All) {
+    match semantics(format)
+        .aspect_class
+        .canonical(GpuTextureAspect::All)
+    {
         Some(aspect) => aspect,
         None => GpuTextureAspect::All,
     }
@@ -522,10 +527,7 @@ pub(crate) const fn default_copy_block_size(format: GpuTextureFormat) -> Option<
     copy_block_size(format, GpuTextureAspect::All)
 }
 
-pub(crate) const fn supports_aspect(
-    format: GpuTextureFormat,
-    aspect: GpuTextureAspect,
-) -> bool {
+pub(crate) const fn supports_aspect(format: GpuTextureFormat, aspect: GpuTextureAspect) -> bool {
     semantics(format).aspect_class.supports(aspect)
 }
 
@@ -1143,7 +1145,10 @@ mod tests {
         assert!(class.supports(GpuTextureAspect::DepthOnly));
         assert!(class.supports(GpuTextureAspect::StencilOnly));
         assert!(!class.supports(GpuTextureAspect::Color));
-        assert_eq!(class.canonical(GpuTextureAspect::All), Some(GpuTextureAspect::All));
+        assert_eq!(
+            class.canonical(GpuTextureAspect::All),
+            Some(GpuTextureAspect::All)
+        );
         assert_eq!(
             class.canonical(GpuTextureAspect::DepthOnly),
             Some(GpuTextureAspect::DepthOnly)
@@ -1153,5 +1158,4 @@ mod tests {
             Some(GpuTextureAspect::StencilOnly)
         );
     }
-
 }

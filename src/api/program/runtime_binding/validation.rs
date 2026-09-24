@@ -9,9 +9,7 @@ use super::{
     GpuRuntimeBufferBinding, GpuRuntimeTextureViewBinding,
 };
 use crate::api::texture_format::{self, GpuTextureScalarClass};
-use crate::{
-    GpuBufferUsage, GpuFilterMode, GpuTextureAspect, GpuTextureFormat, GpuTextureUsage,
-};
+use crate::{GpuBufferUsage, GpuFilterMode, GpuTextureAspect, GpuTextureFormat, GpuTextureUsage};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GpuValidatedBindGroupBindings {
@@ -591,5 +589,4 @@ mod plain_color_sampled_class_tests {
             GpuTextureSampleClass::Depth,
         ));
     }
-
 }
