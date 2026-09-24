@@ -234,6 +234,12 @@ impl From<super::GpuQueryResolveOperation> for GpuWorkOperation {
     }
 }
 
+impl From<super::GpuTimestampMarkerOperation> for GpuWorkOperation {
+    fn from(operation: super::GpuTimestampMarkerOperation) -> Self {
+        Self::TimestampMarker(operation)
+    }
+}
+
 impl From<super::GpuPresentOperation> for GpuWorkOperation {
     fn from(operation: super::GpuPresentOperation) -> Self {
         Self::Present(operation)

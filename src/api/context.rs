@@ -182,6 +182,7 @@ impl GpuContext {
                 GpuWorkOperation::Copy(_)
                 | GpuWorkOperation::Clear(_)
                 | GpuWorkOperation::Resolve(_)
+                | GpuWorkOperation::TimestampMarker(_)
                 | GpuWorkOperation::Present(_)
                 | GpuWorkOperation::Upload(_)
                 | GpuWorkOperation::Readback(_) => {}
