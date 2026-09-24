@@ -197,14 +197,7 @@ fn canonical_wgsl_derives_r_rg8_sampled_scalar_classes_without_storage_formats()
 #[test]
 fn r_rg8_storage_texels_fail_closed_without_normalized_tier1() {
     for storage_format in [
-        "r8unorm",
-        "r8snorm",
-        "r8uint",
-        "r8sint",
-        "rg8unorm",
-        "rg8snorm",
-        "rg8uint",
-        "rg8sint",
+        "r8unorm", "r8snorm", "r8uint", "r8sint", "rg8unorm", "rg8snorm", "rg8uint", "rg8sint",
     ] {
         let source_text = format!(
             "@group(0) @binding(0) var image: texture_storage_2d<{storage_format}, write>;\n\
@@ -580,7 +573,9 @@ fn native_copy_family_qualification_fails_closed_without_gpu() {
 fn r8_new_native_copy_round_trips_per_observed_format() {
     let formats = R8_NEW_FORMATS.map(|entry| entry.0);
     let exercised = run_native_copy_family(&formats, &[255, 256], 1, "R8-new");
-    println!("R8-new native copy proofs: {exercised}/3 formats exercised; all-skipped is NOT qualified");
+    println!(
+        "R8-new native copy proofs: {exercised}/3 formats exercised; all-skipped is NOT qualified"
+    );
     assert_native_copy_family_qualified(exercised, "R8-new");
 }
 
@@ -589,6 +584,8 @@ fn r8_new_native_copy_round_trips_per_observed_format() {
 fn rg8_native_copy_round_trips_per_observed_format() {
     let formats = RG8_FORMATS.map(|entry| entry.0);
     let exercised = run_native_copy_family(&formats, &[127, 128], 2, "RG8");
-    println!("RG8 native copy proofs: {exercised}/4 formats exercised; all-skipped is NOT qualified");
+    println!(
+        "RG8 native copy proofs: {exercised}/4 formats exercised; all-skipped is NOT qualified"
+    );
     assert_native_copy_family_qualified(exercised, "RG8");
 }
