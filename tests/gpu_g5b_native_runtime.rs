@@ -1325,12 +1325,8 @@ fn timestamp_marker_graph() -> (GpuPreparedWorkGraph, GpuReadbackId) {
         .unwrap();
     builder
         .add_explicit_order(
-            GpuExplicitOrder::new(
-                &clear_id,
-                &end_id,
-                "end timestamp must follow bounded work",
-            )
-            .unwrap(),
+            GpuExplicitOrder::new(&clear_id, &end_id, "end timestamp must follow bounded work")
+                .unwrap(),
         )
         .unwrap();
     builder
