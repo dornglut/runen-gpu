@@ -1137,9 +1137,8 @@ mod tests {
 
             let depth_descriptor = GpuContextDescriptor::new(GpuCapabilityRequirements::new())
                 .require_format_role(format, GpuFormatRole::DepthStencil);
-            let error =
-                evaluate_candidate(&depth_descriptor, adapter_for(format, supported), true)
-                    .expect_err("R/RG8 color formats must not gain depth/stencil admission");
+            let error = evaluate_candidate(&depth_descriptor, adapter_for(format, supported), true)
+                .expect_err("R/RG8 color formats must not gain depth/stencil admission");
             assert_eq!(
                 error.category(),
                 GpuContextRequestErrorCategory::UnsupportedFormatRole,
@@ -1147,5 +1146,4 @@ mod tests {
             );
         }
     }
-
 }
