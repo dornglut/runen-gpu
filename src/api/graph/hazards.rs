@@ -303,7 +303,7 @@ pub(super) fn add_graph_explicit_orders(
     edges: &mut DependencyEdges,
 ) -> Result<(), GpuWorkGraphError> {
     for order in orders {
-        let (_, before_fragment, before_node, before) =
+        let (_, _, _, before) =
             resolve_graph_order_endpoint(graph_label, fragments, order.before())?;
         let (_, after_fragment, after_node, after) =
             resolve_graph_order_endpoint(graph_label, fragments, order.after())?;
@@ -331,7 +331,6 @@ pub(super) fn add_graph_explicit_orders(
             ));
         }
 
-        let _ = before_fragment;
         edges
             .entry((before, after))
             .or_default()
