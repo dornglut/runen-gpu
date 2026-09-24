@@ -96,6 +96,13 @@ pub(super) const fn compare_function(value: GpuCompareFunction) -> CompareFuncti
 pub(super) const fn texture_format(value: GpuTextureFormat) -> TextureFormat {
     match value {
         GpuTextureFormat::R8Unorm => TextureFormat::R8Unorm,
+        GpuTextureFormat::R8Snorm => TextureFormat::R8Snorm,
+        GpuTextureFormat::R8Uint => TextureFormat::R8Uint,
+        GpuTextureFormat::R8Sint => TextureFormat::R8Sint,
+        GpuTextureFormat::Rg8Unorm => TextureFormat::Rg8Unorm,
+        GpuTextureFormat::Rg8Snorm => TextureFormat::Rg8Snorm,
+        GpuTextureFormat::Rg8Uint => TextureFormat::Rg8Uint,
+        GpuTextureFormat::Rg8Sint => TextureFormat::Rg8Sint,
         GpuTextureFormat::Rgba8Unorm => TextureFormat::Rgba8Unorm,
         GpuTextureFormat::Rgba8UnormSrgb => TextureFormat::Rgba8UnormSrgb,
         GpuTextureFormat::Rgba8Snorm => TextureFormat::Rgba8Snorm,

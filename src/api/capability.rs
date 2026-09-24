@@ -211,6 +211,13 @@ impl GpuCapabilityProfile {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum GpuTextureFormat {
     R8Unorm,
+    R8Snorm,
+    R8Uint,
+    R8Sint,
+    Rg8Unorm,
+    Rg8Snorm,
+    Rg8Uint,
+    Rg8Sint,
     Rgba8Unorm,
     Rgba8UnormSrgb,
     Rgba8Snorm,

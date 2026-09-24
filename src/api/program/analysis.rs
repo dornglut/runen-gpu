@@ -622,7 +622,9 @@ fn storage_texture_access(access: StorageAccess) -> Result<GpuStorageTextureAcce
 
 fn storage_texture_format(format: StorageFormat) -> Result<GpuTextureFormat, &'static str> {
     match format {
-        StorageFormat::R8Unorm => Ok(GpuTextureFormat::R8Unorm),
+        StorageFormat::R8Unorm => Err(
+            "r8unorm storage textures require texture_formats_tier1, which RunenGPU does not normalize",
+        ),
         StorageFormat::Rgba8Unorm => Ok(GpuTextureFormat::Rgba8Unorm),
         StorageFormat::Rgba8Snorm => Ok(GpuTextureFormat::Rgba8Snorm),
         StorageFormat::Rgba8Uint => Ok(GpuTextureFormat::Rgba8Uint),
