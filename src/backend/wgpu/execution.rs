@@ -19,14 +19,14 @@ use crate::{
     GpuBufferInitialization, GpuBufferRegion, GpuBufferTextureLayout, GpuCapabilityAdmission,
     GpuClearOperation, GpuContext, GpuContextAffinity, GpuCopyExtent, GpuCopyOperation,
     GpuDataLayout, GpuDispatchSize, GpuExecutionLifecycleState, GpuExecutionPolicy,
-    GpuExecutionStats, GpuPipelineRealizationError, GpuPipelineRealizationErrorCategory,
-    GpuPreparedInitialContent, GpuPreparedSubmission, GpuPreparedSubmissionRejected,
-    GpuPreparedTextureData, GpuPreparedWorkGraph, GpuProgramBindingRealizationError,
-    GpuProgramBindingRealizationErrorCategory, GpuReadback, GpuReadbackBytes, GpuReadbackId,
-    GpuReadbackStatus, GpuRealizedBindGroup, GpuRealizedBuffer, GpuRealizedComputePipeline,
-    GpuRealizedQuerySet, GpuRealizedTexture, GpuResourceLabel, GpuResourceProvenance,
-    GpuRetainedResourceContinuity, GpuRuntimeBindingResource, GpuSubmission, GpuSubmissionFailure,
-    GpuSubmissionFailureKind, GpuSubmissionId, GpuSubmissionPreparationError,
+    GpuExecutionStats, GpuGraphExplicitOrder, GpuPipelineRealizationError,
+    GpuPipelineRealizationErrorCategory, GpuPreparedInitialContent, GpuPreparedSubmission,
+    GpuPreparedSubmissionRejected, GpuPreparedTextureData, GpuPreparedWorkGraph,
+    GpuProgramBindingRealizationError, GpuProgramBindingRealizationErrorCategory, GpuReadback,
+    GpuReadbackBytes, GpuReadbackId, GpuReadbackStatus, GpuRealizedBindGroup, GpuRealizedBuffer,
+    GpuRealizedComputePipeline, GpuRealizedQuerySet, GpuRealizedTexture, GpuResourceLabel,
+    GpuResourceProvenance, GpuRetainedResourceContinuity, GpuRuntimeBindingResource, GpuSubmission,
+    GpuSubmissionFailure, GpuSubmissionFailureKind, GpuSubmissionId, GpuSubmissionPreparationError,
     GpuSubmissionPreparationErrorKind, GpuSubmissionRejectionKind, GpuSubmissionRejectionReason,
     GpuSubmissionStatus, GpuSurfaceLeaseError, GpuSurfaceLeaseErrorCategory, GpuSurfaceLeaseId,
     GpuTextureAspect, GpuTextureCopyRegion, GpuTextureFormat, GpuTextureInitialization,
@@ -1239,6 +1239,27 @@ impl GpuContext {
     ) -> Result<GpuPreparedWorkGraph, GpuWorkGraphError> {
         let retained = self.backend.execution.retained.coverage_seed();
         GpuPreparedWorkGraph::prepare_with_retained_coverage(label, fragments, &retained)
+    }
+
+    /// Prepares immutable work plus graph-scope non-data ordering against this context
+    /// generation's completed retained coverage.
+    ///
+    /// Graph-scope ordering extends composition only. Typed resource causality,
+    /// initialization, capability preparation, execution encoding, and submission remain
+    /// owned by the same canonical RunenGPU paths as `prepare_work_graph`.
+    pub fn prepare_work_graph_with_orders(
+        &self,
+        label: GpuResourceLabel,
+        fragments: impl IntoIterator<Item = GpuWorkFragment>,
+        graph_orders: impl IntoIterator<Item = GpuGraphExplicitOrder>,
+    ) -> Result<GpuPreparedWorkGraph, GpuWorkGraphError> {
+        let retained = self.backend.execution.retained.coverage_seed();
+        GpuPreparedWorkGraph::prepare_with_retained_coverage_and_orders(
+            label,
+            fragments,
+            graph_orders,
+            &retained,
+        )
     }
 
     /// Returns current retained lifecycle facts for one logical storage identity.

@@ -3,11 +3,11 @@ use super::super::{
     GpuWorkResourceId,
 };
 use super::{
-    authoring::{GpuWorkFragment, GpuWorkNode},
+    authoring::{GpuGraphExplicitOrder, GpuWorkFragment, GpuWorkNode},
     composition::FragmentRelations,
     dependency::{GpuDependencyReason, GpuDependencyRegion, access_intersection},
     diagnostics::{GraphErrorOrigin, graph_error, graph_error_with_region},
-    identity::GpuPreparedWorkNodeId,
+    identity::{GpuPreparedWorkNodeId, GpuWorkNodeId},
 };
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -294,6 +294,105 @@ pub(super) fn add_explicit_orders(
         }
     }
     Ok(())
+}
+
+pub(super) fn add_graph_explicit_orders(
+    graph_label: &str,
+    fragments: &[GpuWorkFragment],
+    orders: &[GpuGraphExplicitOrder],
+    edges: &mut DependencyEdges,
+) -> Result<(), GpuWorkGraphError> {
+    for order in orders {
+        let (_, _, _, before) =
+            resolve_graph_order_endpoint(graph_label, fragments, order.before())?;
+        let (_, after_fragment, after_node, after) =
+            resolve_graph_order_endpoint(graph_label, fragments, order.after())?;
+
+        if dependency_data_path_exists(edges, before, after) {
+            return Err(graph_error(
+                "add graph-scope explicit GPU work order",
+                graph_label,
+                GraphErrorOrigin::new(Some(after_fragment), Some(after_node)),
+                Some(after),
+                None,
+                GpuWorkGraphCause::RedundantExplicitDataOrder,
+                "remove the graph-scope explicit edge and rely on typed access-derived dependency",
+            ));
+        }
+        if dependency_data_path_exists(edges, after, before) {
+            return Err(graph_error(
+                "add graph-scope explicit GPU work order",
+                graph_label,
+                GraphErrorOrigin::new(Some(after_fragment), Some(after_node)),
+                Some(after),
+                None,
+                GpuWorkGraphCause::ExplicitOrderConflict,
+                "orient the graph-scope non-data constraint consistently with inferred data order",
+            ));
+        }
+
+        edges
+            .entry((before, after))
+            .or_default()
+            .insert(GpuDependencyReason::ExplicitNonData {
+                reason: order.reason().to_string(),
+            });
+    }
+    Ok(())
+}
+
+fn resolve_graph_order_endpoint<'a>(
+    graph_label: &str,
+    fragments: &'a [GpuWorkFragment],
+    endpoint: &GpuWorkNodeId,
+) -> Result<
+    (
+        usize,
+        &'a GpuWorkFragment,
+        &'a GpuWorkNode,
+        GpuPreparedWorkNodeId,
+    ),
+    GpuWorkGraphError,
+> {
+    let mut matching_fragments = fragments
+        .iter()
+        .enumerate()
+        .filter(|(_, fragment)| endpoint.belongs_to(&fragment.identity));
+    let Some((fragment_index, fragment)) = matching_fragments.next() else {
+        return Err(graph_error(
+            "resolve graph-scope explicit GPU work-order fragment",
+            graph_label,
+            GraphErrorOrigin::new(None, None),
+            None,
+            None,
+            GpuWorkGraphCause::ForeignIdentity,
+            "include the endpoint's originating immutable fragment in the prepared graph",
+        ));
+    };
+    if matching_fragments.next().is_some() {
+        return Err(graph_error(
+            "resolve graph-scope explicit GPU work-order fragment",
+            graph_label,
+            GraphErrorOrigin::new(Some(fragment), None),
+            None,
+            None,
+            GpuWorkGraphCause::UnknownIdentity,
+            "include each originating immutable fragment identity at most once when graph-scope orders reference it",
+        ));
+    }
+    let Some(node) = fragment.nodes().iter().find(|node| node.id() == endpoint) else {
+        return Err(graph_error(
+            "resolve graph-scope explicit GPU work-order endpoint",
+            graph_label,
+            GraphErrorOrigin::new(Some(fragment), None),
+            None,
+            None,
+            GpuWorkGraphCause::UnknownIdentity,
+            "retain the authored endpoint node in its immutable fragment",
+        ));
+    };
+    let prepared = prepared_node_id(graph_label, fragment_index, fragment, node)?;
+    Ok((fragment_index, fragment, node, prepared))
 }
 
 fn dependency_data_path_exists(

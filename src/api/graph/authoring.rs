@@ -158,6 +158,57 @@ impl GpuExplicitOrder {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GpuGraphExplicitOrder {
+    before: GpuWorkNodeId,
+    after: GpuWorkNodeId,
+    reason: String,
+}
+
+impl GpuGraphExplicitOrder {
+    pub fn new(
+        before: &GpuWorkNodeId,
+        after: &GpuWorkNodeId,
+        reason: impl Into<String>,
+    ) -> Result<Self, GpuWorkAuthoringError> {
+        let reason = reason.into();
+        let reason = reason.trim();
+        if reason.is_empty() || before == after {
+            return Err(GpuWorkAuthoringError::invalid(
+                "construct graph-scope explicit GPU work order",
+                GpuWorkAuthoringErrorContext::new(None, None, Some(before.clone()), None, None),
+                GpuWorkAuthoringCause::InvalidExplicitOrder,
+                "provide distinct nodes from different fragments and a nonempty non-data reason",
+            ));
+        }
+        if Arc::ptr_eq(&before.fragment_identity, &after.fragment_identity) {
+            return Err(GpuWorkAuthoringError::invalid(
+                "construct graph-scope explicit GPU work order",
+                GpuWorkAuthoringErrorContext::new(None, None, Some(before.clone()), None, None),
+                GpuWorkAuthoringCause::InvalidExplicitOrder,
+                "use GpuExplicitOrder for nodes owned by the same fragment",
+            ));
+        }
+        Ok(Self {
+            before: before.clone(),
+            after: after.clone(),
+            reason: reason.to_string(),
+        })
+    }
+
+    pub fn before(&self) -> &GpuWorkNodeId {
+        &self.before
+    }
+
+    pub fn after(&self) -> &GpuWorkNodeId {
+        &self.after
+    }
+
+    pub fn reason(&self) -> &str {
+        &self.reason
+    }
+}
+
 /// Immutable checked work node. Operation kind is derived from `operation()`;
 /// there is no duplicate mutable kind field.
 ///
