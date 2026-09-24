@@ -8,6 +8,7 @@ use super::{
     GpuRuntimeBindingDeviceFacts, GpuRuntimeBindingResource, GpuRuntimeBindingValue,
     GpuRuntimeBufferBinding, GpuRuntimeTextureViewBinding,
 };
+use crate::api::texture_format::{self, GpuTextureScalarClass};
 use crate::{GpuBufferUsage, GpuFilterMode, GpuTextureFormat, GpuTextureUsage};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -278,14 +279,7 @@ fn validate_sampled_texture_structure(
         .kind()
         .texture_sample_class()
         .expect("sampled-texture declarations carry a sample class");
-    let structurally_compatible = match sample_class {
-        GpuTextureSampleClass::FloatFilterable | GpuTextureSampleClass::FloatUnfilterable => {
-            is_float_format(format)
-        }
-        GpuTextureSampleClass::Depth => format.is_depth(),
-        GpuTextureSampleClass::Sint => false,
-        GpuTextureSampleClass::Uint => format == GpuTextureFormat::R32Uint,
-    };
+    let structurally_compatible = sampled_texture_class_matches(format, sample_class);
     if !structurally_compatible {
         return Err(incompatible(
             declaration.key().to_string(),
@@ -462,8 +456,25 @@ fn validate_sampler(
     Ok(())
 }
 
-fn is_float_format(format: GpuTextureFormat) -> bool {
-    !format.is_depth() && format != GpuTextureFormat::R32Uint
+fn sampled_texture_class_matches(
+    format: GpuTextureFormat,
+    sample_class: GpuTextureSampleClass,
+) -> bool {
+    match sample_class {
+        GpuTextureSampleClass::FloatFilterable | GpuTextureSampleClass::FloatUnfilterable => {
+            !format.is_depth()
+                && texture_format::scalar_class(format) == GpuTextureScalarClass::Float
+        }
+        GpuTextureSampleClass::Depth => format.is_depth(),
+        GpuTextureSampleClass::Sint => {
+            !format.is_depth()
+                && texture_format::scalar_class(format) == GpuTextureScalarClass::Sint
+        }
+        GpuTextureSampleClass::Uint => {
+            !format.is_depth()
+                && texture_format::scalar_class(format) == GpuTextureScalarClass::Uint
+        }
+    }
 }
 
 fn incompatible(label: impl Into<String>, correction: &'static str) -> GpuProgramContractError {
@@ -473,4 +484,46 @@ fn incompatible(label: impl Into<String>, correction: &'static str) -> GpuProgra
         GpuProgramContractCause::RuntimeBindingIncompatible,
         correction,
     )
+}
+
+#[cfg(test)]
+mod r1_r_rg8_sampled_class_tests {
+    use super::*;
+
+    #[test]
+    fn normalized_scalar_class_drives_sampled_texture_structure() {
+        for (format, class) in [
+            (
+                GpuTextureFormat::R8Snorm,
+                GpuTextureSampleClass::FloatUnfilterable,
+            ),
+            (GpuTextureFormat::R8Uint, GpuTextureSampleClass::Uint),
+            (GpuTextureFormat::R8Sint, GpuTextureSampleClass::Sint),
+            (
+                GpuTextureFormat::Rg8Unorm,
+                GpuTextureSampleClass::FloatUnfilterable,
+            ),
+            (
+                GpuTextureFormat::Rg8Snorm,
+                GpuTextureSampleClass::FloatUnfilterable,
+            ),
+            (GpuTextureFormat::Rg8Uint, GpuTextureSampleClass::Uint),
+            (GpuTextureFormat::Rg8Sint, GpuTextureSampleClass::Sint),
+            (GpuTextureFormat::R32Uint, GpuTextureSampleClass::Uint),
+            (GpuTextureFormat::R32Sint, GpuTextureSampleClass::Sint),
+        ] {
+            assert!(
+                sampled_texture_class_matches(format, class),
+                "{format:?} {class:?}"
+            );
+        }
+        assert!(!sampled_texture_class_matches(
+            GpuTextureFormat::R8Uint,
+            GpuTextureSampleClass::Sint
+        ));
+        assert!(!sampled_texture_class_matches(
+            GpuTextureFormat::Rg8Sint,
+            GpuTextureSampleClass::Uint
+        ));
+    }
 }

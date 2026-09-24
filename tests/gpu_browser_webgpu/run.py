@@ -91,7 +91,9 @@ const done = arguments[arguments.length - 1];
     if (typeof wasm.runengpu_browser_start !== "function" ||
         typeof wasm.runengpu_browser_poll !== "function" ||
         typeof wasm.runengpu_browser_rgba16_exercised_mask !== "function" ||
-        typeof wasm.runengpu_browser_rgba8_exercised_mask !== "function") {
+        typeof wasm.runengpu_browser_rgba8_exercised_mask !== "function" ||
+        typeof wasm.runengpu_browser_r8_new_exercised_mask !== "function" ||
+        typeof wasm.runengpu_browser_rg8_exercised_mask !== "function") {
       throw new Error("RunenGPU browser proof control exports are absent");
     }
     wasm.runengpu_browser_start();
@@ -102,6 +104,8 @@ const done = arguments[arguments.length - 1];
           ok: true,
           rgba16Mask: wasm.runengpu_browser_rgba16_exercised_mask(),
           rgba8Mask: wasm.runengpu_browser_rgba8_exercised_mask(),
+          r8NewMask: wasm.runengpu_browser_r8_new_exercised_mask(),
+          rg8Mask: wasm.runengpu_browser_rg8_exercised_mask(),
         });
         return;
       }
@@ -122,61 +126,84 @@ def report_format_family(
     value: dict[str, object],
     mask_key: str,
     family: str,
-    format_names: tuple[str, str, str],
+    format_names: tuple[str, ...],
     widths: str,
 ) -> None:
+    if not format_names or len(format_names) > 32:
+        raise ValueError("format reporter requires 1..32 names")
     mask = value.get(mask_key)
-    if type(mask) is not int or mask < 0 or mask > 7:
+    full_mask = (1 << len(format_names)) - 1
+    if type(mask) is not int or mask < 0 or mask > full_mask:
         raise RuntimeError(
             f"actual-browser {family} proof did not report valid execution evidence: {mask!r}"
         )
     for index, format_name in enumerate(format_names):
         if mask & (1 << index):
-            print(
-                f"RunenGPU actual-browser {format_name}: EXERCISED ({widths} copy round trips)"
-            )
+            print(f"RunenGPU actual-browser {format_name}: EXERCISED ({widths} copy round trips)")
         else:
-            print(
-                f"RunenGPU actual-browser {format_name}: SKIPPED (copy roles not both advertised)"
-            )
+            print(f"RunenGPU actual-browser {format_name}: SKIPPED (copy roles not both advertised)")
     if mask == 0:
-        message = f"RunenGPU actual-browser {family}: NOT QUALIFIED (all three formats skipped)"
+        message = (
+            f"RunenGPU actual-browser {family}: NOT QUALIFIED "
+            f"(all {len(format_names)} formats skipped)"
+        )
         print(message)
         raise RuntimeError(message)
 
 
 def verify_format_reporter() -> None:
-    """Exercise fail-closed qualification through the runner's existing CI invocation."""
-    names = ("Rgba8Snorm", "Rgba8Uint", "Rgba8Sint")
-    for mask, expected_exercised in ((0, 0), (1, 1), (5, 2), (7, 3)):
-        captured = io.StringIO()
-        failed = False
-        try:
-            with contextlib.redirect_stdout(captured):
-                report_format_family({"mask": mask}, "mask", "RGBA8", names, "63px and 64px")
-        except RuntimeError as error:
-            if mask != 0 or "NOT QUALIFIED" not in str(error):
-                raise AssertionError(f"unexpected reporter failure for mask {mask}") from error
-            failed = True
-        if failed != (mask == 0):
-            raise AssertionError(f"incorrect reporter qualification for mask {mask}")
-        transcript = captured.getvalue()
-        if transcript.count(": EXERCISED (") != expected_exercised:
-            raise AssertionError(f"incorrect exercised evidence for mask {mask}")
-        if transcript.count(": SKIPPED (") != 3 - expected_exercised:
-            raise AssertionError(f"incorrect skipped evidence for mask {mask}")
-        if ("NOT QUALIFIED" in transcript) != (mask == 0):
-            raise AssertionError(f"incorrect not-qualified evidence for mask {mask}")
+    """CI-invoked zero/partial/full/out-of-range regression for 3 and 4 formats."""
+    families = (
+        ("RGBA8", ("Rgba8Snorm", "Rgba8Uint", "Rgba8Sint"), (0, 1, 5, 7)),
+        ("RGBA16", ("Rgba16Uint", "Rgba16Sint", "Rgba16Float"), (0, 1, 5, 7)),
+        ("R8-new", ("R8Snorm", "R8Uint", "R8Sint"), (0, 1, 5, 7)),
+        ("RG8", ("Rg8Unorm", "Rg8Snorm", "Rg8Uint", "Rg8Sint"), (0, 1, 9, 15)),
+    )
+    for family, names, masks in families:
+        full_mask = (1 << len(names)) - 1
+        for mask in masks:
+            captured = io.StringIO()
+            failed = False
+            try:
+                with contextlib.redirect_stdout(captured):
+                    report_format_family({"mask": mask}, "mask", family, names, "test widths")
+            except RuntimeError as error:
+                if mask != 0 or "NOT QUALIFIED" not in str(error):
+                    raise AssertionError(
+                        f"unexpected reporter failure for {family} mask {mask}"
+                    ) from error
+                failed = True
+            if failed != (mask == 0):
+                raise AssertionError(f"incorrect reporter qualification for {family} mask {mask}")
+            transcript = captured.getvalue()
+            count = mask.bit_count()
+            if transcript.count(": EXERCISED (") != count:
+                raise AssertionError(f"incorrect exercised count for {family} mask {mask}")
+            if transcript.count(": SKIPPED (") != len(names) - count:
+                raise AssertionError(f"incorrect skipped count for {family} mask {mask}")
+            if ("NOT QUALIFIED" in transcript) != (mask == 0):
+                raise AssertionError(
+                    f"incorrect not-qualified evidence for {family} mask {mask}"
+                )
 
-    for invalid in ({}, {"mask": -1}, {"mask": 8}, {"mask": "1"}, {"mask": True}):
-        try:
-            report_format_family(invalid, "mask", "RGBA8", names, "63px and 64px")
-        except RuntimeError as error:
-            if "valid execution evidence" not in str(error):
-                raise AssertionError(f"incorrect invalid-mask failure: {invalid!r}") from error
-        else:
-            raise AssertionError(f"invalid mask was accepted: {invalid!r}")
-    print("RunenGPU actual-browser RGBA reporter regression: PASS")
+        for invalid in (
+            {},
+            {"mask": -1},
+            {"mask": full_mask + 1},
+            {"mask": "1"},
+            {"mask": True},
+        ):
+            try:
+                with contextlib.redirect_stdout(io.StringIO()):
+                    report_format_family(invalid, "mask", family, names, "test widths")
+            except RuntimeError as error:
+                if "valid execution evidence" not in str(error):
+                    raise AssertionError(
+                        f"incorrect invalid-mask failure for {family}: {invalid!r}"
+                    ) from error
+            else:
+                raise AssertionError(f"invalid {family} mask was accepted: {invalid!r}")
+    print("RunenGPU actual-browser format reporter regression: PASS")
 
 
 def main() -> int:
@@ -289,6 +316,20 @@ def main() -> int:
             "RGBA8",
             ("Rgba8Snorm", "Rgba8Uint", "Rgba8Sint"),
             "63px and 64px",
+        )
+        report_format_family(
+            value,
+            "r8NewMask",
+            "R8-new",
+            ("R8Snorm", "R8Uint", "R8Sint"),
+            "255px and 256px",
+        )
+        report_format_family(
+            value,
+            "rg8Mask",
+            "RG8",
+            ("Rg8Unorm", "Rg8Snorm", "Rg8Uint", "Rg8Sint"),
+            "127px and 128px",
         )
         print("RunenGPU actual-browser WebGPU conformance: PASS")
         return 0

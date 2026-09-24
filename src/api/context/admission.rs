@@ -1068,4 +1068,82 @@ mod tests {
             .is_ok()
         );
     }
+    #[test]
+    fn r_rg8_format_role_admission_preserves_supplied_positive_and_negative_facts() {
+        let formats = [
+            GpuTextureFormat::R8Snorm,
+            GpuTextureFormat::R8Uint,
+            GpuTextureFormat::R8Sint,
+            GpuTextureFormat::Rg8Unorm,
+            GpuTextureFormat::Rg8Snorm,
+            GpuTextureFormat::Rg8Uint,
+            GpuTextureFormat::Rg8Sint,
+        ];
+        let roles = [
+            GpuFormatRole::Sampled,
+            GpuFormatRole::Filterable,
+            GpuFormatRole::StorageRead,
+            GpuFormatRole::StorageWrite,
+            GpuFormatRole::ColorAttachment,
+            GpuFormatRole::CopySource,
+            GpuFormatRole::CopyDestination,
+        ];
+        let supported = GpuTextureFormatCapabilities {
+            sampled: true,
+            filterable: true,
+            storage_read: true,
+            storage_write: true,
+            color_attachment: true,
+            depth_stencil: false,
+            copy_source: true,
+            copy_destination: true,
+            block_dimensions: Some((17, 19)),
+            block_copy_size: Some(999),
+        };
+
+        let adapter_for = |format, facts| {
+            GpuAdapterFacts::new(
+                GpuBackendFamily::Vulkan,
+                GpuAdapterClass::Discrete,
+                GpuSoftwareStatus::Hardware,
+                GpuFallbackStatus::ConfirmedNotFallback,
+                GpuCapabilities::from_normalized_facts([], limits(), [(format, facts)]),
+                GpuAdapterLimits::new(limits()),
+                alignments(),
+            )
+        };
+
+        for format in formats {
+            for role in roles {
+                let descriptor = GpuContextDescriptor::new(GpuCapabilityRequirements::new())
+                    .require_format_role(format, role);
+                evaluate_candidate(&descriptor, adapter_for(format, supported), true)
+                    .unwrap_or_else(|error| {
+                        panic!("{format:?} supplied {role:?} support must admit: {error}")
+                    });
+
+                let error = evaluate_candidate(
+                    &descriptor,
+                    adapter_for(format, GpuTextureFormatCapabilities::none()),
+                    true,
+                )
+                .expect_err("an absent supplied format role must reject");
+                assert_eq!(
+                    error.category(),
+                    GpuContextRequestErrorCategory::UnsupportedFormatRole,
+                    "{format:?} {role:?}"
+                );
+            }
+
+            let depth_descriptor = GpuContextDescriptor::new(GpuCapabilityRequirements::new())
+                .require_format_role(format, GpuFormatRole::DepthStencil);
+            let error = evaluate_candidate(&depth_descriptor, adapter_for(format, supported), true)
+                .expect_err("R/RG8 color formats must not gain depth/stencil admission");
+            assert_eq!(
+                error.category(),
+                GpuContextRequestErrorCategory::UnsupportedFormatRole,
+                "{format:?}"
+            );
+        }
+    }
 }
