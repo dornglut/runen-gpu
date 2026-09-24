@@ -1254,7 +1254,6 @@ fn native_zero_dispatch_timestamp_writes_and_resolve_execute_without_extra_stagi
     assert_eq!(stats.pending_readbacks(), 0);
 }
 
-
 fn timestamp_marker_graph() -> (GpuPreparedWorkGraph, GpuReadbackId) {
     let mut allocator = GpuWorkResourceIdAllocator::new();
     let query_set = timestamp_query_set(&mut allocator, "native timestamp marker query set");

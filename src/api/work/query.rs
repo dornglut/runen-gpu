@@ -287,10 +287,10 @@ mod tests {
         GpuBufferDescriptor, GpuBufferInitialization, GpuBufferRange, GpuBufferRegion,
         GpuBufferUsage, GpuBufferUsages, GpuCapabilityFeature, GpuCapabilityRequirement,
         GpuCapabilityRequirements, GpuClearOperation, GpuDependencyReason, GpuExecutionPreference,
-        GpuExplicitOrder, GpuMemoryIntent, GpuQuerySetDescriptor, GpuReconstruction,
-        GpuResourceCommon, GpuResourceLabel, GpuResourceLifetime, GpuResourceProvenance,
-        GpuResourceRef, GpuWorkFragmentBuilder, GpuWorkOperation, GpuWorkResourceIdAllocator,
-        GpuPreparedWorkGraph,
+        GpuExplicitOrder, GpuMemoryIntent, GpuPreparedWorkGraph, GpuQuerySetDescriptor,
+        GpuReconstruction, GpuResourceCommon, GpuResourceLabel, GpuResourceLifetime,
+        GpuResourceProvenance, GpuResourceRef, GpuWorkFragmentBuilder, GpuWorkOperation,
+        GpuWorkResourceIdAllocator,
     };
 
     fn query_set(count: u32) -> GpuQuerySetHandle {
