@@ -134,18 +134,16 @@ impl GpuTimestampMarkerOperation {
                 source,
             )
         })?;
-        let access =
-            GpuQueryAccess::new(query_set, range, GpuQueryAccessKind::WriteTimestamp).map_err(
-                |source| {
-                    GpuWorkOperationError::from_access(
-                        "construct GPU timestamp marker access",
-                        query_set.descriptor().common().label().as_str(),
-                        GpuWorkOperationCause::InvalidQueryRange,
-                        "retain a checked one-slot timestamp marker write access",
-                        source,
-                    )
-                },
-            )?;
+        let access = GpuQueryAccess::new(query_set, range, GpuQueryAccessKind::WriteTimestamp)
+            .map_err(|source| {
+                GpuWorkOperationError::from_access(
+                    "construct GPU timestamp marker access",
+                    query_set.descriptor().common().label().as_str(),
+                    GpuWorkOperationCause::InvalidQueryRange,
+                    "retain a checked one-slot timestamp marker write access",
+                    source,
+                )
+            })?;
         Ok(Self {
             query_set: query_set.clone(),
             query_index,
