@@ -178,11 +178,7 @@ impl GpuTextureSubresourceRange {
             descriptor.mip_level_count(),
             0,
             layer_count,
-            if descriptor.format().is_depth() {
-                GpuTextureAspect::DepthOnly
-            } else {
-                GpuTextureAspect::Color
-            },
+            super::texture_format::whole_aspect(descriptor.format()),
         )
         .map_err(|_| {
             texture_access_error(
@@ -248,17 +244,7 @@ fn validate_texture_range(
             "keep mip and array-layer coverage inside the parent texture descriptor",
         ));
     }
-    let aspect_valid = if descriptor.format().is_depth() {
-        matches!(
-            range.aspect(),
-            GpuTextureAspect::All | GpuTextureAspect::DepthOnly
-        )
-    } else {
-        matches!(
-            range.aspect(),
-            GpuTextureAspect::All | GpuTextureAspect::Color
-        )
-    };
+    let aspect_valid = super::texture_format::supports_aspect(descriptor.format(), range.aspect());
     if !aspect_valid {
         return Err(texture_access_error(
             texture,
@@ -288,7 +274,11 @@ fn aspects_overlap(
     right: GpuTextureAspect,
     parent: GpuTextureAspect,
 ) -> bool {
-    canonical_aspect(left, parent) == canonical_aspect(right, parent)
+    let left = canonical_aspect(left, parent);
+    let right = canonical_aspect(right, parent);
+    left == right
+        || (parent == GpuTextureAspect::All
+            && (left == GpuTextureAspect::All || right == GpuTextureAspect::All))
 }
 
 fn aspect_contains(
@@ -296,7 +286,9 @@ fn aspect_contains(
     inner: GpuTextureAspect,
     parent: GpuTextureAspect,
 ) -> bool {
-    canonical_aspect(outer, parent) == canonical_aspect(inner, parent)
+    let outer = canonical_aspect(outer, parent);
+    let inner = canonical_aspect(inner, parent);
+    outer == inner || (parent == GpuTextureAspect::All && outer == GpuTextureAspect::All)
 }
 
 fn canonical_aspect(value: GpuTextureAspect, parent: GpuTextureAspect) -> GpuTextureAspect {
@@ -304,6 +296,25 @@ fn canonical_aspect(value: GpuTextureAspect, parent: GpuTextureAspect) -> GpuTex
         parent
     } else {
         value
+    }
+}
+
+fn intersect_aspects(
+    left: GpuTextureAspect,
+    right: GpuTextureAspect,
+    parent: GpuTextureAspect,
+) -> Option<GpuTextureAspect> {
+    if !aspects_overlap(left, right, parent) {
+        return None;
+    }
+    let left = canonical_aspect(left, parent);
+    let right = canonical_aspect(right, parent);
+    if left == GpuTextureAspect::All {
+        Some(right)
+    } else if right == GpuTextureAspect::All || left == right {
+        Some(left)
+    } else {
+        None
     }
 }
 
@@ -316,14 +327,9 @@ fn intersect_texture_ranges(
     let mip_end = left.mip_end().min(right.mip_end());
     let layer_start = left.base_array_layer().max(right.base_array_layer());
     let layer_end = left.layer_end().min(right.layer_end());
-    let parent_aspect = if texture.descriptor().format().is_depth() {
-        GpuTextureAspect::DepthOnly
-    } else {
-        GpuTextureAspect::Color
-    };
-    let left_aspect = canonical_aspect(left.aspect(), parent_aspect);
-    let right_aspect = canonical_aspect(right.aspect(), parent_aspect);
-    if mip_start >= mip_end || layer_start >= layer_end || left_aspect != right_aspect {
+    let parent_aspect = super::texture_format::whole_aspect(texture.descriptor().format());
+    let aspect = intersect_aspects(left.aspect(), right.aspect(), parent_aspect);
+    if mip_start >= mip_end || layer_start >= layer_end || aspect.is_none() {
         return Err(texture_access_error(
             texture,
             GpuAccessCause::InvalidViewIntersection,
@@ -336,7 +342,7 @@ fn intersect_texture_ranges(
         mip_end - mip_start,
         layer_start,
         layer_end - layer_start,
-        left_aspect,
+        aspect.expect("checked aspect intersection"),
     )
     .map_err(|_| {
         texture_access_error(

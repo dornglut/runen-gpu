@@ -22,6 +22,7 @@ impl GpuPresentOperation {
                 GpuTextureAspect::All | GpuTextureAspect::Color
             )
             || source.parent_texture().descriptor().format().is_depth()
+            || source.parent_texture().descriptor().format().is_stencil()
             || source.parent_texture().descriptor().sample_count() != 1
         {
             return Err(GpuWorkOperationError::invalid(

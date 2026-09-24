@@ -50,7 +50,7 @@ impl GpuBindingKind {
         format: GpuTextureFormat,
         view_dimension: GpuTextureViewDimension,
     ) -> Result<Self, GpuProgramContractError> {
-        if format.is_depth()
+        if (format.is_depth() || format.is_stencil())
             || matches!(
                 view_dimension,
                 GpuTextureViewDimension::Cube | GpuTextureViewDimension::CubeArray
@@ -60,7 +60,7 @@ impl GpuBindingKind {
                 "construct GPU storage-texture binding",
                 format!("format={format:?}, view_dimension={view_dimension:?}"),
                 GpuProgramContractCause::BindingDeclarationInvalid,
-                "use a non-depth format and D1, D2, D2Array, or D3 view dimension",
+                "use a color format and D1, D2, D2Array, or D3 view dimension",
             ));
         }
         Ok(Self(GpuBindingKindInner::StorageTexture {

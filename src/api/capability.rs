@@ -255,6 +255,10 @@ impl GpuTextureFormat {
         super::texture_format::is_depth(self)
     }
 
+    pub const fn is_stencil(self) -> bool {
+        super::texture_format::is_stencil(self)
+    }
+
     pub const fn is_srgb(self) -> bool {
         super::texture_format::is_srgb(self)
     }

@@ -786,11 +786,7 @@ pub(super) fn normalize_u32_intervals(mut intervals: Vec<(u32, u32)>) -> Vec<(u3
 }
 
 pub(super) fn texture_aspect(texture: &GpuTextureHandle) -> GpuTextureAspect {
-    if texture.descriptor().format().is_depth() {
-        GpuTextureAspect::DepthOnly
-    } else {
-        GpuTextureAspect::Color
-    }
+    super::super::texture_format::whole_aspect(texture.descriptor().format())
 }
 
 pub(super) fn canonical_texture_aspect(

@@ -71,11 +71,9 @@ fn same_render_pass_subresource(left: &GpuResourceAccess, right: &GpuResourceAcc
             if left.resource_identity() != right.resource_identity() {
                 return false;
             }
-            let parent_aspect = if left.normalized_texture().descriptor().format().is_depth() {
-                GpuTextureAspect::DepthOnly
-            } else {
-                GpuTextureAspect::Color
-            };
+            let parent_aspect = super::texture_format::whole_aspect(
+                left.normalized_texture().descriptor().format(),
+            );
             left.normalized_subresources()
                 .overlaps(right.normalized_subresources(), parent_aspect)
         }

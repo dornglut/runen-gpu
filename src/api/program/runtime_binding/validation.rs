@@ -9,7 +9,9 @@ use super::{
     GpuRuntimeBufferBinding, GpuRuntimeTextureViewBinding,
 };
 use crate::api::texture_format::{self, GpuTextureScalarClass};
-use crate::{GpuBufferUsage, GpuFilterMode, GpuTextureFormat, GpuTextureUsage};
+use crate::{
+    GpuBufferUsage, GpuFilterMode, GpuTextureAspect, GpuTextureFormat, GpuTextureUsage,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GpuValidatedBindGroupBindings {
@@ -258,7 +260,7 @@ fn validate_sampled_texture_structure(
     declaration: &GpuBindingDeclaration,
     binding: &GpuRuntimeTextureViewBinding,
 ) -> Result<(), GpuProgramContractError> {
-    let (format, sample_count) = validate_texture_view_shape(declaration, binding)?;
+    let (format, sample_count, aspect) = validate_texture_view_shape(declaration, binding)?;
     let texture = binding.handle().descriptor().texture().descriptor();
     if !texture.usages().contains(GpuTextureUsage::Sampled) {
         return Err(incompatible(
@@ -279,7 +281,7 @@ fn validate_sampled_texture_structure(
         .kind()
         .texture_sample_class()
         .expect("sampled-texture declarations carry a sample class");
-    let structurally_compatible = sampled_texture_class_matches(format, sample_class);
+    let structurally_compatible = sampled_texture_class_matches(format, aspect, sample_class);
     if !structurally_compatible {
         return Err(incompatible(
             declaration.key().to_string(),
@@ -325,7 +327,7 @@ fn validate_storage_texture_structure(
     declaration: &GpuBindingDeclaration,
     binding: &GpuRuntimeTextureViewBinding,
 ) -> Result<(), GpuProgramContractError> {
-    let (format, sample_count) = validate_texture_view_shape(declaration, binding)?;
+    let (format, sample_count, _aspect) = validate_texture_view_shape(declaration, binding)?;
     if sample_count != 1 {
         return Err(incompatible(
             declaration.key().to_string(),
@@ -408,7 +410,7 @@ fn validate_storage_texture_device(
 fn validate_texture_view_shape(
     declaration: &GpuBindingDeclaration,
     binding: &GpuRuntimeTextureViewBinding,
-) -> Result<(GpuTextureFormat, u32), GpuProgramContractError> {
+) -> Result<(GpuTextureFormat, u32, GpuTextureAspect), GpuProgramContractError> {
     let expected_dimension = declaration
         .kind()
         .texture_view_dimension()
@@ -422,10 +424,15 @@ fn validate_texture_view_shape(
     }
 
     let texture = view.texture().descriptor();
-    Ok((
-        view.format().unwrap_or(texture.format()),
-        texture.sample_count(),
-    ))
+    let format = view.format().unwrap_or(texture.format());
+    let aspect = texture_format::canonical_aspect(format, view.subresources().aspect())
+        .ok_or_else(|| {
+            incompatible(
+                declaration.key().to_string(),
+                "bind a texture view whose selected aspect is represented by the normalized format",
+            )
+        })?;
+    Ok((format, texture.sample_count(), aspect))
 }
 
 fn validate_sampler(
@@ -458,22 +465,32 @@ fn validate_sampler(
 
 fn sampled_texture_class_matches(
     format: GpuTextureFormat,
+    aspect: GpuTextureAspect,
     sample_class: GpuTextureSampleClass,
 ) -> bool {
-    match sample_class {
-        GpuTextureSampleClass::FloatFilterable | GpuTextureSampleClass::FloatUnfilterable => {
-            !format.is_depth()
-                && texture_format::scalar_class(format) == GpuTextureScalarClass::Float
-        }
-        GpuTextureSampleClass::Depth => format.is_depth(),
-        GpuTextureSampleClass::Sint => {
-            !format.is_depth()
-                && texture_format::scalar_class(format) == GpuTextureScalarClass::Sint
-        }
-        GpuTextureSampleClass::Uint => {
-            !format.is_depth()
-                && texture_format::scalar_class(format) == GpuTextureScalarClass::Uint
-        }
+    if !texture_format::supports_aspect(format, aspect) {
+        return false;
+    }
+    sampled_aspect_class_matches(texture_format::scalar_class(format), aspect, sample_class)
+}
+
+fn sampled_aspect_class_matches(
+    scalar_class: GpuTextureScalarClass,
+    aspect: GpuTextureAspect,
+    sample_class: GpuTextureSampleClass,
+) -> bool {
+    match aspect {
+        GpuTextureAspect::Color => match sample_class {
+            GpuTextureSampleClass::FloatFilterable | GpuTextureSampleClass::FloatUnfilterable => {
+                scalar_class == GpuTextureScalarClass::Float
+            }
+            GpuTextureSampleClass::Sint => scalar_class == GpuTextureScalarClass::Sint,
+            GpuTextureSampleClass::Uint => scalar_class == GpuTextureScalarClass::Uint,
+            GpuTextureSampleClass::Depth => false,
+        },
+        GpuTextureAspect::DepthOnly => sample_class == GpuTextureSampleClass::Depth,
+        GpuTextureAspect::StencilOnly => sample_class == GpuTextureSampleClass::Uint,
+        GpuTextureAspect::All => false,
     }
 }
 
@@ -525,17 +542,54 @@ mod plain_color_sampled_class_tests {
             (GpuTextureFormat::R32Sint, GpuTextureSampleClass::Sint),
         ] {
             assert!(
-                sampled_texture_class_matches(format, class),
+                sampled_texture_class_matches(format, GpuTextureAspect::Color, class),
                 "{format:?} {class:?}"
             );
         }
         assert!(!sampled_texture_class_matches(
             GpuTextureFormat::R8Uint,
+            GpuTextureAspect::Color,
             GpuTextureSampleClass::Sint
         ));
         assert!(!sampled_texture_class_matches(
             GpuTextureFormat::Rg8Sint,
+            GpuTextureAspect::Color,
             GpuTextureSampleClass::Uint
         ));
     }
+
+    #[test]
+    fn sampled_texture_class_is_selected_by_view_aspect() {
+        assert!(sampled_texture_class_matches(
+            GpuTextureFormat::Depth32Float,
+            GpuTextureAspect::DepthOnly,
+            GpuTextureSampleClass::Depth,
+        ));
+        assert!(!sampled_texture_class_matches(
+            GpuTextureFormat::Depth32Float,
+            GpuTextureAspect::DepthOnly,
+            GpuTextureSampleClass::FloatUnfilterable,
+        ));
+        assert!(sampled_aspect_class_matches(
+            GpuTextureScalarClass::Uint,
+            GpuTextureAspect::StencilOnly,
+            GpuTextureSampleClass::Uint,
+        ));
+        assert!(!sampled_aspect_class_matches(
+            GpuTextureScalarClass::Uint,
+            GpuTextureAspect::StencilOnly,
+            GpuTextureSampleClass::Depth,
+        ));
+        assert!(!sampled_texture_class_matches(
+            GpuTextureFormat::R8Uint,
+            GpuTextureAspect::StencilOnly,
+            GpuTextureSampleClass::Uint,
+        ));
+        assert!(!sampled_texture_class_matches(
+            GpuTextureFormat::Depth32Float,
+            GpuTextureAspect::All,
+            GpuTextureSampleClass::Depth,
+        ));
+    }
+
 }
