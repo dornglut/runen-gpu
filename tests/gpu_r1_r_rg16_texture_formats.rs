@@ -223,7 +223,7 @@ fn r_rg16_storage_texels_fail_closed_without_normalized_tier1() {
                 GpuProgramSourceProvenance::new("r1-r-rg16-storage-tier-test", None).unwrap(),
             )
             .unwrap();
-        let error = GpuProgramDescriptor::new(
+        GpuProgramDescriptor::new(
             source,
             [GpuEntryPointName::new("inspect").unwrap()],
             std::iter::empty::<GpuBindingLayoutRefinement>(),
