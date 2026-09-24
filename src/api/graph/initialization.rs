@@ -1116,6 +1116,9 @@ fn operation_initialization(
                 "buffer zero",
             ));
         }
+        GpuWorkOperation::TimestampMarker(marker) => {
+            effect(&GpuResourceAccess::Query(marker.access().clone()));
+        }
         GpuWorkOperation::Resolve(resolve) => {
             require(&GpuResourceAccess::Query(resolve.source_access().clone()));
             effect(&GpuResourceAccess::Buffer(

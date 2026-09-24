@@ -427,6 +427,11 @@ enum PreparedExecutionOperation {
         staging: TextureStagingLayout,
         payload: PreparedGpuData<TransferData>,
     },
+    TimestampMarker {
+        observability: PreparedExecutionObservability,
+        query_set: GpuRealizedQuerySet,
+        query_index: u32,
+    },
     Compute {
         observability: PreparedExecutionObservability,
         pipeline: GpuRealizedComputePipeline,
@@ -1537,6 +1542,22 @@ async fn prepare_execution_plan(
                     .await?,
                 );
             }
+            GpuWorkOperation::TimestampMarker(marker) => {
+                let observability = PreparedExecutionObservability::new(
+                    prepared.fragment_label().clone(),
+                    prepared.node().label().clone(),
+                    prepared.node().provenance().clone(),
+                );
+                operations.push(PreparedExecutionOperation::TimestampMarker {
+                    observability,
+                    query_set: realized_query_set(
+                        context,
+                        &mut query_set_cache,
+                        marker.query_set(),
+                    )?,
+                    query_index: marker.query_index(),
+                });
+            }
             GpuWorkOperation::Render(render) => {
                 let observability = PreparedExecutionObservability::new(
                     prepared.fragment_label().clone(),
@@ -2621,6 +2642,21 @@ fn encode_submit_and_register(
                     )
                     .map_err(submission_pipeline_failure)?
                     .map_err(submission_program_binding_failure)?;
+            }
+            PreparedExecutionOperation::TimestampMarker {
+                observability,
+                query_set,
+                query_index,
+            } => {
+                let debug_label = observability.debug_label();
+                let _pass = encoder.begin_compute_pass(&ComputePassDescriptor {
+                    label: Some(debug_label.as_str()),
+                    timestamp_writes: Some(ComputePassTimestampWrites {
+                        query_set: &query_set.record.object,
+                        beginning_of_pass_write_index: Some(*query_index),
+                        end_of_pass_write_index: None,
+                    }),
+                });
             }
             PreparedExecutionOperation::Render {
                 observability,
