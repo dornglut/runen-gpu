@@ -57,13 +57,13 @@ impl GpuTextureAspectClass {
     }
 
     const fn texture_to_texture_copy_aspect_valid(self, aspect: GpuTextureAspect) -> bool {
-        match (self, self.canonical(aspect)) {
+        matches!(
+            (self, self.canonical(aspect)),
             (Self::Color, Some(GpuTextureAspect::Color))
-            | (Self::Depth, Some(GpuTextureAspect::DepthOnly))
-            | (Self::Stencil, Some(GpuTextureAspect::StencilOnly))
-            | (Self::DepthStencil, Some(GpuTextureAspect::All)) => true,
-            _ => false,
-        }
+                | (Self::Depth, Some(GpuTextureAspect::DepthOnly))
+                | (Self::Stencil, Some(GpuTextureAspect::StencilOnly))
+                | (Self::DepthStencil, Some(GpuTextureAspect::All))
+        )
     }
 }
 
