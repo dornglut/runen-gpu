@@ -232,7 +232,7 @@ fn prepared_texture_data_uses_4_8_and_16_byte_block_rows_through_public_descript
     const WIDTH: u32 = 3;
     const HEIGHT: u32 = 2;
 
-    for (name, format, bytes_per_texel) in [
+    for (name, format, copy_block_bytes) in [
         ("r32sint", GpuTextureFormat::R32Sint, 4_u32),
         ("rg32float", GpuTextureFormat::Rg32Float, 8_u32),
         ("rgba32sint", GpuTextureFormat::Rgba32Sint, 16_u32),
@@ -241,7 +241,7 @@ fn prepared_texture_data_uses_4_8_and_16_byte_block_rows_through_public_descript
         let extent =
             GpuTextureExtent::new(&resource_label, GpuTextureDimension::D2, WIDTH, HEIGHT, 1)
                 .unwrap();
-        let bytes_per_row = WIDTH * bytes_per_texel;
+        let bytes_per_row = WIDTH * copy_block_bytes;
         let byte_len = (bytes_per_row * HEIGHT) as usize;
         let data = PreparedGpuData::<TransferData>::from_pod_transfer(
             format!("{name} bytes"),
