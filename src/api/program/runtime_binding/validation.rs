@@ -487,7 +487,7 @@ fn incompatible(label: impl Into<String>, correction: &'static str) -> GpuProgra
 }
 
 #[cfg(test)]
-mod r1_r_rg8_sampled_class_tests {
+mod plain_color_sampled_class_tests {
     use super::*;
 
     #[test]
@@ -509,6 +509,18 @@ mod r1_r_rg8_sampled_class_tests {
             ),
             (GpuTextureFormat::Rg8Uint, GpuTextureSampleClass::Uint),
             (GpuTextureFormat::Rg8Sint, GpuTextureSampleClass::Sint),
+            (GpuTextureFormat::R16Uint, GpuTextureSampleClass::Uint),
+            (GpuTextureFormat::R16Sint, GpuTextureSampleClass::Sint),
+            (
+                GpuTextureFormat::R16Float,
+                GpuTextureSampleClass::FloatUnfilterable,
+            ),
+            (GpuTextureFormat::Rg16Uint, GpuTextureSampleClass::Uint),
+            (GpuTextureFormat::Rg16Sint, GpuTextureSampleClass::Sint),
+            (
+                GpuTextureFormat::Rg16Float,
+                GpuTextureSampleClass::FloatUnfilterable,
+            ),
             (GpuTextureFormat::R32Uint, GpuTextureSampleClass::Uint),
             (GpuTextureFormat::R32Sint, GpuTextureSampleClass::Sint),
         ] {

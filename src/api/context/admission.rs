@@ -1069,7 +1069,7 @@ mod tests {
         );
     }
     #[test]
-    fn r_rg8_format_role_admission_preserves_supplied_positive_and_negative_facts() {
+    fn plain_r_rg_format_role_admission_preserves_supplied_positive_and_negative_facts() {
         let formats = [
             GpuTextureFormat::R8Snorm,
             GpuTextureFormat::R8Uint,
@@ -1078,6 +1078,12 @@ mod tests {
             GpuTextureFormat::Rg8Snorm,
             GpuTextureFormat::Rg8Uint,
             GpuTextureFormat::Rg8Sint,
+            GpuTextureFormat::R16Uint,
+            GpuTextureFormat::R16Sint,
+            GpuTextureFormat::R16Float,
+            GpuTextureFormat::Rg16Uint,
+            GpuTextureFormat::Rg16Sint,
+            GpuTextureFormat::Rg16Float,
         ];
         let roles = [
             GpuFormatRole::Sampled,
@@ -1138,7 +1144,7 @@ mod tests {
             let depth_descriptor = GpuContextDescriptor::new(GpuCapabilityRequirements::new())
                 .require_format_role(format, GpuFormatRole::DepthStencil);
             let error = evaluate_candidate(&depth_descriptor, adapter_for(format, supported), true)
-                .expect_err("R/RG8 color formats must not gain depth/stencil admission");
+                .expect_err("plain R/RG color formats must not gain depth/stencil admission");
             assert_eq!(
                 error.category(),
                 GpuContextRequestErrorCategory::UnsupportedFormatRole,
