@@ -238,12 +238,7 @@ impl GpuPreparedWorkGraph {
         infer_fragment_hazards(graph_label, &fragments, &mut inferred_edges)?;
         infer_cross_fragment_hazards(graph_label, &fragments, &relations, &mut inferred_edges)?;
         add_explicit_orders(graph_label, &fragments, &mut inferred_edges)?;
-        add_graph_explicit_orders(
-            graph_label,
-            &fragments,
-            &graph_orders,
-            &mut inferred_edges,
-        )?;
+        add_graph_explicit_orders(graph_label, &fragments, &graph_orders, &mut inferred_edges)?;
         let topological_order =
             topological_node_order(graph_label, &fragments, &node_locations, &inferred_edges)?;
         let fragment_order = topological_fragment_order(graph_label, &fragments, &import_bindings)?;

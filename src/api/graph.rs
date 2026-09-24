@@ -17,8 +17,7 @@ mod preparation;
 
 pub use authoring::{
     GpuExecutionPreference, GpuExplicitOrder, GpuGraphExplicitOrder, GpuWorkFragment,
-    GpuWorkFragmentBuilder,
-    GpuWorkImport, GpuWorkNode, GpuWorkOutput,
+    GpuWorkFragmentBuilder, GpuWorkImport, GpuWorkNode, GpuWorkOutput,
 };
 pub use coverage::{
     GpuBufferCoverage, GpuBufferStridedCoverage, GpuInitialCoverage, GpuInitialCoverageKind,

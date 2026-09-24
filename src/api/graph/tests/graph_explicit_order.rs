@@ -140,9 +140,7 @@ fn graph_scope_order_resolves_immutable_fragments_independent_of_input_order() {
             [order.clone()],
         )
         .unwrap();
-        assert!(
-            prepared_position(&graph, "first node") < prepared_position(&graph, "second node")
-        );
+        assert!(prepared_position(&graph, "first node") < prepared_position(&graph, "second node"));
         let dependency = graph
             .dependencies()
             .iter()
@@ -183,6 +181,30 @@ fn graph_scope_order_rejects_endpoint_whose_fragment_is_absent() {
         .unwrap_err()
         .cause(),
         GpuWorkGraphCause::ForeignIdentity
+    );
+}
+
+#[test]
+fn graph_scope_order_rejects_ambiguous_cloned_fragment_identity() {
+    let (duplicated_fragment, duplicated_node) =
+        independent_fragment("duplicated fragment", "duplicated node");
+    let (other_fragment, other_node) = independent_fragment("other fragment", "other node");
+    let order =
+        GpuGraphExplicitOrder::new(&duplicated_node, &other_node, "ambiguous duplicate").unwrap();
+
+    assert_eq!(
+        GpuPreparedWorkGraph::prepare_with_orders(
+            label("ambiguous graph-order endpoint"),
+            [
+                duplicated_fragment.clone(),
+                duplicated_fragment,
+                other_fragment,
+            ],
+            [order],
+        )
+        .unwrap_err()
+        .cause(),
+        GpuWorkGraphCause::UnknownIdentity
     );
 }
 
@@ -244,8 +266,12 @@ fn graph_scope_orders_bracket_immutable_work_with_timestamp_markers() {
     let mut allocator = allocator();
     let queries = allocator
         .allocate_query_set_handle(
-            GpuQuerySetDescriptor::new(common("graph-order timestamps"), GpuQueryKind::Timestamp, 2)
-                .unwrap(),
+            GpuQuerySetDescriptor::new(
+                common("graph-order timestamps"),
+                GpuQueryKind::Timestamp,
+                2,
+            )
+            .unwrap(),
         )
         .unwrap();
     let work = buffer(

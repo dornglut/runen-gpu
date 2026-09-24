@@ -332,11 +332,12 @@ pub(super) fn add_graph_explicit_orders(
         }
 
         let _ = before_fragment;
-        edges.entry((before, after)).or_default().insert(
-            GpuDependencyReason::ExplicitNonData {
+        edges
+            .entry((before, after))
+            .or_default()
+            .insert(GpuDependencyReason::ExplicitNonData {
                 reason: order.reason().to_string(),
-            },
-        );
+            });
     }
     Ok(())
 }
@@ -354,11 +355,11 @@ fn resolve_graph_order_endpoint<'a>(
     ),
     GpuWorkGraphError,
 > {
-    let Some((fragment_index, fragment)) = fragments
+    let mut matching_fragments = fragments
         .iter()
         .enumerate()
-        .find(|(_, fragment)| endpoint.belongs_to(&fragment.identity))
-    else {
+        .filter(|(_, fragment)| endpoint.belongs_to(&fragment.identity));
+    let Some((fragment_index, fragment)) = matching_fragments.next() else {
         return Err(graph_error(
             "resolve graph-scope explicit GPU work-order fragment",
             graph_label,
@@ -369,6 +370,17 @@ fn resolve_graph_order_endpoint<'a>(
             "include the endpoint's originating immutable fragment in the prepared graph",
         ));
     };
+    if matching_fragments.next().is_some() {
+        return Err(graph_error(
+            "resolve graph-scope explicit GPU work-order fragment",
+            graph_label,
+            GraphErrorOrigin::new(Some(fragment), None),
+            None,
+            None,
+            GpuWorkGraphCause::UnknownIdentity,
+            "include each originating immutable fragment identity at most once when graph-scope orders reference it",
+        ));
+    }
     let Some(node) = fragment.nodes().iter().find(|node| node.id() == endpoint) else {
         return Err(graph_error(
             "resolve graph-scope explicit GPU work-order endpoint",
