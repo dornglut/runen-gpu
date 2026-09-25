@@ -384,6 +384,27 @@ fn required_bind_group_slots(layout: &GpuPipelineLayoutDescriptor) -> u64 {
         .unwrap_or(0)
 }
 
+fn incompatible(label: impl Into<String>, correction: &'static str) -> GpuProgramContractError {
+    GpuProgramContractError::invalid(
+        "construct runtime GPU binding set",
+        label,
+        GpuProgramContractCause::RuntimeBindingIncompatible,
+        correction,
+    )
+}
+
+fn device_incompatible(
+    label: impl Into<String>,
+    correction: &'static str,
+) -> GpuProgramContractError {
+    GpuProgramContractError::invalid(
+        "validate runtime GPU binding set against admitted device facts",
+        label,
+        GpuProgramContractCause::RuntimeBindingIncompatible,
+        correction,
+    )
+}
+
 #[cfg(test)]
 mod binding_array_limit_tests {
     use super::*;
@@ -503,23 +524,3 @@ mod binding_array_limit_tests {
     }
 }
 
-fn incompatible(label: impl Into<String>, correction: &'static str) -> GpuProgramContractError {
-    GpuProgramContractError::invalid(
-        "construct runtime GPU binding set",
-        label,
-        GpuProgramContractCause::RuntimeBindingIncompatible,
-        correction,
-    )
-}
-
-fn device_incompatible(
-    label: impl Into<String>,
-    correction: &'static str,
-) -> GpuProgramContractError {
-    GpuProgramContractError::invalid(
-        "validate runtime GPU binding set against admitted device facts",
-        label,
-        GpuProgramContractCause::RuntimeBindingIncompatible,
-        correction,
-    )
-}
