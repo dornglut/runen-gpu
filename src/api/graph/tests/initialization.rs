@@ -328,14 +328,7 @@ fn combined_depth_stencil_store_and_discard_track_aspects_independently() {
             GpuTextureDescriptor::new(
                 common("combined initialization"),
                 GpuTextureDimension::D2,
-                GpuTextureExtent::new(
-                    &resource_label,
-                    GpuTextureDimension::D2,
-                    8,
-                    8,
-                    1,
-                )
-                .unwrap(),
+                GpuTextureExtent::new(&resource_label, GpuTextureDimension::D2, 8, 8, 1).unwrap(),
                 1,
                 1,
                 GpuTextureFormat::Depth24PlusStencil8,
