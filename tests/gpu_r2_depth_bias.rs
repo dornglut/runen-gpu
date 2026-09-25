@@ -6,6 +6,7 @@ const RED: [u8; 4] = [255, 0, 0, 255];
 const GREEN: [u8; 4] = [0, 255, 0, 255];
 const BASELINE_MASK: u32 = 0b0111;
 const CLAMP_BIT: u32 = 1 << 3;
+#[cfg(target_arch = "wasm32")]
 const CLAMP_SUPPORTED_BIT: u32 = 1 << 8;
 
 #[derive(Clone, Copy)]
