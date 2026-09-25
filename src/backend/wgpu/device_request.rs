@@ -750,9 +750,7 @@ mod tests {
         assert_eq!(facts.values().max_vertex_attributes(), 12);
         assert_eq!(facts.values().max_vertex_buffer_array_stride(), 1024);
         assert_eq!(
-            facts
-                .values()
-                .max_binding_array_elements_per_shader_stage(),
+            facts.values().max_binding_array_elements_per_shader_stage(),
             123_456
         );
         assert_eq!(
