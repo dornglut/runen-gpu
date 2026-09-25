@@ -45,7 +45,7 @@ fn sampler_descriptor(max_anisotropy: u16) -> GpuSamplerDescriptor {
     .unwrap()
 }
 
-fn realize_anisotropic_sampler(context: &GpuContext) {
+pub(crate) fn realize_anisotropic_sampler(context: &GpuContext) {
     let mut scope = GpuResourceScope::new();
     let sampler = scope.sampler(sampler_descriptor(8)).unwrap();
     context.realize_sampler(&sampler).unwrap();

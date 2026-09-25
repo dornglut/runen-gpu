@@ -315,7 +315,7 @@ fn render_operation(
     GpuRenderOperation::new([attachment], None, [draw], None).unwrap()
 }
 
-fn graph() -> (
+pub(crate) fn graph() -> (
     GpuPreparedWorkGraph,
     GpuReadbackId,
     GpuBufferHandle,
@@ -396,7 +396,7 @@ fn assert_prepared_materialization(graph: &GpuPreparedWorkGraph, buffer: &GpuBuf
     );
 }
 
-fn assert_graph_contract(
+pub(crate) fn assert_graph_contract(
     graph: &GpuPreparedWorkGraph,
     args: &GpuBufferHandle,
     vertices: &GpuBufferHandle,
@@ -527,7 +527,7 @@ fn pixel_at(bytes: &GpuReadbackBytes, x: u32, y: u32) -> [u8; 4] {
     bytes.as_bytes()[offset..offset + 4].try_into().unwrap()
 }
 
-fn assert_rendered_pixels(bytes: &GpuReadbackBytes) {
+pub(crate) fn assert_rendered_pixels(bytes: &GpuReadbackBytes) {
     assert_eq!(bytes.texture_format(), Some(GpuTextureFormat::Rgba8Unorm));
     assert_eq!(
         bytes.as_bytes().len(),

@@ -277,7 +277,7 @@ fn pixel_at(bytes: &GpuReadbackBytes, x: u32, y: u32) -> [u8; 4] {
     bytes.as_bytes()[offset..offset + 4].try_into().unwrap()
 }
 
-async fn run_suite(context: &GpuContext) -> u32 {
+pub(crate) async fn run_suite(context: &GpuContext) -> u32 {
     let mut mask = 0_u32;
     for (index, case) in CASES.into_iter().enumerate() {
         let (graph, readback_id) = graph(case);
