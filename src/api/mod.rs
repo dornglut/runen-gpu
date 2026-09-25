@@ -63,10 +63,11 @@ pub use transfer::*;
 pub use work::{
     GpuBufferRegion, GpuBufferTextureLayout, GpuClearOperation, GpuColorAttachmentLoad,
     GpuColorClearValue, GpuComputeOperation, GpuCopyExtent, GpuCopyOperation,
-    GpuDepthAttachmentLoad, GpuDepthClearValue, GpuDispatchSize, GpuDrawIntent, GpuDrawRange,
-    GpuMultisampleResolveTarget, GpuPresentOperation, GpuQueryResolveOperation,
-    GpuRenderColorAttachment, GpuRenderDepthStencilAttachment, GpuTextureCopyRegion,
-    GpuTextureOrigin, GpuTimestampMarkerOperation, GpuTimestampWrites,
+    GpuDepthAttachmentLoad, GpuDepthAttachmentState, GpuDepthClearValue, GpuDispatchSize,
+    GpuDrawIntent, GpuDrawRange, GpuMultisampleResolveTarget, GpuPresentOperation,
+    GpuQueryResolveOperation, GpuRenderColorAttachment, GpuRenderDepthStencilAttachment,
+    GpuStencilAttachmentLoad, GpuStencilAttachmentState, GpuStencilClearValue,
+    GpuTextureCopyRegion, GpuTextureOrigin, GpuTimestampMarkerOperation, GpuTimestampWrites,
 };
 pub use work_resource_id::{
     GpuWorkResourceId, GpuWorkResourceIdAllocationError, GpuWorkResourceIdAllocator,

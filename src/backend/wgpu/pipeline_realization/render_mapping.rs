@@ -80,6 +80,19 @@ pub(super) const fn cull_mode(value: GpuCullMode) -> Option<Face> {
     }
 }
 
+pub(super) const fn stencil_operation(value: crate::GpuStencilOperation) -> wgpu::StencilOperation {
+    match value {
+        crate::GpuStencilOperation::Keep => wgpu::StencilOperation::Keep,
+        crate::GpuStencilOperation::Zero => wgpu::StencilOperation::Zero,
+        crate::GpuStencilOperation::Replace => wgpu::StencilOperation::Replace,
+        crate::GpuStencilOperation::Invert => wgpu::StencilOperation::Invert,
+        crate::GpuStencilOperation::IncrementClamp => wgpu::StencilOperation::IncrementClamp,
+        crate::GpuStencilOperation::DecrementClamp => wgpu::StencilOperation::DecrementClamp,
+        crate::GpuStencilOperation::IncrementWrap => wgpu::StencilOperation::IncrementWrap,
+        crate::GpuStencilOperation::DecrementWrap => wgpu::StencilOperation::DecrementWrap,
+    }
+}
+
 pub(super) const fn compare_function(value: GpuCompareFunction) -> CompareFunction {
     match value {
         GpuCompareFunction::Never => CompareFunction::Never,
@@ -128,6 +141,7 @@ pub(super) const fn texture_format(value: GpuTextureFormat) -> TextureFormat {
         GpuTextureFormat::Rgba16Uint => TextureFormat::Rgba16Uint,
         GpuTextureFormat::Rgba16Sint => TextureFormat::Rgba16Sint,
         GpuTextureFormat::Rgba16Float => TextureFormat::Rgba16Float,
+        GpuTextureFormat::Stencil8 => TextureFormat::Stencil8,
         GpuTextureFormat::Depth16Unorm => TextureFormat::Depth16Unorm,
         GpuTextureFormat::Depth24Plus => TextureFormat::Depth24Plus,
         GpuTextureFormat::Depth32Float => TextureFormat::Depth32Float,
@@ -154,6 +168,42 @@ mod tests {
             compare_function(GpuCompareFunction::LessEqual),
             CompareFunction::LessEqual
         );
+        for (normalized, native) in [
+            (
+                crate::GpuStencilOperation::Keep,
+                wgpu::StencilOperation::Keep,
+            ),
+            (
+                crate::GpuStencilOperation::Zero,
+                wgpu::StencilOperation::Zero,
+            ),
+            (
+                crate::GpuStencilOperation::Replace,
+                wgpu::StencilOperation::Replace,
+            ),
+            (
+                crate::GpuStencilOperation::Invert,
+                wgpu::StencilOperation::Invert,
+            ),
+            (
+                crate::GpuStencilOperation::IncrementClamp,
+                wgpu::StencilOperation::IncrementClamp,
+            ),
+            (
+                crate::GpuStencilOperation::DecrementClamp,
+                wgpu::StencilOperation::DecrementClamp,
+            ),
+            (
+                crate::GpuStencilOperation::IncrementWrap,
+                wgpu::StencilOperation::IncrementWrap,
+            ),
+            (
+                crate::GpuStencilOperation::DecrementWrap,
+                wgpu::StencilOperation::DecrementWrap,
+            ),
+        ] {
+            assert_eq!(stencil_operation(normalized), native);
+        }
         for (normalized, native) in [
             (GpuTextureFormat::Rgba8Snorm, TextureFormat::Rgba8Snorm),
             (GpuTextureFormat::Rgba8Uint, TextureFormat::Rgba8Uint),

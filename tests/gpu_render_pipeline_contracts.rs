@@ -1,13 +1,14 @@
 use runen_gpu::{
     GpuAdmittedProgramSource, GpuBindingLayoutRefinement, GpuBlendMode, GpuCapabilityFeature,
     GpuCapabilityRequirement, GpuCapabilityRequirements, GpuColorTargetStateDescriptor,
-    GpuColorWriteMask, GpuCompareFunction, GpuDepthStencilStateDescriptor, GpuEntryPointName,
-    GpuFragmentOutputStateDescriptor, GpuMultisampleStateDescriptor, GpuPipelineConfiguration,
-    GpuPipelineLayoutDescriptor, GpuPrimitiveStateDescriptor, GpuProgramContractCause,
-    GpuProgramDescriptor, GpuProgramSourceIdentity, GpuProgramSourceKey, GpuProgramSourceOwnerId,
-    GpuProgramSourceProvenance, GpuProgramSourceRegistry, GpuProgramSourceRevision,
-    GpuRenderEntryPoints, GpuRenderPipelineDescriptor, GpuRenderPipelineStateDescriptor,
-    GpuShaderIoScalarClass, GpuTextureFormat, GpuVertexInputStateDescriptor,
+    GpuColorWriteMask, GpuCompareFunction, GpuDepthStateDescriptor, GpuDepthStencilStateDescriptor,
+    GpuEntryPointName, GpuFragmentOutputStateDescriptor, GpuMultisampleStateDescriptor,
+    GpuPipelineConfiguration, GpuPipelineLayoutDescriptor, GpuPrimitiveStateDescriptor,
+    GpuProgramContractCause, GpuProgramDescriptor, GpuProgramSourceIdentity, GpuProgramSourceKey,
+    GpuProgramSourceOwnerId, GpuProgramSourceProvenance, GpuProgramSourceRegistry,
+    GpuProgramSourceRevision, GpuRenderEntryPoints, GpuRenderPipelineDescriptor,
+    GpuRenderPipelineStateDescriptor, GpuShaderIoScalarClass, GpuTextureFormat,
+    GpuVertexInputStateDescriptor,
 };
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
@@ -63,8 +64,11 @@ fn color_target() -> GpuColorTargetStateDescriptor {
 fn depth_state() -> GpuDepthStencilStateDescriptor {
     GpuDepthStencilStateDescriptor::new(
         GpuTextureFormat::Depth32Float,
-        true,
-        GpuCompareFunction::LessEqual,
+        Some(GpuDepthStateDescriptor::new(
+            true,
+            GpuCompareFunction::LessEqual,
+        )),
+        None,
     )
     .expect("test depth state should be valid")
 }

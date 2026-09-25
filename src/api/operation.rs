@@ -2,7 +2,8 @@ use super::work::{
     GpuBufferTextureLayout, GpuClearOperation, GpuColorAttachmentLoad, GpuComputeOperation,
     GpuCopyOperation, GpuDepthAttachmentLoad, GpuDrawIntent, GpuPresentOperation,
     GpuQueryResolveOperation, GpuRenderColorAttachment, GpuRenderDepthStencilAttachment,
-    GpuTextureCopyRegion, GpuTimestampMarkerOperation, GpuTimestampWrites,
+    GpuStencilAttachmentLoad, GpuTextureCopyRegion, GpuTimestampMarkerOperation,
+    GpuTimestampWrites,
 };
 use super::{
     GpuBufferAccess, GpuBufferAccessKind, GpuBufferRange, GpuCapabilityFeature,
@@ -61,9 +62,21 @@ impl GpuRenderOperation {
             .iter()
             .any(|attachment| matches!(attachment.load(), GpuColorAttachmentLoad::Clear(_)));
         let clears_depth = depth_stencil_attachment.as_ref().is_some_and(|attachment| {
-            matches!(attachment.load(), GpuDepthAttachmentLoad::Clear(_))
+            attachment
+                .depth()
+                .is_some_and(|state| matches!(state.load(), GpuDepthAttachmentLoad::Clear(_)))
         });
-        if draws.is_empty() && !clears_color && !clears_depth && timestamp_writes.is_none() {
+        let clears_stencil = depth_stencil_attachment.as_ref().is_some_and(|attachment| {
+            attachment
+                .stencil()
+                .is_some_and(|state| matches!(state.load(), GpuStencilAttachmentLoad::Clear(_)))
+        });
+        if draws.is_empty()
+            && !clears_color
+            && !clears_depth
+            && !clears_stencil
+            && timestamp_writes.is_none()
+        {
             return Err(GpuWorkOperationError::invalid(
                 "construct GPU render operation",
                 "render",
@@ -80,7 +93,7 @@ impl GpuRenderOperation {
 
         for draw in &draws {
             signature.validate_draw(draw)?;
-            validate_depth_access_for_draw(depth_stencil_attachment.as_ref(), draw)?;
+            validate_depth_stencil_access_for_draw(depth_stencil_attachment.as_ref(), draw)?;
         }
 
         let mut accesses = Vec::new();
@@ -93,9 +106,12 @@ impl GpuRenderOperation {
             }
         }
         if let Some(attachment) = &depth_stencil_attachment {
-            accesses.push(GpuResourceAccess::Texture(
-                attachment.source_access().clone(),
-            ));
+            if let Some(access) = attachment.depth_access() {
+                accesses.push(GpuResourceAccess::Texture(access.clone()));
+            }
+            if let Some(access) = attachment.stencil_access() {
+                accesses.push(GpuResourceAccess::Texture(access.clone()));
+            }
         }
         for draw in &draws {
             accesses.extend(draw.accesses().iter().cloned());
@@ -147,19 +163,20 @@ impl GpuRenderOperation {
     }
 }
 
-fn validate_depth_access_for_draw(
+fn validate_depth_stencil_access_for_draw(
     attachment: Option<&GpuRenderDepthStencilAttachment>,
     draw: &GpuRenderDraw,
 ) -> Result<(), GpuWorkOperationError> {
     let Some(attachment) = attachment else {
         return Ok(());
     };
-    if attachment.access() == GpuDepthStencilAccess::ReadOnly
-        && draw
-            .pipeline()
-            .state()
-            .depth_stencil()
-            .is_some_and(|depth| depth.depth_write_enabled())
+    let pipeline_state = draw.pipeline().state().depth_stencil();
+    if attachment
+        .depth()
+        .is_some_and(|state| state.access() == GpuDepthStencilAccess::ReadOnly)
+        && pipeline_state
+            .and_then(|state| state.depth())
+            .is_some_and(|depth| depth.write_enabled())
     {
         return Err(GpuWorkOperationError::invalid(
             "validate GPU render draw depth access",
@@ -173,6 +190,27 @@ fn validate_depth_access_for_draw(
             ),
             GpuWorkOperationCause::InvalidAttachment,
             "disable pipeline depth writes when the render pass uses a read-only depth attachment",
+        ));
+    }
+    if attachment
+        .stencil()
+        .is_some_and(|state| state.access() == GpuDepthStencilAccess::ReadOnly)
+        && pipeline_state
+            .and_then(|state| state.stencil())
+            .is_some_and(|stencil| stencil.may_write())
+    {
+        return Err(GpuWorkOperationError::invalid(
+            "validate GPU render draw stencil access",
+            "read-only stencil attachment with stencil-writing pipeline",
+            Some(
+                attachment
+                    .source()
+                    .descriptor()
+                    .texture()
+                    .diagnostic_identity(),
+            ),
+            GpuWorkOperationCause::InvalidAttachment,
+            "disable stencil writes when the render pass uses a read-only stencil attachment",
         ));
     }
     Ok(())

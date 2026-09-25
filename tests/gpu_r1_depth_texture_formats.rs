@@ -212,9 +212,15 @@ fn wait_submission(context: &GpuContext, submission: &GpuSubmission, name: &str)
 fn clear_operation(view: GpuTextureViewHandle) -> GpuRenderOperation {
     let attachment = GpuRenderDepthStencilAttachment::new(
         view,
-        GpuDepthStencilAccess::ReadWrite,
-        GpuDepthAttachmentLoad::Clear(GpuDepthClearValue::new(0.5).unwrap()),
-        GpuAttachmentStore::Store,
+        Some(
+            GpuDepthAttachmentState::new(
+                GpuDepthStencilAccess::ReadWrite,
+                GpuDepthAttachmentLoad::Clear(GpuDepthClearValue::new(0.5).unwrap()),
+                GpuAttachmentStore::Store,
+            )
+            .unwrap(),
+        ),
+        None,
     )
     .unwrap();
     GpuRenderOperation::new([], Some(attachment), [], None).unwrap()

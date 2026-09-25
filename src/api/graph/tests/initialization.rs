@@ -350,9 +350,15 @@ fn depth_attachment_load_clear_store_and_discard_drive_initialization() {
                 Some(
                     GpuRenderDepthStencilAttachment::new(
                         depth_view.clone(),
-                        GpuDepthStencilAccess::ReadWrite,
-                        load,
-                        store,
+                        Some(
+                            GpuDepthAttachmentState::new(
+                                GpuDepthStencilAccess::ReadWrite,
+                                load,
+                                store,
+                            )
+                            .unwrap(),
+                        ),
+                        None,
                     )
                     .unwrap(),
                 ),

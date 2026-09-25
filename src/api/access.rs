@@ -689,8 +689,9 @@ fn validate_texture_usage(
             "add the matching normalized usage to the texture descriptor",
         ));
     }
-    let depth = texture.descriptor().format().is_depth();
-    if matches!(kind, GpuTextureAccessKind::DepthStencilAttachment { .. }) != depth
+    let format = texture.descriptor().format();
+    let depth_stencil = format.is_depth() || format.is_stencil();
+    if matches!(kind, GpuTextureAccessKind::DepthStencilAttachment { .. }) != depth_stencil
         && matches!(
             kind,
             GpuTextureAccessKind::ColorAttachment { .. }
@@ -701,7 +702,7 @@ fn validate_texture_usage(
         return Err(texture_access_error(
             texture,
             GpuAccessCause::InvalidTextureAspect,
-            "use color attachment roles with color formats and depth roles with depth formats",
+            "use color attachment roles with color formats and depth/stencil roles with depth or stencil formats",
         ));
     }
     Ok(())

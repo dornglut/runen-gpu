@@ -349,6 +349,7 @@ pub(super) const fn map_texture_format(format: GpuTextureFormat) -> TextureForma
         GpuTextureFormat::Rgba16Uint => TextureFormat::Rgba16Uint,
         GpuTextureFormat::Rgba16Sint => TextureFormat::Rgba16Sint,
         GpuTextureFormat::Rgba16Float => TextureFormat::Rgba16Float,
+        GpuTextureFormat::Stencil8 => TextureFormat::Stencil8,
         GpuTextureFormat::Depth16Unorm => TextureFormat::Depth16Unorm,
         GpuTextureFormat::Depth24Plus => TextureFormat::Depth24Plus,
         GpuTextureFormat::Depth32Float => TextureFormat::Depth32Float,

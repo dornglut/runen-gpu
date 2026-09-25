@@ -1153,6 +1153,62 @@ mod tests {
         }
     }
     #[test]
+    fn stencil8_role_admission_preserves_supplied_adapter_facts() {
+        let format = GpuTextureFormat::Stencil8;
+        let supported = GpuTextureFormatCapabilities {
+            sampled: true,
+            filterable: false,
+            storage_read: false,
+            storage_write: false,
+            color_attachment: false,
+            depth_stencil: true,
+            copy_source: true,
+            copy_destination: true,
+            block_dimensions: Some((99, 99)),
+            block_copy_size: Some(999),
+        };
+        let adapter = GpuAdapterFacts::new(
+            GpuBackendFamily::Vulkan,
+            GpuAdapterClass::Discrete,
+            GpuSoftwareStatus::Hardware,
+            GpuFallbackStatus::ConfirmedNotFallback,
+            GpuCapabilities::from_normalized_facts([], limits(), [(format, supported)]),
+            GpuAdapterLimits::new(limits()),
+            alignments(),
+        );
+
+        for role in [
+            GpuFormatRole::Sampled,
+            GpuFormatRole::DepthStencil,
+            GpuFormatRole::CopySource,
+            GpuFormatRole::CopyDestination,
+        ] {
+            let descriptor = GpuContextDescriptor::new(GpuCapabilityRequirements::new())
+                .require_format_role(format, role);
+            assert!(
+                evaluate_candidate(&descriptor, adapter.clone(), true).is_ok(),
+                "{role:?}"
+            );
+        }
+        for role in [
+            GpuFormatRole::Filterable,
+            GpuFormatRole::StorageRead,
+            GpuFormatRole::StorageWrite,
+            GpuFormatRole::ColorAttachment,
+        ] {
+            let descriptor = GpuContextDescriptor::new(GpuCapabilityRequirements::new())
+                .require_format_role(format, role);
+            assert!(
+                evaluate_candidate(&descriptor, adapter.clone(), true).is_err(),
+                "{role:?}"
+            );
+        }
+        let normalized = adapter.supported().format(format).unwrap();
+        assert_eq!(normalized.block_dimensions, Some((1, 1)));
+        assert_eq!(normalized.block_copy_size, Some(1));
+    }
+
+    #[test]
     fn depth_only_format_role_admission_preserves_supplied_positive_and_negative_facts() {
         let formats = [
             GpuTextureFormat::Depth16Unorm,

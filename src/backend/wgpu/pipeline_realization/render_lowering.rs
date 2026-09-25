@@ -6,7 +6,7 @@ use crate::{
 };
 use wgpu::{
     BlendState, ColorTargetState, DepthBiasState, DepthStencilState, DownlevelFlags, Features,
-    MultisampleState, PolygonMode, PrimitiveState, StencilState, TextureFormat,
+    MultisampleState, PolygonMode, PrimitiveState, StencilFaceState, StencilState, TextureFormat,
     TextureFormatFeatureFlags, TextureFormatFeatures, TextureUsages, VertexAttribute,
     VertexBufferLayout, VertexStepMode,
 };
@@ -272,13 +272,35 @@ fn lower_color_target(target: GpuColorTargetStateDescriptor) -> ColorTargetState
     }
 }
 
-fn lower_depth_stencil(depth: crate::GpuDepthStencilStateDescriptor) -> DepthStencilState {
+fn lower_depth_stencil(state: crate::GpuDepthStencilStateDescriptor) -> DepthStencilState {
+    let depth = state.depth();
+    let stencil = state.stencil();
     DepthStencilState {
-        format: render_mapping::texture_format(depth.format()),
-        depth_write_enabled: Some(depth.depth_write_enabled()),
-        depth_compare: Some(render_mapping::compare_function(depth.depth_compare())),
-        stencil: StencilState::default(),
+        format: render_mapping::texture_format(state.format()),
+        depth_write_enabled: depth.map(crate::GpuDepthStateDescriptor::write_enabled),
+        depth_compare: depth
+            .map(crate::GpuDepthStateDescriptor::compare)
+            .map(render_mapping::compare_function),
+        stencil: stencil.map(lower_stencil_state).unwrap_or_default(),
         bias: DepthBiasState::default(),
+    }
+}
+
+fn lower_stencil_state(state: crate::GpuStencilStateDescriptor) -> StencilState {
+    StencilState {
+        front: lower_stencil_face(state.front()),
+        back: lower_stencil_face(state.back()),
+        read_mask: state.read_mask(),
+        write_mask: state.write_mask(),
+    }
+}
+
+fn lower_stencil_face(face: crate::GpuStencilFaceStateDescriptor) -> StencilFaceState {
+    StencilFaceState {
+        compare: render_mapping::compare_function(face.compare()),
+        fail_op: render_mapping::stencil_operation(face.fail_op()),
+        depth_fail_op: render_mapping::stencil_operation(face.depth_fail_op()),
+        pass_op: render_mapping::stencil_operation(face.pass_op()),
     }
 }
 

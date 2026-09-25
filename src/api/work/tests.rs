@@ -593,18 +593,19 @@ fn depth_attachment_load_clear_store_and_requirements_are_typed() {
         0,
         GpuTextureAspect::DepthOnly,
     );
-    let read_only = GpuRenderDepthStencilAttachment::new(
-        depth_view.clone(),
+    let read_only_state = GpuDepthAttachmentState::new(
         GpuDepthStencilAccess::ReadOnly,
         GpuDepthAttachmentLoad::Load,
         GpuAttachmentStore::Store,
     )
     .unwrap();
-    assert!(read_only.source_access().kind().reads());
-    assert!(!read_only.source_access().kind().writes());
+    let read_only =
+        GpuRenderDepthStencilAttachment::new(depth_view.clone(), Some(read_only_state), None)
+            .unwrap();
+    assert!(read_only.depth_access().unwrap().kind().reads());
+    assert!(!read_only.depth_access().unwrap().kind().writes());
     assert!(
-        GpuRenderDepthStencilAttachment::new(
-            depth_view.clone(),
+        GpuDepthAttachmentState::new(
             GpuDepthStencilAccess::ReadOnly,
             GpuDepthAttachmentLoad::Clear(GpuDepthClearValue::new(1.0).unwrap()),
             GpuAttachmentStore::Store,
@@ -612,8 +613,7 @@ fn depth_attachment_load_clear_store_and_requirements_are_typed() {
         .is_err()
     );
     assert!(
-        GpuRenderDepthStencilAttachment::new(
-            depth_view.clone(),
+        GpuDepthAttachmentState::new(
             GpuDepthStencilAccess::ReadOnly,
             GpuDepthAttachmentLoad::Load,
             GpuAttachmentStore::Discard,
@@ -621,15 +621,15 @@ fn depth_attachment_load_clear_store_and_requirements_are_typed() {
         .is_err()
     );
 
-    let clear = GpuRenderDepthStencilAttachment::new(
-        depth_view,
+    let clear_state = GpuDepthAttachmentState::new(
         GpuDepthStencilAccess::ReadWrite,
         GpuDepthAttachmentLoad::Clear(GpuDepthClearValue::new(0.5).unwrap()),
         GpuAttachmentStore::Discard,
     )
     .unwrap();
-    assert!(!clear.source_access().kind().reads());
-    assert!(clear.source_access().kind().writes());
+    let clear = GpuRenderDepthStencilAttachment::new(depth_view, Some(clear_state), None).unwrap();
+    assert!(!clear.depth_access().unwrap().kind().reads());
+    assert!(clear.depth_access().unwrap().kind().writes());
     let operation =
         GpuWorkOperation::Render(GpuRenderOperation::new([], Some(clear), [], None).unwrap());
     let requirements = operation.derived_requirements().unwrap();

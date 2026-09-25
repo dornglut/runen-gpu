@@ -26,6 +26,7 @@ mod browser {
         static DEPTH_ATTACHMENT_EXERCISED_MASK: RefCell<u32> = RefCell::new(0);
         static DEPTH_COPY_EXERCISED_MASK: RefCell<u32> = RefCell::new(0);
         static DEPTH_LINEAR_EXERCISED_MASK: RefCell<u32> = RefCell::new(0);
+        static STENCIL8_EXERCISED: RefCell<u32> = RefCell::new(0);
     }
 
     struct YieldOnce(bool);
@@ -619,9 +620,15 @@ mod browser {
     fn browser_depth_clear(view: GpuTextureViewHandle) -> GpuRenderOperation {
         let attachment = GpuRenderDepthStencilAttachment::new(
             view,
-            GpuDepthStencilAccess::ReadWrite,
-            GpuDepthAttachmentLoad::Clear(GpuDepthClearValue::new(0.5).unwrap()),
-            GpuAttachmentStore::Store,
+            Some(
+                GpuDepthAttachmentState::new(
+                    GpuDepthStencilAccess::ReadWrite,
+                    GpuDepthAttachmentLoad::Clear(GpuDepthClearValue::new(0.5).unwrap()),
+                    GpuAttachmentStore::Store,
+                )
+                .unwrap(),
+            ),
+            None,
         )
         .unwrap();
         GpuRenderOperation::new([], Some(attachment), [], None).unwrap()
@@ -842,6 +849,311 @@ mod browser {
         assert_execution_drained(&context);
     }
 
+    const STENCIL8_WGSL: &str = r#"
+@vertex
+fn vs_main(@builtin(vertex_index) index: u32) -> @builtin(position) vec4f {
+    var positions = array<vec2f, 3>(
+        vec2f(-1.0, -1.0),
+        vec2f(3.0, -1.0),
+        vec2f(-1.0, 3.0),
+    );
+    return vec4f(positions[index], 0.0, 1.0);
+}
+"#;
+
+    fn browser_stencil8_texture(
+        allocator: &mut GpuWorkResourceIdAllocator,
+        width: u32,
+    ) -> (GpuTextureHandle, GpuTextureViewHandle) {
+        let resource_label = format_label("browser Stencil8 target");
+        let texture = allocator
+            .allocate_texture_handle(
+                GpuTextureDescriptor::new(
+                    GpuResourceCommon::owned(
+                        resource_label.clone(),
+                        GpuResourceLifetime::Transient,
+                        GpuMemoryIntent::Device,
+                        GpuReconstruction::SourceBacked,
+                        format_provenance("browser Stencil8 target"),
+                    )
+                    .unwrap(),
+                    GpuTextureDimension::D2,
+                    GpuTextureExtent::new(&resource_label, GpuTextureDimension::D2, width, 2, 1)
+                        .unwrap(),
+                    1,
+                    1,
+                    GpuTextureFormat::Stencil8,
+                    GpuTextureUsages::new(
+                        &resource_label,
+                        [
+                            GpuTextureUsage::DepthStencilAttachment,
+                            GpuTextureUsage::CopySource,
+                            GpuTextureUsage::CopyDestination,
+                        ],
+                    )
+                    .unwrap(),
+                    GpuTextureInitialization::Uninitialized,
+                )
+                .unwrap(),
+            )
+            .unwrap();
+        let range = GpuTextureSubresourceRange::new(
+            texture.descriptor().common().label(),
+            0,
+            1,
+            0,
+            1,
+            GpuTextureAspect::StencilOnly,
+        )
+        .unwrap();
+        let view = allocator
+            .allocate_texture_view_handle(
+                GpuTextureViewDescriptor::new(
+                    GpuResourceCommon::owned(
+                        format_label("browser Stencil8 target view"),
+                        GpuResourceLifetime::Transient,
+                        GpuMemoryIntent::Device,
+                        GpuReconstruction::SourceBacked,
+                        format_provenance("browser Stencil8 target view"),
+                    )
+                    .unwrap(),
+                    &texture,
+                    None,
+                    GpuTextureViewDimension::D2,
+                    range,
+                )
+                .unwrap(),
+            )
+            .unwrap();
+        (texture, view)
+    }
+
+    fn browser_stencil_face(
+        compare: GpuCompareFunction,
+        pass_op: GpuStencilOperation,
+    ) -> GpuStencilFaceStateDescriptor {
+        GpuStencilFaceStateDescriptor::new(
+            compare,
+            GpuStencilOperation::Keep,
+            GpuStencilOperation::Keep,
+            pass_op,
+        )
+    }
+
+    fn browser_stencil_pipeline(write: bool) -> GpuRenderPipelineDescriptor {
+        let vertex = GpuEntryPointName::new("vs_main").unwrap();
+        let identity = GpuProgramSourceIdentity::new(
+            GpuProgramSourceOwnerId::allocate().unwrap(),
+            GpuProgramSourceKey::new(if write {
+                "proof.browser.stencil8.write"
+            } else {
+                "proof.browser.stencil8.read-only"
+            })
+            .unwrap(),
+            GpuProgramSourceRevision::try_from_raw(1).unwrap(),
+        );
+        let mut sources = GpuProgramSourceRegistry::new(2, 4096).unwrap();
+        let source = sources
+            .admit_wgsl(
+                identity,
+                STENCIL8_WGSL,
+                GpuProgramSourceProvenance::new("browser Stencil8 proof", None).unwrap(),
+            )
+            .unwrap();
+        let program = GpuProgramDescriptor::new(
+            source,
+            [vertex.clone()],
+            std::iter::empty::<GpuBindingLayoutRefinement>(),
+        )
+        .unwrap();
+        let face = if write {
+            browser_stencil_face(GpuCompareFunction::Always, GpuStencilOperation::Replace)
+        } else {
+            browser_stencil_face(GpuCompareFunction::Equal, GpuStencilOperation::Keep)
+        };
+        let stencil =
+            GpuStencilStateDescriptor::new(face, face, u32::MAX, if write { 0xff } else { 0 });
+        let depth_stencil =
+            GpuDepthStencilStateDescriptor::new(GpuTextureFormat::Stencil8, None, Some(stencil))
+                .unwrap();
+        let state = GpuRenderPipelineStateDescriptor::new(
+            GpuVertexInputStateDescriptor::new([]).unwrap(),
+            None,
+            GpuPrimitiveStateDescriptor::default(),
+            Some(depth_stencil),
+            GpuMultisampleStateDescriptor::default(),
+        )
+        .unwrap();
+        GpuRenderPipelineDescriptor::new(
+            program,
+            GpuRenderEntryPoints::new(vertex, None),
+            state,
+            GpuPipelineConfiguration::default(),
+        )
+        .unwrap()
+    }
+
+    fn browser_stencil_draw(
+        pipeline: GpuRenderPipelineDescriptor,
+        width: u32,
+        reference: u32,
+    ) -> GpuRenderDraw {
+        let bindings = GpuRuntimeBindingSet::new(pipeline.layout().clone(), []).unwrap();
+        GpuRenderDraw::new(
+            pipeline,
+            bindings,
+            [],
+            None,
+            GpuDrawIntent::direct(
+                GpuDrawRange::new(0, 3).unwrap(),
+                GpuDrawRange::new(0, 1).unwrap(),
+            ),
+            GpuViewport::new(0.0, 0.0, width as f32, 2.0, 0.0, 1.0).unwrap(),
+            GpuScissorRect::new(0, 0, width, 2).unwrap(),
+            GpuBlendConstant::new(0.0, 0.0, 0.0, 0.0).unwrap(),
+            reference,
+        )
+        .unwrap()
+    }
+
+    async fn run_browser_stencil8_width(context: &GpuContext, width: u32) {
+        const REFERENCE: u32 = 91;
+
+        let mut allocator = GpuWorkResourceIdAllocator::new();
+        let (texture, view) = browser_stencil8_texture(&mut allocator, width);
+
+        let write_state = GpuStencilAttachmentState::new(
+            GpuDepthStencilAccess::ReadWrite,
+            GpuStencilAttachmentLoad::Clear(GpuStencilClearValue::new(0).unwrap()),
+            GpuAttachmentStore::Store,
+        )
+        .unwrap();
+        let write_attachment =
+            GpuRenderDepthStencilAttachment::new(view.clone(), None, Some(write_state)).unwrap();
+        let write_render = GpuRenderOperation::new(
+            [],
+            Some(write_attachment),
+            [browser_stencil_draw(
+                browser_stencil_pipeline(true),
+                width,
+                REFERENCE,
+            )],
+            None,
+        )
+        .unwrap();
+
+        let read_state = GpuStencilAttachmentState::new(
+            GpuDepthStencilAccess::ReadOnly,
+            GpuStencilAttachmentLoad::Load,
+            GpuAttachmentStore::Store,
+        )
+        .unwrap();
+        let read_attachment =
+            GpuRenderDepthStencilAttachment::new(view.clone(), None, Some(read_state)).unwrap();
+        let read_render = GpuRenderOperation::new(
+            [],
+            Some(read_attachment),
+            [browser_stencil_draw(
+                browser_stencil_pipeline(false),
+                width,
+                REFERENCE,
+            )],
+            None,
+        )
+        .unwrap();
+
+        let region = GpuTextureCopyRegion::new(
+            &texture,
+            0,
+            GpuTextureOrigin::new(0, 0, 0),
+            GpuTextureAspect::StencilOnly,
+            GpuCopyExtent::new(width, 2, 1).unwrap(),
+        )
+        .unwrap();
+        let readback_id = GpuReadbackId::allocate().unwrap();
+        let readback = GpuReadbackOperation::new(region.into(), readback_id).unwrap();
+
+        let name = format!("browser Stencil8 {width}x2");
+        let mut builder =
+            GpuWorkFragmentBuilder::new(format_label(&name), format_provenance(&name));
+        builder.declare_resource(texture.into()).unwrap();
+        builder.declare_resource(view.into()).unwrap();
+        for (node, operation) in [
+            (
+                "browser Stencil8 write",
+                GpuWorkOperation::Render(write_render),
+            ),
+            (
+                "browser Stencil8 read-only test",
+                GpuWorkOperation::Render(read_render),
+            ),
+            (
+                "browser Stencil8 readback",
+                GpuWorkOperation::Readback(readback),
+            ),
+        ] {
+            add_format_operation(&mut builder, node, operation);
+        }
+        let graph = GpuPreparedWorkGraph::prepare(format_label(&name), [builder.finish().unwrap()])
+            .unwrap();
+        let prepared = context.prepare_submission(graph).await.unwrap();
+        let submission = context.submit_prepared(prepared).unwrap();
+        let readbacks = wait_for_terminal_readbacks(context, &submission, &[readback_id]).await;
+        assert_eq!(readbacks.len(), 1);
+        assert_eq!(
+            readbacks[0].texture_format(),
+            Some(GpuTextureFormat::Stencil8)
+        );
+        assert_eq!(
+            readbacks[0].as_bytes().len(),
+            usize::try_from(width * 2).unwrap()
+        );
+        assert!(
+            readbacks[0]
+                .as_bytes()
+                .iter()
+                .all(|byte| *byte == REFERENCE as u8),
+            "browser Stencil8 Replace must write the dynamic reference across the full target"
+        );
+        assert_execution_drained(context);
+    }
+
+    async fn run_browser_stencil8() {
+        let census = GpuContext::request(
+            GpuContextDescriptor::new(depth_requirements())
+                .with_allowed_backends([GpuBackendFamily::BrowserWebGpu])
+                .with_label("browser Stencil8 census"),
+        )
+        .await
+        .expect("declared browser-conformance environment must provide WebGPU");
+        let facts = census
+            .adapter_facts()
+            .supported()
+            .format(GpuTextureFormat::Stencil8)
+            .expect("Stencil8 must be present in the normalized format census");
+
+        if !(facts.depth_stencil && facts.copy_source && facts.copy_destination) {
+            STENCIL8_EXERCISED.with(|slot| *slot.borrow_mut() = 0);
+            return;
+        }
+
+        let context = GpuContext::request(
+            GpuContextDescriptor::new(depth_requirements())
+                .require_format_role(GpuTextureFormat::Stencil8, GpuFormatRole::DepthStencil)
+                .require_format_role(GpuTextureFormat::Stencil8, GpuFormatRole::CopySource)
+                .require_format_role(GpuTextureFormat::Stencil8, GpuFormatRole::CopyDestination)
+                .with_allowed_backends([GpuBackendFamily::BrowserWebGpu])
+                .with_label("browser Stencil8 execution proof"),
+        )
+        .await
+        .expect("advertised browser Stencil8 attachment/copy roles must admit a context");
+
+        for width in [255, 256] {
+            run_browser_stencil8_width(&context, width).await;
+        }
+        STENCIL8_EXERCISED.with(|slot| *slot.borrow_mut() = 1);
+    }
+
     async fn run_browser_depth_formats() {
         let census = GpuContext::request(
             GpuContextDescriptor::new(depth_requirements())
@@ -910,6 +1222,7 @@ mod browser {
         run_browser_r16_copy().await;
         run_browser_rg16_copy().await;
         run_browser_depth_formats().await;
+        run_browser_stencil8().await;
     }
 
     #[unsafe(no_mangle)]
@@ -989,6 +1302,11 @@ mod browser {
     #[unsafe(no_mangle)]
     pub extern "C" fn runengpu_browser_depth_linear_exercised_mask() -> u32 {
         DEPTH_LINEAR_EXERCISED_MASK.with(|mask| *mask.borrow())
+    }
+
+    #[unsafe(no_mangle)]
+    pub extern "C" fn runengpu_browser_stencil8_exercised() -> u32 {
+        STENCIL8_EXERCISED.with(|value| *value.borrow())
     }
 }
 

@@ -172,28 +172,169 @@ impl GpuFragmentOutputStateDescriptor {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct GpuDepthStateDescriptor {
+    write_enabled: bool,
+    compare: GpuCompareFunction,
+}
+
+impl GpuDepthStateDescriptor {
+    pub const fn new(write_enabled: bool, compare: GpuCompareFunction) -> Self {
+        Self {
+            write_enabled,
+            compare,
+        }
+    }
+
+    pub const fn write_enabled(self) -> bool {
+        self.write_enabled
+    }
+
+    pub const fn compare(self) -> GpuCompareFunction {
+        self.compare
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum GpuStencilOperation {
+    Keep,
+    Zero,
+    Replace,
+    Invert,
+    IncrementClamp,
+    DecrementClamp,
+    IncrementWrap,
+    DecrementWrap,
+}
+
+impl GpuStencilOperation {
+    pub const fn writes(self) -> bool {
+        !matches!(self, Self::Keep)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct GpuStencilFaceStateDescriptor {
+    compare: GpuCompareFunction,
+    fail_op: GpuStencilOperation,
+    depth_fail_op: GpuStencilOperation,
+    pass_op: GpuStencilOperation,
+}
+
+impl GpuStencilFaceStateDescriptor {
+    pub const fn new(
+        compare: GpuCompareFunction,
+        fail_op: GpuStencilOperation,
+        depth_fail_op: GpuStencilOperation,
+        pass_op: GpuStencilOperation,
+    ) -> Self {
+        Self {
+            compare,
+            fail_op,
+            depth_fail_op,
+            pass_op,
+        }
+    }
+
+    pub const fn compare(self) -> GpuCompareFunction {
+        self.compare
+    }
+
+    pub const fn fail_op(self) -> GpuStencilOperation {
+        self.fail_op
+    }
+
+    pub const fn depth_fail_op(self) -> GpuStencilOperation {
+        self.depth_fail_op
+    }
+
+    pub const fn pass_op(self) -> GpuStencilOperation {
+        self.pass_op
+    }
+
+    pub const fn may_write(self) -> bool {
+        self.fail_op.writes() || self.depth_fail_op.writes() || self.pass_op.writes()
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct GpuStencilStateDescriptor {
+    front: GpuStencilFaceStateDescriptor,
+    back: GpuStencilFaceStateDescriptor,
+    read_mask: u32,
+    write_mask: u32,
+}
+
+impl GpuStencilStateDescriptor {
+    pub const fn new(
+        front: GpuStencilFaceStateDescriptor,
+        back: GpuStencilFaceStateDescriptor,
+        read_mask: u32,
+        write_mask: u32,
+    ) -> Self {
+        Self {
+            front,
+            back,
+            read_mask,
+            write_mask,
+        }
+    }
+
+    pub const fn front(self) -> GpuStencilFaceStateDescriptor {
+        self.front
+    }
+
+    pub const fn back(self) -> GpuStencilFaceStateDescriptor {
+        self.back
+    }
+
+    pub const fn read_mask(self) -> u32 {
+        self.read_mask
+    }
+
+    pub const fn write_mask(self) -> u32 {
+        self.write_mask
+    }
+
+    pub const fn may_write(self) -> bool {
+        self.write_mask != 0 && (self.front.may_write() || self.back.may_write())
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct GpuDepthStencilStateDescriptor {
     format: GpuTextureFormat,
-    depth_write_enabled: bool,
-    depth_compare: GpuCompareFunction,
+    depth: Option<GpuDepthStateDescriptor>,
+    stencil: Option<GpuStencilStateDescriptor>,
 }
 
 impl GpuDepthStencilStateDescriptor {
     pub fn new(
         format: GpuTextureFormat,
-        depth_write_enabled: bool,
-        depth_compare: GpuCompareFunction,
+        depth: Option<GpuDepthStateDescriptor>,
+        stencil: Option<GpuStencilStateDescriptor>,
     ) -> Result<Self, GpuProgramContractError> {
-        if !format.is_depth() {
+        if depth.is_none() && stencil.is_none() {
+            return Err(invalid_attachment_state(
+                format!("depth_stencil_format={format:?}, depth=none, stencil=none"),
+                "provide at least one depth or stencil pipeline state",
+            ));
+        }
+        if depth.is_some() && !format.is_depth() {
             return Err(invalid_attachment_state(
                 format!("depth_format={format:?}"),
-                "use a depth-attachment format for depth-stencil state",
+                "use a format with a depth aspect when depth state is present",
+            ));
+        }
+        if stencil.is_some() && !format.is_stencil() {
+            return Err(invalid_attachment_state(
+                format!("stencil_format={format:?}"),
+                "use a format with a stencil aspect when stencil state is present",
             ));
         }
         Ok(Self {
             format,
-            depth_write_enabled,
-            depth_compare,
+            depth,
+            stencil,
         })
     }
 
@@ -201,12 +342,12 @@ impl GpuDepthStencilStateDescriptor {
         self.format
     }
 
-    pub const fn depth_write_enabled(self) -> bool {
-        self.depth_write_enabled
+    pub const fn depth(self) -> Option<GpuDepthStateDescriptor> {
+        self.depth
     }
 
-    pub const fn depth_compare(self) -> GpuCompareFunction {
-        self.depth_compare
+    pub const fn stencil(self) -> Option<GpuStencilStateDescriptor> {
+        self.stencil
     }
 }
 
@@ -342,8 +483,15 @@ mod tests {
                 .is_err()
             );
             assert!(
-                GpuDepthStencilStateDescriptor::new(format, true, GpuCompareFunction::LessEqual,)
-                    .is_ok()
+                GpuDepthStencilStateDescriptor::new(
+                    format,
+                    Some(GpuDepthStateDescriptor::new(
+                        true,
+                        GpuCompareFunction::LessEqual
+                    )),
+                    None,
+                )
+                .is_ok()
             );
         }
         for format in [
@@ -376,6 +524,44 @@ mod tests {
                 GpuColorWriteMask::ALL,
             )
             .is_ok()
+        );
+
+        let keep = GpuStencilFaceStateDescriptor::new(
+            GpuCompareFunction::Always,
+            GpuStencilOperation::Keep,
+            GpuStencilOperation::Keep,
+            GpuStencilOperation::Keep,
+        );
+        let replace = GpuStencilFaceStateDescriptor::new(
+            GpuCompareFunction::Equal,
+            GpuStencilOperation::Keep,
+            GpuStencilOperation::Keep,
+            GpuStencilOperation::Replace,
+        );
+        let stencil = GpuStencilStateDescriptor::new(keep, replace, u32::MAX, 0xff);
+        let state =
+            GpuDepthStencilStateDescriptor::new(GpuTextureFormat::Stencil8, None, Some(stencil))
+                .unwrap();
+        assert_eq!(state.stencil(), Some(stencil));
+        assert!(stencil.may_write());
+        assert!(
+            GpuDepthStencilStateDescriptor::new(
+                GpuTextureFormat::Stencil8,
+                Some(GpuDepthStateDescriptor::new(
+                    false,
+                    GpuCompareFunction::Always
+                )),
+                None,
+            )
+            .is_err()
+        );
+        assert!(
+            GpuDepthStencilStateDescriptor::new(
+                GpuTextureFormat::Depth32Float,
+                None,
+                Some(stencil),
+            )
+            .is_err()
         );
     }
 }

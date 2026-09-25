@@ -99,7 +99,8 @@ const done = arguments[arguments.length - 1];
         typeof wasm.runengpu_browser_depth_sampled_exercised_mask !== "function" ||
         typeof wasm.runengpu_browser_depth_attachment_exercised_mask !== "function" ||
         typeof wasm.runengpu_browser_depth_copy_exercised_mask !== "function" ||
-        typeof wasm.runengpu_browser_depth_linear_exercised_mask !== "function") {
+        typeof wasm.runengpu_browser_depth_linear_exercised_mask !== "function" ||
+        typeof wasm.runengpu_browser_stencil8_exercised !== "function") {
       throw new Error("RunenGPU browser proof control exports are absent");
     }
     wasm.runengpu_browser_start();
@@ -118,6 +119,7 @@ const done = arguments[arguments.length - 1];
           depthAttachmentMask: wasm.runengpu_browser_depth_attachment_exercised_mask(),
           depthCopyMask: wasm.runengpu_browser_depth_copy_exercised_mask(),
           depthLinearMask: wasm.runengpu_browser_depth_linear_exercised_mask(),
+          stencil8Exercised: wasm.runengpu_browser_stencil8_exercised(),
         });
         return;
       }
@@ -240,6 +242,24 @@ def report_depth_proofs(value: dict[str, object]) -> None:
         raise RuntimeError(message)
 
 
+def report_stencil8_proof(value: dict[str, object]) -> None:
+    exercised = value.get("stencil8Exercised")
+    if type(exercised) is not int or exercised not in (0, 1):
+        raise RuntimeError(
+            f"actual-browser Stencil8 proof did not report valid execution evidence: {exercised!r}"
+        )
+    if exercised:
+        print(
+            "RunenGPU actual-browser Stencil8: EXERCISED "
+            "(clear + dynamic Replace + read-only test + exact 255px/256px readback)"
+        )
+    else:
+        print(
+            "RunenGPU actual-browser Stencil8: SKIPPED "
+            "(DepthStencil + CopySource + CopyDestination roles not all advertised)"
+        )
+
+
 def verify_format_reporter() -> None:
     """CI-invoked zero/partial/full/out-of-range regression for 3 and 4 formats."""
     families = (
@@ -329,10 +349,34 @@ def verify_depth_reporter() -> None:
     print("RunenGPU actual-browser depth reporter regression: PASS")
 
 
+def verify_stencil8_reporter() -> None:
+    for exercised in (0, 1):
+        captured = io.StringIO()
+        with contextlib.redirect_stdout(captured):
+            report_stencil8_proof({"stencil8Exercised": exercised})
+        transcript = captured.getvalue()
+        expected = "EXERCISED" if exercised else "SKIPPED"
+        if expected not in transcript:
+            raise AssertionError(
+                f"incorrect Stencil8 reporter output for evidence {exercised}"
+            )
+    for invalid in ({}, {"stencil8Exercised": -1}, {"stencil8Exercised": 2},
+                    {"stencil8Exercised": True}, {"stencil8Exercised": "1"}):
+        try:
+            with contextlib.redirect_stdout(io.StringIO()):
+                report_stencil8_proof(invalid)
+        except RuntimeError:
+            pass
+        else:
+            raise AssertionError(f"invalid Stencil8 evidence was accepted: {invalid!r}")
+    print("RunenGPU actual-browser Stencil8 reporter regression: PASS")
+
+
 def main() -> int:
     args = parse_args()
     verify_format_reporter()
     verify_depth_reporter()
+    verify_stencil8_reporter()
     out_dir = args.out_dir.resolve()
     js_path = out_dir / "gpu_browser_webgpu.js"
     wasm_path = out_dir / "gpu_browser_webgpu_bg.wasm"
@@ -470,6 +514,7 @@ def main() -> int:
             "63px and 64px copy round trips",
         )
         report_depth_proofs(value)
+        report_stencil8_proof(value)
         print("RunenGPU actual-browser WebGPU conformance: PASS")
         return 0
     except Exception:

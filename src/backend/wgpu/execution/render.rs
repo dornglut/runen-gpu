@@ -11,10 +11,10 @@ use super::{
 };
 use crate::{
     GpuAttachmentStore, GpuColorAttachmentLoad, GpuContext, GpuDepthAttachmentLoad,
-    GpuDepthStencilAccess, GpuDrawIntent, GpuIndexFormat, GpuRealizedBuffer,
-    GpuRealizedRenderPipeline, GpuRealizedTextureView, GpuRenderDraw, GpuRenderOperation,
-    GpuSubmissionFailure, GpuSubmissionPreparationError, GpuSubmissionPreparationErrorKind,
-    GpuWorkResourceId,
+    GpuDepthAttachmentState, GpuDepthStencilAccess, GpuDrawIntent, GpuIndexFormat,
+    GpuRealizedBuffer, GpuRealizedRenderPipeline, GpuRealizedTextureView, GpuRenderDraw,
+    GpuRenderOperation, GpuStencilAttachmentLoad, GpuStencilAttachmentState, GpuSubmissionFailure,
+    GpuSubmissionPreparationError, GpuSubmissionPreparationErrorKind, GpuWorkResourceId,
 };
 use std::collections::BTreeMap;
 use wgpu::{
@@ -58,9 +58,8 @@ struct PreparedRenderColorAttachment {
 #[derive(Debug, Clone)]
 struct PreparedRenderDepthStencilAttachment {
     source: GpuRealizedTextureView,
-    access: GpuDepthStencilAccess,
-    load: GpuDepthAttachmentLoad,
-    store: GpuAttachmentStore,
+    depth: Option<GpuDepthAttachmentState>,
+    stencil: Option<GpuStencilAttachmentState>,
 }
 
 #[derive(Debug, Clone)]
@@ -163,9 +162,8 @@ pub(super) async fn prepare_render_operation(
             };
             Ok(PreparedRenderDepthStencilAttachment {
                 source,
-                access: attachment.access(),
-                load: attachment.load(),
-                store: attachment.store(),
+                depth: attachment.depth(),
+                stencil: attachment.stencil(),
             })
         })
         .transpose()?;
@@ -338,14 +336,20 @@ pub(super) fn encode_render_operation<'a>(
     let depth_stencil_attachment = render.depth_stencil_attachment.as_ref().map(|attachment| {
         RenderPassDepthStencilAttachment {
             view: &attachment.source.record.object,
-            depth_ops: match attachment.access {
+            depth_ops: attachment.depth.and_then(|state| match state.access() {
                 GpuDepthStencilAccess::ReadOnly => None,
                 GpuDepthStencilAccess::ReadWrite => Some(Operations {
-                    load: depth_load(attachment.load),
-                    store: attachment_store(attachment.store),
+                    load: depth_load(state.load()),
+                    store: attachment_store(state.store()),
                 }),
-            },
-            stencil_ops: None,
+            }),
+            stencil_ops: attachment.stencil.and_then(|state| match state.access() {
+                GpuDepthStencilAccess::ReadOnly => None,
+                GpuDepthStencilAccess::ReadWrite => Some(Operations {
+                    load: stencil_load(state.load()),
+                    store: attachment_store(state.store()),
+                }),
+            }),
         }
     });
     let timestamp_writes =
@@ -468,6 +472,13 @@ fn depth_load(load: GpuDepthAttachmentLoad) -> LoadOp<f32> {
     match load {
         GpuDepthAttachmentLoad::Load => LoadOp::Load,
         GpuDepthAttachmentLoad::Clear(value) => LoadOp::Clear(value.value()),
+    }
+}
+
+fn stencil_load(load: GpuStencilAttachmentLoad) -> LoadOp<u32> {
+    match load {
+        GpuStencilAttachmentLoad::Load => LoadOp::Load,
+        GpuStencilAttachmentLoad::Clear(value) => LoadOp::Clear(value.value()),
     }
 }
 

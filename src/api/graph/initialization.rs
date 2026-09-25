@@ -1034,10 +1034,22 @@ fn operation_initialization(
                 }
             }
             if let Some(attachment) = render.depth_stencil_attachment() {
-                let access = GpuResourceAccess::Texture(attachment.source_access().clone());
-                match attachment.load() {
-                    GpuDepthAttachmentLoad::Load => require(&access),
-                    GpuDepthAttachmentLoad::Clear(_) => effect(&access),
+                if let (Some(state), Some(access)) = (attachment.depth(), attachment.depth_access())
+                {
+                    let access = GpuResourceAccess::Texture(access.clone());
+                    match state.load() {
+                        GpuDepthAttachmentLoad::Load => require(&access),
+                        GpuDepthAttachmentLoad::Clear(_) => effect(&access),
+                    }
+                }
+                if let (Some(state), Some(access)) =
+                    (attachment.stencil(), attachment.stencil_access())
+                {
+                    let access = GpuResourceAccess::Texture(access.clone());
+                    match state.load() {
+                        crate::GpuStencilAttachmentLoad::Load => require(&access),
+                        crate::GpuStencilAttachmentLoad::Clear(_) => effect(&access),
+                    }
                 }
             }
             for draw in render.draws() {
@@ -1318,10 +1330,19 @@ fn operation_discard_regions(operation: &GpuWorkOperation) -> Vec<Initialization
         }
     }
     if let Some(attachment) = render.depth_stencil_attachment() {
-        if attachment.store() == GpuAttachmentStore::Discard {
-            discarded.push(initialization_region_for_access(
-                &GpuResourceAccess::Texture(attachment.source_access().clone()),
-            ));
+        if let (Some(state), Some(access)) = (attachment.depth(), attachment.depth_access()) {
+            if state.store() == GpuAttachmentStore::Discard {
+                discarded.push(initialization_region_for_access(
+                    &GpuResourceAccess::Texture(access.clone()),
+                ));
+            }
+        }
+        if let (Some(state), Some(access)) = (attachment.stencil(), attachment.stencil_access()) {
+            if state.store() == GpuAttachmentStore::Discard {
+                discarded.push(initialization_region_for_access(
+                    &GpuResourceAccess::Texture(access.clone()),
+                ));
+            }
         }
     }
     discarded

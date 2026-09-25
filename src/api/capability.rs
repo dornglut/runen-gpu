@@ -243,6 +243,7 @@ pub enum GpuTextureFormat {
     Rgba16Uint,
     Rgba16Sint,
     Rgba16Float,
+    Stencil8,
     Depth16Unorm,
     Depth24Plus,
     Depth32Float,
@@ -711,6 +712,7 @@ mod tests {
     fn format_capability_construction_normalizes_structural_fields() {
         for (format, expected_copy_size) in [
             (GpuTextureFormat::R32Float, Some(4)),
+            (GpuTextureFormat::Stencil8, Some(1)),
             (GpuTextureFormat::Depth16Unorm, Some(2)),
             (GpuTextureFormat::Depth24Plus, None),
         ] {
