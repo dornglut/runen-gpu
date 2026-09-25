@@ -118,6 +118,11 @@ one-off framework expansion.
 - preserve per-format sampled/storage/render/copy role admission from actual
   device facts.
 
+Transient attachment content semantics are a planned `ADVANCED` R1/R2-boundary
+capability. They remain distinct from logical resource lifetime and may permit
+private tile-local, memoryless, or ordinary backing. A bounded investigation must
+settle the exact resource-versus-attachment authority before delivery.
+
 ### R2 — Sampling and raster completeness
 
 Goal: provide the mature generic fixed-function vocabulary expected by modern
@@ -127,10 +132,6 @@ renderers without importing renderer policy.
 - full blend factors and operations with independent color/alpha state;
 - depth bias, slope scale, and applicable clamp semantics;
 - complete stencil front/back operations and masks;
-- normalized transient-attachment content semantics for attachment-only
-  ephemeral contents, kept distinct from logical resource lifetime and privately
-  realizable through tile-local, memoryless, or ordinary backing as the accepted
-  contract permits;
 - mature portable optional raster capabilities behind truthful capability gates,
   such as depth-clip control and dual-source blending when their prerequisites are
   satisfied;
@@ -233,7 +234,7 @@ This is intentionally family-level rather than a mirror of WGPU's feature list.
 | Portable texture/view/vertex/depth-stencil vocabulary | `CORE` | `PLAN` — R1 |
 | BC/ETC2/ASTC compression | `ADVANCED` | `PLAN` — R1, capability-gated |
 | Anisotropy and complete portable raster/blend/depth/stencil state | `CORE` | `PLAN` — R2 |
-| Transient attachment content semantics | `ADVANCED` | `PLAN` — R2, distinct from logical resource lifetime |
+| Transient attachment content semantics | `ADVANCED` | `PLAN` — R1/R2 boundary; contract investigation precedes delivery |
 | WGSL `f16` and mature standardized optional shader features | `ADVANCED` | `PLAN` — R3 |
 | Fixed binding arrays | `ADVANCED` | `CURRENT`, retain truthful admission |
 | Non-uniform sampled-texture/storage-resource indexing | `ADVANCED` | `PLAN` — R3, capability-gated native-generic path |
