@@ -179,16 +179,8 @@ fn shader_f16_invalid_and_unrepresentable_forms_fail_closed() {
 fn f16_context_descriptor(
     backend: GpuBackendFamily,
     fallback: Option<GpuSoftwareFallbackPolicy>,
-    require_f16: bool,
+    requirements: GpuCapabilityRequirements,
 ) -> GpuContextDescriptor {
-    let mut requirements = GpuCapabilityProfile::ComputeBaseline.requirements();
-    if require_f16 {
-        requirements
-            .insert(GpuCapabilityRequirement::Required(
-                GpuCapabilityFeature::ShaderF16,
-            ))
-            .unwrap();
-    }
     let mut descriptor = GpuContextDescriptor::new(requirements)
         .with_allowed_backends([backend])
         .with_label("R3 ShaderF16 execution proof");
@@ -270,8 +262,11 @@ fn f16_graph() -> (GpuPreparedWorkGraph, GpuReadbackId) {
     )
 }
 
-async fn execute_f16(context: &GpuContext) {
-    let (graph, readback_id) = f16_graph();
+async fn execute_f16(
+    context: &GpuContext,
+    graph: GpuPreparedWorkGraph,
+    readback_id: GpuReadbackId,
+) {
     let prepared = context.prepare_submission(graph).await.unwrap();
     let submission = context.submit_prepared(prepared).unwrap();
     let bytes =
@@ -289,10 +284,18 @@ async fn execute_f16(context: &GpuContext) {
 #[test]
 #[ignore = "requires retained Vulkan/Lavapipe execution"]
 fn shader_f16_native_execution_is_backend_proven() {
+    let (graph, readback_id) = f16_graph();
+    assert!(matches!(
+        graph.requirements().get(GpuCapabilityFeature::ShaderF16),
+        Some(GpuCapabilityRequirement::Required(
+            GpuCapabilityFeature::ShaderF16
+        ))
+    ));
+
     let baseline = pollster::block_on(GpuContext::request(f16_context_descriptor(
         GpuBackendFamily::Vulkan,
         Some(GpuSoftwareFallbackPolicy::Require),
-        false,
+        GpuCapabilityProfile::ComputeBaseline.requirements(),
     )))
     .expect("retained Vulkan fallback context must be available");
     assert!(
@@ -302,13 +305,18 @@ fn shader_f16_native_execution_is_backend_proven() {
             .supports(GpuCapabilityFeature::ShaderF16),
         "acceptance requires at least one retained positive ShaderF16 execution"
     );
+    assert!(
+        pollster::block_on(baseline.prepare_submission(graph.clone())).is_err(),
+        "a context created without the graph-derived ShaderF16 requirement must reject the f16 graph"
+    );
+
     let context = pollster::block_on(GpuContext::request(f16_context_descriptor(
         GpuBackendFamily::Vulkan,
         Some(GpuSoftwareFallbackPolicy::Require),
-        true,
+        graph.requirements().clone(),
     )))
-    .expect("advertised retained Vulkan ShaderF16 capability must admit a context");
-    pollster::block_on(execute_f16(&context));
+    .expect("graph-derived ShaderF16 requirements must admit the retained Vulkan context");
+    pollster::block_on(execute_f16(&context, graph, readback_id));
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -319,7 +327,7 @@ pub(crate) async fn run_browser_shader_f16() -> u32 {
     let baseline = GpuContext::request(f16_context_descriptor(
         GpuBackendFamily::BrowserWebGpu,
         None,
-        false,
+        GpuCapabilityProfile::ComputeBaseline.requirements(),
     ))
     .await
     .expect("actual-browser WebGPU baseline must be available");
@@ -332,13 +340,25 @@ pub(crate) async fn run_browser_shader_f16() -> u32 {
         return 0;
     }
 
+    let (graph, readback_id) = f16_graph();
+    assert!(matches!(
+        graph.requirements().get(GpuCapabilityFeature::ShaderF16),
+        Some(GpuCapabilityRequirement::Required(
+            GpuCapabilityFeature::ShaderF16
+        ))
+    ));
+    assert!(
+        baseline.prepare_submission(graph.clone()).await.is_err(),
+        "a browser context created without the graph-derived ShaderF16 requirement must reject the f16 graph"
+    );
+
     let context = GpuContext::request(f16_context_descriptor(
         GpuBackendFamily::BrowserWebGpu,
         None,
-        true,
+        graph.requirements().clone(),
     ))
     .await
-    .expect("advertised browser ShaderF16 capability must admit a context");
-    execute_f16(&context).await;
+    .expect("graph-derived ShaderF16 requirements must admit the browser context");
+    execute_f16(&context, graph, readback_id).await;
     SUPPORTED | EXERCISED
 }
