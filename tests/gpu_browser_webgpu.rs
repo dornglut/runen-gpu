@@ -27,6 +27,7 @@ mod browser {
         static DEPTH_COPY_EXERCISED_MASK: RefCell<u32> = RefCell::new(0);
         static DEPTH_LINEAR_EXERCISED_MASK: RefCell<u32> = RefCell::new(0);
         static STENCIL8_EXERCISED: RefCell<u32> = RefCell::new(0);
+        static DEPTH24PLUS_STENCIL8_EXERCISED: RefCell<u32> = RefCell::new(0);
     }
 
     struct YieldOnce(bool);
@@ -1154,6 +1155,390 @@ fn vs_main(@builtin(vertex_index) index: u32) -> @builtin(position) vec4f {
         STENCIL8_EXERCISED.with(|slot| *slot.borrow_mut() = 1);
     }
 
+    fn browser_combined_texture(
+        allocator: &mut GpuWorkResourceIdAllocator,
+        name: &str,
+        width: u32,
+        usages: impl IntoIterator<Item = GpuTextureUsage>,
+    ) -> (GpuTextureHandle, GpuTextureViewHandle) {
+        let resource_label = format_label(name);
+        let texture = allocator
+            .allocate_texture_handle(
+                GpuTextureDescriptor::new(
+                    format_texture_common(name),
+                    GpuTextureDimension::D2,
+                    GpuTextureExtent::new(&resource_label, GpuTextureDimension::D2, width, 2, 1)
+                        .unwrap(),
+                    1,
+                    1,
+                    GpuTextureFormat::Depth24PlusStencil8,
+                    GpuTextureUsages::new(&resource_label, usages).unwrap(),
+                    GpuTextureInitialization::Uninitialized,
+                )
+                .unwrap(),
+            )
+            .unwrap();
+        let range = GpuTextureSubresourceRange::new(
+            texture.descriptor().common().label(),
+            0,
+            1,
+            0,
+            1,
+            GpuTextureAspect::All,
+        )
+        .unwrap();
+        let view = allocator
+            .allocate_texture_view_handle(
+                GpuTextureViewDescriptor::new(
+                    format_texture_common(&format!("{name} view")),
+                    &texture,
+                    None,
+                    GpuTextureViewDimension::D2,
+                    range,
+                )
+                .unwrap(),
+            )
+            .unwrap();
+        (texture, view)
+    }
+
+    fn browser_combined_pipeline(
+        key: &str,
+        depth_write: bool,
+        depth_compare: GpuCompareFunction,
+    ) -> GpuRenderPipelineDescriptor {
+        let vertex = GpuEntryPointName::new("vs_main").unwrap();
+        let identity = GpuProgramSourceIdentity::new(
+            GpuProgramSourceOwnerId::allocate().unwrap(),
+            GpuProgramSourceKey::new(key).unwrap(),
+            GpuProgramSourceRevision::try_from_raw(1).unwrap(),
+        );
+        let mut sources = GpuProgramSourceRegistry::new(2, 4096).unwrap();
+        let source = sources
+            .admit_wgsl(
+                identity,
+                STENCIL8_WGSL,
+                GpuProgramSourceProvenance::new(
+                    "browser Depth24PlusStencil8 proof",
+                    None,
+                )
+                .unwrap(),
+            )
+            .unwrap();
+        let program = GpuProgramDescriptor::new(
+            source,
+            [vertex.clone()],
+            std::iter::empty::<GpuBindingLayoutRefinement>(),
+        )
+        .unwrap();
+        let face =
+            browser_stencil_face(GpuCompareFunction::Always, GpuStencilOperation::Replace);
+        let stencil = GpuStencilStateDescriptor::new(face, face, u32::MAX, 0xff);
+        let depth_stencil = GpuDepthStencilStateDescriptor::new(
+            GpuTextureFormat::Depth24PlusStencil8,
+            Some(GpuDepthStateDescriptor::new(depth_write, depth_compare)),
+            Some(stencil),
+        )
+        .unwrap();
+        let state = GpuRenderPipelineStateDescriptor::new(
+            GpuVertexInputStateDescriptor::new([]).unwrap(),
+            None,
+            GpuPrimitiveStateDescriptor::default(),
+            Some(depth_stencil),
+            GpuMultisampleStateDescriptor::default(),
+        )
+        .unwrap();
+        GpuRenderPipelineDescriptor::new(
+            program,
+            GpuRenderEntryPoints::new(vertex, None),
+            state,
+            GpuPipelineConfiguration::default(),
+        )
+        .unwrap()
+    }
+
+    fn browser_combined_seed_attachment(
+        view: GpuTextureViewHandle,
+    ) -> GpuRenderDepthStencilAttachment {
+        let depth = GpuDepthAttachmentState::new(
+            GpuDepthStencilAccess::ReadWrite,
+            GpuDepthAttachmentLoad::Clear(GpuDepthClearValue::new(1.0).unwrap()),
+            GpuAttachmentStore::Store,
+        )
+        .unwrap();
+        let stencil = GpuStencilAttachmentState::new(
+            GpuDepthStencilAccess::ReadWrite,
+            GpuStencilAttachmentLoad::Clear(GpuStencilClearValue::new(0).unwrap()),
+            GpuAttachmentStore::Store,
+        )
+        .unwrap();
+        GpuRenderDepthStencilAttachment::new(view, Some(depth), Some(stencil)).unwrap()
+    }
+
+    fn browser_combined_mixed_attachment(
+        view: GpuTextureViewHandle,
+    ) -> GpuRenderDepthStencilAttachment {
+        let depth = GpuDepthAttachmentState::new(
+            GpuDepthStencilAccess::ReadOnly,
+            GpuDepthAttachmentLoad::Load,
+            GpuAttachmentStore::Store,
+        )
+        .unwrap();
+        let stencil = GpuStencilAttachmentState::new(
+            GpuDepthStencilAccess::ReadWrite,
+            GpuStencilAttachmentLoad::Load,
+            GpuAttachmentStore::Store,
+        )
+        .unwrap();
+        GpuRenderDepthStencilAttachment::new(view, Some(depth), Some(stencil)).unwrap()
+    }
+
+    fn browser_combined_stencil_region(
+        texture: &GpuTextureHandle,
+        width: u32,
+    ) -> GpuTextureCopyRegion {
+        GpuTextureCopyRegion::new(
+            texture,
+            0,
+            GpuTextureOrigin::new(0, 0, 0),
+            GpuTextureAspect::StencilOnly,
+            GpuCopyExtent::new(width, 2, 1).unwrap(),
+        )
+        .unwrap()
+    }
+
+    async fn run_browser_combined_width(context: &GpuContext, width: u32) {
+        const FIRST_REFERENCE: u32 = 91;
+        const MIXED_REFERENCE: u32 = 123;
+        const COPIED_DEPTH_REFERENCE: u32 = 177;
+
+        let mut allocator = GpuWorkResourceIdAllocator::new();
+        let (source, source_view) = browser_combined_texture(
+            &mut allocator,
+            "browser Depth24PlusStencil8 source",
+            width,
+            [
+                GpuTextureUsage::DepthStencilAttachment,
+                GpuTextureUsage::CopySource,
+            ],
+        );
+        let (destination, destination_view) = browser_combined_texture(
+            &mut allocator,
+            "browser Depth24PlusStencil8 destination",
+            width,
+            [
+                GpuTextureUsage::DepthStencilAttachment,
+                GpuTextureUsage::CopySource,
+                GpuTextureUsage::CopyDestination,
+            ],
+        );
+
+        let seed = GpuRenderOperation::new(
+            [],
+            Some(browser_combined_seed_attachment(source_view.clone())),
+            [browser_stencil_draw(
+                browser_combined_pipeline(
+                    "proof.browser.depth24plus-stencil8.seed",
+                    true,
+                    GpuCompareFunction::Always,
+                ),
+                width,
+                FIRST_REFERENCE,
+            )],
+            None,
+        )
+        .unwrap();
+        let mixed = GpuRenderOperation::new(
+            [],
+            Some(browser_combined_mixed_attachment(source_view.clone())),
+            [browser_stencil_draw(
+                browser_combined_pipeline(
+                    "proof.browser.depth24plus-stencil8.mixed",
+                    false,
+                    GpuCompareFunction::Equal,
+                ),
+                width,
+                MIXED_REFERENCE,
+            )],
+            None,
+        )
+        .unwrap();
+
+        let extent = GpuCopyExtent::new(width, 2, 1).unwrap();
+        let source_all = GpuTextureCopyRegion::new(
+            &source,
+            0,
+            GpuTextureOrigin::new(0, 0, 0),
+            GpuTextureAspect::All,
+            extent,
+        )
+        .unwrap();
+        let destination_all = GpuTextureCopyRegion::new(
+            &destination,
+            0,
+            GpuTextureOrigin::new(0, 0, 0),
+            GpuTextureAspect::All,
+            extent,
+        )
+        .unwrap();
+        let copy = GpuCopyOperation::texture_to_texture(source_all, destination_all).unwrap();
+
+        let copied_id = GpuReadbackId::allocate().unwrap();
+        let copied_readback = GpuReadbackOperation::new(
+            browser_combined_stencil_region(&destination, width).into(),
+            copied_id,
+        )
+        .unwrap();
+
+        let copied_depth_gate = GpuRenderOperation::new(
+            [],
+            Some(browser_combined_mixed_attachment(destination_view.clone())),
+            [browser_stencil_draw(
+                browser_combined_pipeline(
+                    "proof.browser.depth24plus-stencil8.copied-depth",
+                    false,
+                    GpuCompareFunction::Equal,
+                ),
+                width,
+                COPIED_DEPTH_REFERENCE,
+            )],
+            None,
+        )
+        .unwrap();
+
+        let final_id = GpuReadbackId::allocate().unwrap();
+        let final_readback = GpuReadbackOperation::new(
+            browser_combined_stencil_region(&destination, width).into(),
+            final_id,
+        )
+        .unwrap();
+
+        let name = format!("browser Depth24PlusStencil8 {width}x2");
+        let mut builder =
+            GpuWorkFragmentBuilder::new(format_label(&name), format_provenance(&name));
+        for resource in [
+            source.clone().into(),
+            source_view.into(),
+            destination.clone().into(),
+            destination_view.into(),
+        ] {
+            builder.declare_resource(resource).unwrap();
+        }
+        for (node, operation) in [
+            (
+                "browser combined seed depth + stencil",
+                GpuWorkOperation::Render(seed),
+            ),
+            (
+                "browser combined mixed depth-read-only + stencil-write",
+                GpuWorkOperation::Render(mixed),
+            ),
+            (
+                "browser combined all-aspect texture copy",
+                GpuWorkOperation::Copy(copy),
+            ),
+            (
+                "browser combined copied stencil snapshot",
+                GpuWorkOperation::Readback(copied_readback),
+            ),
+            (
+                "browser combined copied depth gate",
+                GpuWorkOperation::Render(copied_depth_gate),
+            ),
+            (
+                "browser combined final stencil readback",
+                GpuWorkOperation::Readback(final_readback),
+            ),
+        ] {
+            builder
+                .add_node(
+                    format_label(node),
+                    operation,
+                    [],
+                    GpuCapabilityRequirements::new(),
+                    GpuExecutionPreference::Automatic,
+                    format_provenance(node),
+                )
+                .unwrap();
+        }
+
+        let graph = GpuPreparedWorkGraph::prepare(format_label(&name), [builder.finish().unwrap()])
+            .unwrap();
+        let prepared = context.prepare_submission(graph).await.unwrap();
+        let submission = context.submit_prepared(prepared).unwrap();
+        let readbacks =
+            wait_for_terminal_readbacks(context, &submission, &[copied_id, final_id]).await;
+        assert_eq!(readbacks.len(), 2);
+        assert_eq!(
+            readbacks[0].texture_format(),
+            Some(GpuTextureFormat::Depth24PlusStencil8)
+        );
+        assert_eq!(
+            readbacks[0].as_bytes().len(),
+            usize::try_from(width * 2).unwrap()
+        );
+        assert!(
+            readbacks[0]
+                .as_bytes()
+                .iter()
+                .all(|byte| *byte == MIXED_REFERENCE as u8),
+            "browser all-aspect copy must preserve the mixed-pass stencil result"
+        );
+        assert!(
+            readbacks[1]
+                .as_bytes()
+                .iter()
+                .all(|byte| *byte == COPIED_DEPTH_REFERENCE as u8),
+            "browser copied depth must pass Equal and gate final stencil Replace"
+        );
+        assert_execution_drained(context);
+    }
+
+    async fn run_browser_depth24plus_stencil8() {
+        let census = GpuContext::request(
+            GpuContextDescriptor::new(depth_requirements())
+                .with_allowed_backends([GpuBackendFamily::BrowserWebGpu])
+                .with_label("browser Depth24PlusStencil8 census"),
+        )
+        .await
+        .expect("declared browser-conformance environment must provide WebGPU");
+        let facts = census
+            .adapter_facts()
+            .supported()
+            .format(GpuTextureFormat::Depth24PlusStencil8)
+            .expect("Depth24PlusStencil8 must be present in the normalized format census");
+
+        if !(facts.depth_stencil && facts.copy_source && facts.copy_destination) {
+            DEPTH24PLUS_STENCIL8_EXERCISED.with(|slot| *slot.borrow_mut() = 0);
+            return;
+        }
+
+        let context = GpuContext::request(
+            GpuContextDescriptor::new(depth_requirements())
+                .require_format_role(
+                    GpuTextureFormat::Depth24PlusStencil8,
+                    GpuFormatRole::DepthStencil,
+                )
+                .require_format_role(
+                    GpuTextureFormat::Depth24PlusStencil8,
+                    GpuFormatRole::CopySource,
+                )
+                .require_format_role(
+                    GpuTextureFormat::Depth24PlusStencil8,
+                    GpuFormatRole::CopyDestination,
+                )
+                .with_allowed_backends([GpuBackendFamily::BrowserWebGpu])
+                .with_label("browser Depth24PlusStencil8 execution proof"),
+        )
+        .await
+        .expect("advertised browser combined attachment/copy roles must admit a context");
+
+        for width in [255, 256] {
+            run_browser_combined_width(&context, width).await;
+        }
+        DEPTH24PLUS_STENCIL8_EXERCISED.with(|slot| *slot.borrow_mut() = 1);
+    }
+
     async fn run_browser_depth_formats() {
         let census = GpuContext::request(
             GpuContextDescriptor::new(depth_requirements())
@@ -1223,6 +1608,7 @@ fn vs_main(@builtin(vertex_index) index: u32) -> @builtin(position) vec4f {
         run_browser_rg16_copy().await;
         run_browser_depth_formats().await;
         run_browser_stencil8().await;
+        run_browser_depth24plus_stencil8().await;
     }
 
     #[unsafe(no_mangle)]
@@ -1307,6 +1693,11 @@ fn vs_main(@builtin(vertex_index) index: u32) -> @builtin(position) vec4f {
     #[unsafe(no_mangle)]
     pub extern "C" fn runengpu_browser_stencil8_exercised() -> u32 {
         STENCIL8_EXERCISED.with(|value| *value.borrow())
+    }
+
+    #[unsafe(no_mangle)]
+    pub extern "C" fn runengpu_browser_depth24plus_stencil8_exercised() -> u32 {
+        DEPTH24PLUS_STENCIL8_EXERCISED.with(|value| *value.borrow())
     }
 }
 

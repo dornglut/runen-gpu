@@ -100,7 +100,8 @@ const done = arguments[arguments.length - 1];
         typeof wasm.runengpu_browser_depth_attachment_exercised_mask !== "function" ||
         typeof wasm.runengpu_browser_depth_copy_exercised_mask !== "function" ||
         typeof wasm.runengpu_browser_depth_linear_exercised_mask !== "function" ||
-        typeof wasm.runengpu_browser_stencil8_exercised !== "function") {
+        typeof wasm.runengpu_browser_stencil8_exercised !== "function" ||
+        typeof wasm.runengpu_browser_depth24plus_stencil8_exercised !== "function") {
       throw new Error("RunenGPU browser proof control exports are absent");
     }
     wasm.runengpu_browser_start();
@@ -120,6 +121,7 @@ const done = arguments[arguments.length - 1];
           depthCopyMask: wasm.runengpu_browser_depth_copy_exercised_mask(),
           depthLinearMask: wasm.runengpu_browser_depth_linear_exercised_mask(),
           stencil8Exercised: wasm.runengpu_browser_stencil8_exercised(),
+          depth24PlusStencil8Exercised: wasm.runengpu_browser_depth24plus_stencil8_exercised(),
         });
         return;
       }
@@ -260,6 +262,26 @@ def report_stencil8_proof(value: dict[str, object]) -> None:
         )
 
 
+def report_depth24plus_stencil8_proof(value: dict[str, object]) -> None:
+    exercised = value.get("depth24PlusStencil8Exercised")
+    if type(exercised) is not int or exercised not in (0, 1):
+        raise RuntimeError(
+            "actual-browser Depth24PlusStencil8 proof did not report valid "
+            f"execution evidence: {exercised!r}"
+        )
+    if exercised:
+        print(
+            "RunenGPU actual-browser Depth24PlusStencil8: EXERCISED "
+            "(mixed depth-read-only/stencil-write + all-aspect copy + "
+            "copied stencil snapshot + copied-depth gate + exact 255px/256px readback)"
+        )
+    else:
+        print(
+            "RunenGPU actual-browser Depth24PlusStencil8: SKIPPED "
+            "(DepthStencil + CopySource + CopyDestination roles not all advertised)"
+        )
+
+
 def verify_format_reporter() -> None:
     """CI-invoked zero/partial/full/out-of-range regression for 3 and 4 formats."""
     families = (
@@ -372,11 +394,45 @@ def verify_stencil8_reporter() -> None:
     print("RunenGPU actual-browser Stencil8 reporter regression: PASS")
 
 
+def verify_depth24plus_stencil8_reporter() -> None:
+    for exercised in (0, 1):
+        captured = io.StringIO()
+        with contextlib.redirect_stdout(captured):
+            report_depth24plus_stencil8_proof(
+                {"depth24PlusStencil8Exercised": exercised}
+            )
+        transcript = captured.getvalue()
+        expected = "EXERCISED" if exercised else "SKIPPED"
+        if expected not in transcript:
+            raise AssertionError(
+                "incorrect Depth24PlusStencil8 reporter output "
+                f"for evidence {exercised}"
+            )
+    for invalid in (
+        {},
+        {"depth24PlusStencil8Exercised": -1},
+        {"depth24PlusStencil8Exercised": 2},
+        {"depth24PlusStencil8Exercised": True},
+        {"depth24PlusStencil8Exercised": "1"},
+    ):
+        try:
+            with contextlib.redirect_stdout(io.StringIO()):
+                report_depth24plus_stencil8_proof(invalid)
+        except RuntimeError:
+            pass
+        else:
+            raise AssertionError(
+                f"invalid Depth24PlusStencil8 evidence was accepted: {invalid!r}"
+            )
+    print("RunenGPU actual-browser Depth24PlusStencil8 reporter regression: PASS")
+
+
 def main() -> int:
     args = parse_args()
     verify_format_reporter()
     verify_depth_reporter()
     verify_stencil8_reporter()
+    verify_depth24plus_stencil8_reporter()
     out_dir = args.out_dir.resolve()
     js_path = out_dir / "gpu_browser_webgpu.js"
     wasm_path = out_dir / "gpu_browser_webgpu_bg.wasm"
@@ -515,6 +571,7 @@ def main() -> int:
         )
         report_depth_proofs(value)
         report_stencil8_proof(value)
+        report_depth24plus_stencil8_proof(value)
         print("RunenGPU actual-browser WebGPU conformance: PASS")
         return 0
     except Exception:
