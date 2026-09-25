@@ -10,6 +10,8 @@ pub(crate) struct GpuRuntimeBindingDeviceFacts {
     max_bind_groups: u32,
     max_dynamic_uniform_buffers_per_pipeline_layout: u32,
     max_dynamic_storage_buffers_per_pipeline_layout: u32,
+    max_binding_array_elements_per_shader_stage: u32,
+    max_binding_array_sampler_elements_per_shader_stage: u32,
     format_capabilities: BTreeMap<GpuTextureFormat, GpuTextureFormatCapabilities>,
 }
 
@@ -28,8 +30,22 @@ impl GpuRuntimeBindingDeviceFacts {
             max_bind_groups,
             max_dynamic_uniform_buffers_per_pipeline_layout,
             max_dynamic_storage_buffers_per_pipeline_layout,
+            max_binding_array_elements_per_shader_stage: 0,
+            max_binding_array_sampler_elements_per_shader_stage: 0,
             format_capabilities: format_capabilities.into_iter().collect(),
         }
+    }
+
+    pub(crate) const fn with_binding_array_limits(
+        mut self,
+        max_binding_array_elements_per_shader_stage: u32,
+        max_binding_array_sampler_elements_per_shader_stage: u32,
+    ) -> Self {
+        self.max_binding_array_elements_per_shader_stage =
+            max_binding_array_elements_per_shader_stage;
+        self.max_binding_array_sampler_elements_per_shader_stage =
+            max_binding_array_sampler_elements_per_shader_stage;
+        self
     }
 
     pub(crate) const fn uniform_buffer_offset_alignment(&self) -> Option<NonZeroU64> {
@@ -50,6 +66,14 @@ impl GpuRuntimeBindingDeviceFacts {
 
     pub(crate) const fn max_dynamic_storage_buffers_per_pipeline_layout(&self) -> u32 {
         self.max_dynamic_storage_buffers_per_pipeline_layout
+    }
+
+    pub(crate) const fn max_binding_array_elements_per_shader_stage(&self) -> u32 {
+        self.max_binding_array_elements_per_shader_stage
+    }
+
+    pub(crate) const fn max_binding_array_sampler_elements_per_shader_stage(&self) -> u32 {
+        self.max_binding_array_sampler_elements_per_shader_stage
     }
 
     pub(crate) fn format_capabilities(
