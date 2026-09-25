@@ -103,6 +103,7 @@ const done = arguments[arguments.length - 1];
         typeof wasm.runengpu_browser_blend_state_exercised_mask !== "function" ||
         typeof wasm.runengpu_browser_depth_bias_exercised_mask !== "function" ||
         typeof wasm.runengpu_browser_sampler_anisotropy_exercised !== "function" ||
+        typeof wasm.runengpu_browser_shader_f16_exercised_mask !== "function" ||
         typeof wasm.runengpu_browser_vertex8_exercised_mask !== "function" ||
         typeof wasm.runengpu_browser_vertex16_exercised_mask !== "function" ||
         typeof wasm.runengpu_browser_vertex_packed_exercised_mask !== "function" ||
@@ -136,6 +137,7 @@ const done = arguments[arguments.length - 1];
           blendStateMask: wasm.runengpu_browser_blend_state_exercised_mask(),
           depthBiasMask: wasm.runengpu_browser_depth_bias_exercised_mask(),
           samplerAnisotropyExercised: wasm.runengpu_browser_sampler_anisotropy_exercised(),
+          shaderF16Mask: wasm.runengpu_browser_shader_f16_exercised_mask(),
           vertex8Mask: wasm.runengpu_browser_vertex8_exercised_mask(),
           vertex16Mask: wasm.runengpu_browser_vertex16_exercised_mask(),
           vertexPackedMask: wasm.runengpu_browser_vertex_packed_exercised_mask(),
@@ -882,6 +884,31 @@ def main() -> int:
             "RunenGPU actual-browser sampler anisotropy: "
             "EXERCISED (requested max=8 through public sampler realization)"
         )
+
+        shader_f16_mask = value.get("shaderF16Mask")
+        if type(shader_f16_mask) is not int or shader_f16_mask < 0:
+            raise RuntimeError(
+                f"RunenGPU actual-browser ShaderF16: invalid mask {shader_f16_mask!r}"
+            )
+        shader_f16_supported = 1 << 0
+        shader_f16_exercised = 1 << 1
+        if shader_f16_mask & ~(shader_f16_supported | shader_f16_exercised):
+            raise RuntimeError(
+                "RunenGPU actual-browser ShaderF16: unknown mask bits "
+                f"{shader_f16_mask:#x}"
+            )
+        if shader_f16_mask & shader_f16_supported:
+            if shader_f16_mask & shader_f16_exercised != shader_f16_exercised:
+                raise RuntimeError(
+                    "RunenGPU actual-browser ShaderF16: advertised support was not exercised"
+                )
+            print("RunenGPU actual-browser ShaderF16: EXERCISED")
+        elif shader_f16_mask != 0:
+            raise RuntimeError(
+                "RunenGPU actual-browser ShaderF16: exercised without advertised support"
+            )
+        else:
+            print("RunenGPU actual-browser ShaderF16: UNSUPPORTED")
 
         vertex8_names = (
             "Uint8",

@@ -431,6 +431,7 @@ fn wgpu_features_for(feature: GpuCapabilityFeature) -> Features {
             Features::STORAGE_RESOURCE_BINDING_ARRAY
         }
         GpuCapabilityFeature::UniformBufferBindingArray => Features::UNIFORM_BUFFER_BINDING_ARRAYS,
+        GpuCapabilityFeature::ShaderF16 => Features::SHADER_F16,
         GpuCapabilityFeature::DepthBiasClamp => Features::empty(),
         _ => Features::empty(),
     }
@@ -864,6 +865,14 @@ mod tests {
         assert!(
             requested_features(&candidate_with_rg11b10_role(GpuFormatRole::ColorAttachment))
                 .contains(Features::RG11B10UFLOAT_RENDERABLE)
+        );
+    }
+
+    #[test]
+    fn shader_f16_requests_the_exact_wgpu_feature() {
+        assert_eq!(
+            wgpu_features_for(GpuCapabilityFeature::ShaderF16),
+            Features::SHADER_F16
         );
     }
 

@@ -153,6 +153,9 @@ pub(super) fn normalized_features(
     if features.contains(Features::STORAGE_RESOURCE_BINDING_ARRAY) {
         supported.push(GpuCapabilityFeature::StorageResourceBindingArray);
     }
+    if features.contains(Features::SHADER_F16) {
+        supported.push(GpuCapabilityFeature::ShaderF16);
+    }
     if surface_compatible {
         supported.push(GpuCapabilityFeature::Presentation);
     }
@@ -409,6 +412,35 @@ mod tests {
         assert!(!unknown.contains(&GpuCapabilityFeature::Copy));
         assert!(!unknown.contains(&GpuCapabilityFeature::DepthBiasClamp));
         assert!(unknown.contains(&GpuCapabilityFeature::Presentation));
+    }
+
+    #[test]
+    fn shader_f16_mapping_requires_the_exact_advertised_feature() {
+        for backend in [Backend::Vulkan, Backend::BrowserWebGpu, Backend::Metal] {
+            let supported = normalized_features(
+                backend,
+                Features::SHADER_F16,
+                DownlevelFlags::empty(),
+                false,
+                false,
+            );
+            assert!(
+                supported.contains(&GpuCapabilityFeature::ShaderF16),
+                "{backend:?}"
+            );
+
+            let unsupported = normalized_features(
+                backend,
+                Features::empty(),
+                DownlevelFlags::empty(),
+                false,
+                false,
+            );
+            assert!(
+                !unsupported.contains(&GpuCapabilityFeature::ShaderF16),
+                "{backend:?}"
+            );
+        }
     }
 
     #[test]
