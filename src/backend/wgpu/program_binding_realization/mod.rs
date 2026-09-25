@@ -11,8 +11,8 @@ pub(crate) use records::{
 
 use super::{WgpuDeviceHealth, WgpuErrorAttributionGate};
 use crate::{
-    GpuBindGroupLayoutDescriptor, GpuBindingDeclaration, GpuContext, GpuContextAffinity,
-    GpuPipelineLayoutDescriptor, GpuProgramBindingRealizationError,
+    GpuBindGroupLayoutDescriptor, GpuBindingDeclaration, GpuCapabilityAdmission, GpuContext,
+    GpuContextAffinity, GpuPipelineLayoutDescriptor, GpuProgramBindingRealizationError,
     GpuProgramBindingRealizationErrorCategory, GpuProgramBindingRealizationPolicy,
     GpuProgramBindingRealizationStats, GpuProgramDescriptor, GpuRealizedBindGroup,
     GpuRealizedBindGroupLayout, GpuRealizedPipelineLayout, GpuRealizedProgram,
@@ -173,6 +173,19 @@ impl GpuContext {
         descriptor: &GpuProgramDescriptor,
     ) -> Result<GpuRealizedProgram, GpuProgramBindingRealizationError> {
         let request = program_request_name(descriptor);
+        GpuCapabilityAdmission::evaluate(
+            request.clone(),
+            descriptor.requirements(),
+            self.adapter_facts().supported(),
+            self.device_facts().enabled_features(),
+        )
+        .map_err(|error| {
+            GpuProgramBindingRealizationError::new(
+                GpuProgramBindingRealizationErrorCategory::RequirementNotAdmitted,
+                request.clone(),
+                error.to_string(),
+            )
+        })?;
         loop {
             self.backend
                 .program_binding_realization
