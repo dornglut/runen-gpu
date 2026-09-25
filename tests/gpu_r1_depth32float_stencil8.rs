@@ -744,14 +744,9 @@ fn depth32float_stencil8_copy_operations_preserve_aspect_contract() {
     assert!(GpuCopyOperation::texture_to_texture(source_all, destination_all).is_ok());
 
     for aspect in [GpuTextureAspect::DepthOnly, GpuTextureAspect::StencilOnly] {
-        let source_region = GpuTextureCopyRegion::new(
-            &source,
-            0,
-            GpuTextureOrigin::new(0, 0, 0),
-            aspect,
-            extent,
-        )
-        .unwrap();
+        let source_region =
+            GpuTextureCopyRegion::new(&source, 0, GpuTextureOrigin::new(0, 0, 0), aspect, extent)
+                .unwrap();
         let destination_region = GpuTextureCopyRegion::new(
             &destination,
             0,
@@ -760,9 +755,7 @@ fn depth32float_stencil8_copy_operations_preserve_aspect_contract() {
             extent,
         )
         .unwrap();
-        assert!(
-            GpuCopyOperation::texture_to_texture(source_region, destination_region).is_err()
-        );
+        assert!(GpuCopyOperation::texture_to_texture(source_region, destination_region).is_err());
     }
 
     let buffer_label = label("Depth32FloatStencil8 linear source");
