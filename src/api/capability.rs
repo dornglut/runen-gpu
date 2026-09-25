@@ -16,6 +16,7 @@ pub enum GpuCapabilityFeature {
     StorageResourceBindingArray,
     UniformBufferBindingArray,
     DepthAttachment,
+    DepthBiasClamp,
     TimestampQuery,
     Presentation,
 }
