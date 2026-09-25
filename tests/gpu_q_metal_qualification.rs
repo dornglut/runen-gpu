@@ -25,6 +25,8 @@ mod retained_vertex16;
 mod retained_vertex8;
 #[path = "gpu_r1_vertex_packed_formats.rs"]
 mod retained_vertex_packed;
+#[path = "gpu_transient_attachment/mod.rs"]
+mod retained_transient_attachment;
 
 const FEATURES: [GpuCapabilityFeature; 14] = [
     GpuCapabilityFeature::Compute,
@@ -488,6 +490,16 @@ fn metal_qualification_records_exact_public_api_evidence() {
     let blend_mask = pollster::block_on(retained_blend::run_suite(&context));
     let depth_bias_mask = pollster::block_on(retained_depth_bias::run_baseline(&context));
     retained_sampler_anisotropy::realize_anisotropic_sampler(&context);
+    let (transient_graph, transient_readback_id) = retained_transient_attachment::graph();
+    let transient_prepared = pollster::block_on(context.prepare_submission(transient_graph)).unwrap();
+    let transient_submission = context.submit_prepared(transient_prepared).unwrap();
+    let transient_bytes = pollster::block_on(readback_wait::wait_for_readback(
+        &context,
+        &transient_submission,
+        transient_readback_id,
+        "Metal qualification transient attachment resolve",
+    ));
+    retained_transient_attachment::assert_resolved(&transient_bytes);
 
     let stats = context.execution_stats();
     assert_eq!(stats.prepared_submissions(), 0);
@@ -538,6 +550,7 @@ fn metal_qualification_records_exact_public_api_evidence() {
             "blend_state_mask": blend_mask,
             "depth_bias_baseline_mask": depth_bias_mask,
             "sampler_anisotropy": "EXERCISED",
+            "transient_attachment": "EXERCISED",
             "timestamp_query": "UNSUPPORTED_SUPPRESSED",
         },
     });

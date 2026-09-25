@@ -28,13 +28,16 @@ mod retained_vertex8;
 #[cfg(target_arch = "wasm32")]
 #[path = "gpu_r1_vertex_packed_formats.rs"]
 mod retained_vertex_packed;
+#[cfg(target_arch = "wasm32")]
+#[path = "gpu_transient_attachment/mod.rs"]
+mod retained_transient_attachment;
 
 #[cfg(target_arch = "wasm32")]
 mod browser {
     use super::{
         retained_bc, retained_blend_state, retained_depth_bias, retained_offscreen_indexed,
         retained_prefix_scan, retained_sampler_anisotropy, retained_shader_f16,
-        retained_vertex_packed, retained_vertex8, retained_vertex16,
+        retained_transient_attachment, retained_vertex_packed, retained_vertex8, retained_vertex16,
     };
     use runen_gpu::*;
     use std::cell::RefCell;
@@ -2141,6 +2144,28 @@ fn cs_main() {
     }
 
     async fn run_browser_webgpu_conformance() {
+        let transient_context = GpuContext::request(retained_transient_attachment::descriptor(
+            GpuBackendFamily::BrowserWebGpu,
+        ))
+        .await
+        .expect("actual-browser Conformance must provide transient attachment WebGPU support");
+        let (transient_graph, transient_readback_id) = retained_transient_attachment::graph();
+        let transient_prepared = transient_context
+            .prepare_submission(transient_graph)
+            .await
+            .unwrap();
+        let transient_submission = transient_context
+            .submit_prepared(transient_prepared)
+            .unwrap();
+        let mut transient_bytes = wait_for_terminal_readbacks(
+            &transient_context,
+            &transient_submission,
+            &[transient_readback_id],
+        )
+        .await;
+        retained_transient_attachment::assert_resolved(&transient_bytes.remove(0));
+        assert_execution_drained(&transient_context);
+
         run_browser_prefix_scan().await;
         run_browser_offscreen_indexed().await;
         run_browser_rgba16_copy().await;
