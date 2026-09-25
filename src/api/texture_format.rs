@@ -1397,7 +1397,7 @@ mod tests {
             stencil_copy_block_size: None,
             srgb: false,
             paired_view_format: None,
-            scalar_class: GpuTextureScalarClass::Float,
+            color_scalar_class: None,
             component_count: 1,
             has_alpha: false,
         };

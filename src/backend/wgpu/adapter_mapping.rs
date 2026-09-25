@@ -195,7 +195,7 @@ const fn is_g7a_presentation_format(format: GpuTextureFormat) -> bool {
     )
 }
 
-fn texture_formats() -> [(GpuTextureFormat, TextureFormat); 37] {
+fn texture_formats() -> [(GpuTextureFormat, TextureFormat); 38] {
     [
         (GpuTextureFormat::R8Unorm, TextureFormat::R8Unorm),
         (GpuTextureFormat::R8Snorm, TextureFormat::R8Snorm),
