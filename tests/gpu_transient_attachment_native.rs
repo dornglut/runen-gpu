@@ -47,6 +47,11 @@ fn transient_attachment_native_execution_is_backend_proven() {
                 .with_fallback_policy(GpuSoftwareFallbackPolicy::Require),
         ))
         .expect("advertised native Stencil8 depth/stencil role must admit a context");
+        assert_eq!(
+            stencil_context.adapter_facts(),
+            context.adapter_facts(),
+            "conditional transient Stencil8 proof must stay on the retained Vulkan adapter"
+        );
         let (stencil_graph, stencil_readback_id) = retained_transient_attachment::stencil_graph();
         let stencil_prepared =
             pollster::block_on(stencil_context.prepare_submission(stencil_graph)).unwrap();
