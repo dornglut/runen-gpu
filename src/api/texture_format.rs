@@ -539,6 +539,18 @@ const fn semantics(format: GpuTextureFormat) -> GpuTextureFormatSemantics {
             component_count: 1,
             has_alpha: false,
         },
+        GpuTextureFormat::Depth32FloatStencil8 => GpuTextureFormatSemantics {
+            aspect_class: GpuTextureAspectClass::DepthStencil,
+            block_dimensions: (1, 1),
+            color_copy_block_size: None,
+            depth_copy_block_size: Some(4),
+            stencil_copy_block_size: Some(1),
+            srgb: false,
+            paired_view_format: None,
+            color_scalar_class: None,
+            component_count: 1,
+            has_alpha: false,
+        },
     }
 }
 
@@ -1076,9 +1088,19 @@ mod tests {
                 1,
                 false,
             ),
+            (
+                GpuTextureFormat::Depth32FloatStencil8,
+                None,
+                true,
+                false,
+                None,
+                None,
+                1,
+                false,
+            ),
         ];
 
-        assert_eq!(cases.len(), 38);
+        assert_eq!(cases.len(), 39);
         for (format, bytes, depth, srgb, pair, class, components, alpha) in cases {
             let stencil = is_stencil(format);
             let combined = depth && stencil;
@@ -1430,6 +1452,40 @@ mod tests {
         assert!(!supports_aspect(format, GpuTextureAspect::Color));
         assert_eq!(copy_block_size(format, GpuTextureAspect::All), None);
         assert_eq!(copy_block_size(format, GpuTextureAspect::DepthOnly), None);
+        assert_eq!(
+            copy_block_size(format, GpuTextureAspect::StencilOnly),
+            Some(1)
+        );
+        assert!(texture_to_texture_copy_aspect_valid(
+            format,
+            GpuTextureAspect::All
+        ));
+        assert!(!texture_to_texture_copy_aspect_valid(
+            format,
+            GpuTextureAspect::DepthOnly
+        ));
+        assert!(!texture_to_texture_copy_aspect_valid(
+            format,
+            GpuTextureAspect::StencilOnly
+        ));
+        assert_eq!(color_scalar_class(format), None);
+    }
+
+    #[test]
+    fn depth32float_stencil8_preserves_independent_copy_footprints() {
+        let format = GpuTextureFormat::Depth32FloatStencil8;
+        assert!(is_depth(format));
+        assert!(is_stencil(format));
+        assert_eq!(block_dimensions(format), (1, 1));
+        assert_eq!(
+            canonical_aspect(format, GpuTextureAspect::All),
+            Some(GpuTextureAspect::All)
+        );
+        assert_eq!(copy_block_size(format, GpuTextureAspect::All), None);
+        assert_eq!(
+            copy_block_size(format, GpuTextureAspect::DepthOnly),
+            Some(4)
+        );
         assert_eq!(
             copy_block_size(format, GpuTextureAspect::StencilOnly),
             Some(1)
