@@ -774,10 +774,7 @@ mod tests {
         assert!(!absent.copy_source);
         assert!(!absent.copy_destination);
 
-        let present = if format_prerequisites_available(
-            format,
-            Features::DEPTH32FLOAT_STENCIL8,
-        ) {
+        let present = if format_prerequisites_available(format, Features::DEPTH32FLOAT_STENCIL8) {
             format_capabilities(format, native)
         } else {
             GpuTextureFormatCapabilities::none()

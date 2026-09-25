@@ -590,10 +590,7 @@ fn derive_portability(
     }
     for &(format, role) in &descriptor.format_roles {
         if is_declared_format_role_extension(format, role) {
-            reasons.insert(GpuPortabilityReason::DeclaredFormatRoleExtension {
-                format,
-                role,
-            });
+            reasons.insert(GpuPortabilityReason::DeclaredFormatRoleExtension { format, role });
         }
     }
     if descriptor.allowed_backends().len() == 1 {
@@ -639,10 +636,7 @@ fn is_declared_extension(feature: GpuCapabilityFeature) -> bool {
     )
 }
 
-fn is_declared_format_role_extension(
-    format: GpuTextureFormat,
-    _role: GpuFormatRole,
-) -> bool {
+fn is_declared_format_role_extension(format: GpuTextureFormat, _role: GpuFormatRole) -> bool {
     format == GpuTextureFormat::Depth32FloatStencil8
 }
 
@@ -1131,7 +1125,10 @@ mod tests {
             true,
         )
         .unwrap();
-        assert_eq!(baseline.portability(), GpuPortabilityClass::PortableBaseline);
+        assert_eq!(
+            baseline.portability(),
+            GpuPortabilityClass::PortableBaseline
+        );
     }
 
     #[test]

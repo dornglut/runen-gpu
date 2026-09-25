@@ -11,8 +11,7 @@ use crate::{
     GpuContextRequestError, GpuContextRequestErrorCategory, GpuDeviceGeneration, GpuDeviceLimits,
     GpuDeviceRequestProfile, GpuExecutionPolicy, GpuFallbackStatus, GpuLimits,
     GpuRealizationPolicies, GpuSoftwareFallbackPolicy, GpuTextureFormat, admitted_device_facts,
-    allocate_context_id,
-    canonical_candidate_input_key, select_candidate_inputs,
+    allocate_context_id, canonical_candidate_input_key, select_candidate_inputs,
 };
 use std::sync::Arc;
 #[cfg(not(target_arch = "wasm32"))]
@@ -778,7 +777,10 @@ mod tests {
             GpuFormatRole::CopyDestination,
         ] {
             let requested = requested_features(&candidate_with_depth32float_stencil8_role(role));
-            assert!(requested.contains(Features::DEPTH32FLOAT_STENCIL8), "{role:?}");
+            assert!(
+                requested.contains(Features::DEPTH32FLOAT_STENCIL8),
+                "{role:?}"
+            );
         }
     }
 

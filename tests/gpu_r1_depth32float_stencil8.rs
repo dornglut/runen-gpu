@@ -704,10 +704,7 @@ fn depth32float_stencil8_public_copy_and_sampling_contract_is_aspect_specific() 
     assert!(format.is_depth());
     assert!(format.is_stencil());
     assert_eq!(format.copy_block_size(GpuTextureAspect::All), None);
-    assert_eq!(
-        format.copy_block_size(GpuTextureAspect::DepthOnly),
-        Some(4)
-    );
+    assert_eq!(format.copy_block_size(GpuTextureAspect::DepthOnly), Some(4));
     assert_eq!(
         format.copy_block_size(GpuTextureAspect::StencilOnly),
         Some(1)

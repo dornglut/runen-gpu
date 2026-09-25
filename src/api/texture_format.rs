@@ -1477,11 +1477,11 @@ mod tests {
         assert!(is_depth(format));
         assert!(is_stencil(format));
         assert_eq!(block_dimensions(format), (1, 1));
-        assert_eq!(canonical_aspect(format, GpuTextureAspect::All), Some(GpuTextureAspect::All));
         assert_eq!(
-            copy_block_size(format, GpuTextureAspect::All),
-            None
+            canonical_aspect(format, GpuTextureAspect::All),
+            Some(GpuTextureAspect::All)
         );
+        assert_eq!(copy_block_size(format, GpuTextureAspect::All), None);
         assert_eq!(
             copy_block_size(format, GpuTextureAspect::DepthOnly),
             Some(4)
