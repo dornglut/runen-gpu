@@ -69,6 +69,16 @@ fn inspect_textures() {
 }
 "#;
 
+const UNUSED_BINDING_ARRAY_WGSL: &str = r#"
+enable wgpu_binding_array;
+
+@group(0) @binding(0)
+var unused_textures: binding_array<texture_2d<u32>, 3>;
+
+@compute @workgroup_size(1)
+fn selected_main() {}
+"#;
+
 const VISIBILITY_WGSL: &str = r#"
 @group(0) @binding(0)
 var<storage, read> values: array<u32>;
@@ -199,6 +209,28 @@ fn fixed_binding_array_cardinality_and_capability_are_compiler_derived() {
             GpuCapabilityFeature::TextureBindingArray
         ))
     ));
+}
+
+#[test]
+fn unused_module_global_fixed_array_requires_compilation_feature_without_entering_selected_interface() {
+    let (_registry, source) = admitted_source_from(UNUSED_BINDING_ARRAY_WGSL);
+    let program = GpuProgramDescriptor::new(
+        source,
+        [entry("selected_main")],
+        std::iter::empty::<GpuBindingLayoutRefinement>(),
+    )
+    .expect("unused fixed-array globals must still produce whole-module compilation requirements");
+
+    assert_eq!(program.interface().bindings().count(), 0);
+    assert!(program.interface().binding(key(0)).is_none());
+    assert_eq!(
+        program
+            .requirements()
+            .get(GpuCapabilityFeature::TextureBindingArray),
+        Some(GpuCapabilityRequirement::Required(
+            GpuCapabilityFeature::TextureBindingArray
+        ))
+    );
 }
 
 #[test]
