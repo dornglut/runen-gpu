@@ -84,8 +84,8 @@ impl GpuColorTargetStateDescriptor {
         }
         if blend == GpuBlendMode::Alpha
             && matches!(
-                texture_format::scalar_class(format),
-                GpuTextureScalarClass::Sint | GpuTextureScalarClass::Uint
+                texture_format::color_scalar_class(format),
+                Some(GpuTextureScalarClass::Sint | GpuTextureScalarClass::Uint)
             )
         {
             return Err(invalid_attachment_state(
@@ -117,7 +117,9 @@ impl GpuColorTargetStateDescriptor {
     }
 
     pub fn shader_io_type(self) -> GpuShaderIoValueType {
-        let class = match texture_format::scalar_class(self.format) {
+        let class = match texture_format::color_scalar_class(self.format)
+            .expect("validated color targets retain a color scalar class")
+        {
             GpuTextureScalarClass::Float => GpuShaderIoScalarClass::Float,
             GpuTextureScalarClass::Sint => GpuShaderIoScalarClass::Sint,
             GpuTextureScalarClass::Uint => GpuShaderIoScalarClass::Uint,

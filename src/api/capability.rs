@@ -246,6 +246,7 @@ pub enum GpuTextureFormat {
     Stencil8,
     Depth16Unorm,
     Depth24Plus,
+    Depth24PlusStencil8,
     Depth32Float,
 }
 
