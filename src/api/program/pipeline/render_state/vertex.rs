@@ -41,6 +41,8 @@ pub enum GpuVertexFormat {
     Float16,
     Float16x2,
     Float16x4,
+    Unorm10_10_10_2,
+    Unorm8x4Bgra,
     Float32,
     Float32x2,
     Float32x3,
@@ -77,6 +79,8 @@ impl GpuVertexFormat {
             | Self::Unorm16x2
             | Self::Snorm16x2
             | Self::Float16x2
+            | Self::Unorm10_10_10_2
+            | Self::Unorm8x4Bgra
             | Self::Float32
             | Self::Uint32
             | Self::Sint32 => 4,
@@ -128,6 +132,8 @@ impl GpuVertexFormat {
             | Self::Unorm16x4
             | Self::Snorm16x4
             | Self::Float16x4
+            | Self::Unorm10_10_10_2
+            | Self::Unorm8x4Bgra
             | Self::Float32x4 => (GpuShaderIoScalarClass::Float, 4),
             Self::Uint32x3 => (GpuShaderIoScalarClass::Uint, 3),
             Self::Sint32x3 => (GpuShaderIoScalarClass::Sint, 3),

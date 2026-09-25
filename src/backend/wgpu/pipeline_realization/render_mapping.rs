@@ -53,6 +53,8 @@ pub(super) const fn vertex_format(value: GpuVertexFormat) -> VertexFormat {
         GpuVertexFormat::Float16 => VertexFormat::Float16,
         GpuVertexFormat::Float16x2 => VertexFormat::Float16x2,
         GpuVertexFormat::Float16x4 => VertexFormat::Float16x4,
+        GpuVertexFormat::Unorm10_10_10_2 => VertexFormat::Unorm10_10_10_2,
+        GpuVertexFormat::Unorm8x4Bgra => VertexFormat::Unorm8x4Bgra,
         GpuVertexFormat::Float32 => VertexFormat::Float32,
         GpuVertexFormat::Float32x2 => VertexFormat::Float32x2,
         GpuVertexFormat::Float32x3 => VertexFormat::Float32x3,
@@ -219,6 +221,11 @@ mod tests {
             (GpuVertexFormat::Float16, VertexFormat::Float16),
             (GpuVertexFormat::Float16x2, VertexFormat::Float16x2),
             (GpuVertexFormat::Float16x4, VertexFormat::Float16x4),
+            (
+                GpuVertexFormat::Unorm10_10_10_2,
+                VertexFormat::Unorm10_10_10_2,
+            ),
+            (GpuVertexFormat::Unorm8x4Bgra, VertexFormat::Unorm8x4Bgra),
         ] {
             assert_eq!(vertex_format(normalized), native);
         }
