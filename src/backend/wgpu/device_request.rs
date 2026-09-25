@@ -472,6 +472,10 @@ fn requested_limits(
     limits.max_color_attachments = budget.max_color_attachments();
     limits.max_vertex_buffers = budget.max_vertex_buffers();
     limits.max_bindings_per_bind_group = budget.max_bindings_per_group();
+    limits.max_binding_array_elements_per_shader_stage =
+        budget.max_binding_array_elements_per_shader_stage();
+    limits.max_binding_array_sampler_elements_per_shader_stage =
+        budget.max_binding_array_sampler_elements_per_shader_stage();
     limits.max_texture_dimension_2d = budget.max_texture_dimension_2d();
     limits.max_bind_groups = budget.max_bind_groups();
     limits.max_bind_groups_plus_vertex_buffers = budget.max_bind_groups_plus_vertex_buffers();
@@ -520,6 +524,8 @@ fn map_device_limits(native: &Limits) -> GpuDeviceLimits {
             native.max_color_attachments,
             native.max_vertex_buffers,
             native.max_bindings_per_bind_group,
+            native.max_binding_array_elements_per_shader_stage,
+            native.max_binding_array_sampler_elements_per_shader_stage,
             native.max_texture_dimension_2d,
             native.max_bind_groups,
             native.max_bind_groups_plus_vertex_buffers,
