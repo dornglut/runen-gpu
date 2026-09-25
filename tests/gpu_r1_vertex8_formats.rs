@@ -182,7 +182,8 @@ fn pipeline(case: Vertex8Case) -> GpuRenderPipelineDescriptor {
         .admit_wgsl(
             identity,
             &source_text,
-            GpuProgramSourceProvenance::new(format!("R1 vertex8 {} proof", case.name), None).unwrap(),
+            GpuProgramSourceProvenance::new(format!("R1 vertex8 {} proof", case.name), None)
+                .unwrap(),
         )
         .unwrap();
     let vertex = GpuEntryPointName::new("vs_main").unwrap();
@@ -229,7 +230,8 @@ fn vertex_buffer(scope: &mut GpuResourceScope, case: Vertex8Case) -> GpuBufferHa
         bytes.extend_from_slice(&case.bytes);
     }
     let prepared =
-        PreparedGpuData::<TransferData>::ordinary_pod_transfer(case.name, bytes.as_slice()).unwrap();
+        PreparedGpuData::<TransferData>::ordinary_pod_transfer(case.name, bytes.as_slice())
+            .unwrap();
     let name = format!("{} compact vertex buffer", case.name);
     let resource_label = label(&name);
     scope
@@ -260,14 +262,8 @@ fn render_target(
             GpuTextureDescriptor::new(
                 common(&name),
                 GpuTextureDimension::D2,
-                GpuTextureExtent::new(
-                    &resource_label,
-                    GpuTextureDimension::D2,
-                    WIDTH,
-                    HEIGHT,
-                    1,
-                )
-                .unwrap(),
+                GpuTextureExtent::new(&resource_label, GpuTextureDimension::D2, WIDTH, HEIGHT, 1)
+                    .unwrap(),
                 1,
                 1,
                 GpuTextureFormat::Rgba8Unorm,
