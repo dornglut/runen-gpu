@@ -3,26 +3,26 @@ use serde_json::{Map, Value, json};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+#[path = "support/readback_wait.rs"]
+mod readback_wait;
+#[path = "gpu_r2_blend_state.rs"]
+mod retained_blend;
+#[path = "gpu_r2_depth_bias.rs"]
+mod retained_depth_bias;
 #[path = "gpu_compute_generated_indirect_native.rs"]
 mod retained_indirect;
 #[path = "gpu_offscreen_indexed_native.rs"]
 mod retained_offscreen;
 #[path = "gpu_prefix_scan_native.rs"]
 mod retained_prefix_scan;
+#[path = "gpu_r2_sampler_anisotropy.rs"]
+mod retained_sampler_anisotropy;
 #[path = "gpu_r1_vertex16_formats.rs"]
 mod retained_vertex16;
 #[path = "gpu_r1_vertex8_formats.rs"]
 mod retained_vertex8;
 #[path = "gpu_r1_vertex_packed_formats.rs"]
 mod retained_vertex_packed;
-#[path = "gpu_r2_blend_state.rs"]
-mod retained_blend;
-#[path = "gpu_r2_depth_bias.rs"]
-mod retained_depth_bias;
-#[path = "gpu_r2_sampler_anisotropy.rs"]
-mod retained_sampler_anisotropy;
-#[path = "support/readback_wait.rs"]
-mod readback_wait;
 
 const FEATURES: [GpuCapabilityFeature; 14] = [
     GpuCapabilityFeature::Compute,
@@ -87,7 +87,10 @@ fn command_stdout(program: &str, arguments: &[&str]) -> String {
 }
 
 fn repository_status() -> String {
-    command_stdout("git", &["status", "--porcelain", "--untracked-files=normal"])
+    command_stdout(
+        "git",
+        &["status", "--porcelain", "--untracked-files=normal"],
+    )
 }
 
 fn expected_revision() -> String {
@@ -356,11 +359,7 @@ fn metal_qualification_records_exact_public_api_evidence() {
         retained_prefix_scan::ScanMode::Inclusive,
     ));
     pollster::block_on(execute_render(&context, render, render_readback));
-    pollster::block_on(execute_indirect(
-        &context,
-        indirect,
-        indirect_readback,
-    ));
+    pollster::block_on(execute_indirect(&context, indirect, indirect_readback));
     let vertex8_mask = pollster::block_on(retained_vertex8::run_suite(&context));
     let vertex16_mask = pollster::block_on(retained_vertex16::run_suite(&context));
     let vertex_packed_mask = pollster::block_on(retained_vertex_packed::run_suite(&context));
