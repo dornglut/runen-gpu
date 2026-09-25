@@ -6,8 +6,7 @@ use crate::{
     GpuBindingClass, GpuBindingDeclaration, GpuBufferAccess, GpuBufferAccessKind, GpuBufferRange,
     GpuPipelineLayoutDescriptor, GpuProgramContractCause, GpuProgramContractError,
     GpuResourceAccess, GpuSamplerUse, GpuShaderStage, GpuStorageBufferAccess,
-    GpuStorageTextureAccess,
-    GpuTextureAccess, GpuTextureAccessKind, GpuTextureAccessResource,
+    GpuStorageTextureAccess, GpuTextureAccess, GpuTextureAccessKind, GpuTextureAccessResource,
 };
 use core::hash::{Hash, Hasher};
 use std::collections::BTreeMap;
@@ -300,8 +299,7 @@ fn validate_pipeline_binding_limits(
             if let Some(array_count) = declaration.array_count() {
                 binding_array_elements.add(declaration.visibility(), array_count.get());
                 if declaration.kind().class() == GpuBindingClass::Sampler {
-                    binding_array_sampler_elements
-                        .add(declaration.visibility(), array_count.get());
+                    binding_array_sampler_elements.add(declaration.visibility(), array_count.get());
                 }
             }
 
