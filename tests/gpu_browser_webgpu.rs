@@ -22,6 +22,9 @@ mod browser {
         static RG8_EXERCISED_MASK: RefCell<u32> = RefCell::new(0);
         static R16_EXERCISED_MASK: RefCell<u32> = RefCell::new(0);
         static RG16_EXERCISED_MASK: RefCell<u32> = RefCell::new(0);
+        static PACKED32_EXERCISED_MASK: RefCell<u32> = RefCell::new(0);
+        static PACKED32_SAMPLED_MASK: RefCell<u32> = RefCell::new(0);
+        static PACKED32_COLOR_ATTACHMENT_MASK: RefCell<u32> = RefCell::new(0);
         static DEPTH_SAMPLED_EXERCISED_MASK: RefCell<u32> = RefCell::new(0);
         static DEPTH_ATTACHMENT_EXERCISED_MASK: RefCell<u32> = RefCell::new(0);
         static DEPTH_COPY_EXERCISED_MASK: RefCell<u32> = RefCell::new(0);
@@ -245,6 +248,7 @@ mod browser {
         widths: &[u32],
         bytes_per_texel: u32,
         family: &str,
+        zero_fill: bool,
     ) -> u32 {
         let mut requirements = GpuCapabilityRequirements::new();
         requirements
@@ -287,9 +291,13 @@ mod browser {
             for width in widths.iter().copied() {
                 let height = 2;
                 let name = format!("{family} browser {format:?} {width}x{height}");
-                let expected = (0..width * height * bytes_per_texel)
-                    .map(|byte| (byte % 251) as u8)
-                    .collect::<Vec<_>>();
+                let expected = if zero_fill {
+                    vec![0_u8; usize::try_from(width * height * bytes_per_texel).unwrap()]
+                } else {
+                    (0..width * height * bytes_per_texel)
+                        .map(|byte| (byte % 251) as u8)
+                        .collect::<Vec<_>>()
+                };
                 let mut allocator = GpuWorkResourceIdAllocator::new();
                 let mut texture = |suffix: &str| {
                     let texture_name = format!("{name} {suffix}");
@@ -414,6 +422,7 @@ mod browser {
             &[31, 32],
             8,
             "RGBA16",
+            false,
         )
         .await;
         RGBA16_EXERCISED_MASK.with(|slot| *slot.borrow_mut() = mask);
@@ -429,6 +438,7 @@ mod browser {
             &[63, 64],
             4,
             "RGBA8",
+            false,
         )
         .await;
         RGBA8_EXERCISED_MASK.with(|slot| *slot.borrow_mut() = mask);
@@ -444,6 +454,7 @@ mod browser {
             &[255, 256],
             1,
             "R8-new",
+            false,
         )
         .await;
         R8_NEW_EXERCISED_MASK.with(|slot| *slot.borrow_mut() = mask);
@@ -460,6 +471,7 @@ mod browser {
             &[127, 128],
             2,
             "RG8",
+            false,
         )
         .await;
         RG8_EXERCISED_MASK.with(|slot| *slot.borrow_mut() = mask);
@@ -475,6 +487,7 @@ mod browser {
             &[127, 128],
             2,
             "R16",
+            false,
         )
         .await;
         R16_EXERCISED_MASK.with(|slot| *slot.borrow_mut() = mask);
@@ -490,9 +503,236 @@ mod browser {
             &[63, 64],
             4,
             "RG16",
+            false,
         )
         .await;
         RG16_EXERCISED_MASK.with(|slot| *slot.borrow_mut() = mask);
+    }
+
+    async fn realize_browser_packed_role(
+        context: &GpuContext,
+        format: GpuTextureFormat,
+        role: GpuFormatRole,
+        usage: GpuTextureUsage,
+        name: &str,
+    ) {
+        let mut allocator = GpuWorkResourceIdAllocator::new();
+        let resource_label = format_label(name);
+        let texture = allocator
+            .allocate_texture_handle(
+                GpuTextureDescriptor::new(
+                    format_texture_common(name),
+                    GpuTextureDimension::D2,
+                    GpuTextureExtent::new(&resource_label, GpuTextureDimension::D2, 4, 4, 1)
+                        .unwrap(),
+                    1,
+                    1,
+                    format,
+                    GpuTextureUsages::new(&resource_label, [usage]).unwrap(),
+                    GpuTextureInitialization::Uninitialized,
+                )
+                .unwrap(),
+            )
+            .unwrap();
+        let realized_texture = context.realize_texture(&texture).unwrap();
+        let subresources = GpuTextureSubresourceRange::new(
+            texture.descriptor().common().label(),
+            0,
+            1,
+            0,
+            1,
+            GpuTextureAspect::Color,
+        )
+        .unwrap();
+        let view = allocator
+            .allocate_texture_view_handle(
+                GpuTextureViewDescriptor::new(
+                    format_texture_common(&format!("{name} view")),
+                    &texture,
+                    None,
+                    GpuTextureViewDimension::D2,
+                    subresources,
+                )
+                .unwrap(),
+            )
+            .unwrap();
+        let realized_view = context
+            .realize_texture_view(&view, &realized_texture)
+            .expect("browser packed texture view must realize");
+
+        match role {
+            GpuFormatRole::Sampled => {
+                let sample_class = if format == GpuTextureFormat::Rgb10a2Uint {
+                    GpuTextureSampleClass::Uint
+                } else {
+                    GpuTextureSampleClass::FloatUnfilterable
+                };
+                let binding_key = GpuBindingKey::try_new(0, 0).unwrap();
+                let binding = GpuBindingDeclaration::new(
+                    binding_key,
+                    GpuShaderStages::one(GpuShaderStage::Compute),
+                    GpuBindingKind::sampled_texture(
+                        sample_class,
+                        GpuTextureViewDimension::D2,
+                        false,
+                    )
+                    .unwrap(),
+                    None,
+                    "packed_texture",
+                    GpuBindingProvenance::new("browser packed sampled binding qualification", None)
+                        .unwrap(),
+                )
+                .unwrap();
+                let layout = GpuBindGroupLayoutDescriptor::new(0, [binding]).unwrap();
+                let realized_layout = context
+                    .realize_bind_group_layout(&layout)
+                    .await
+                    .expect("browser packed sampled layout must realize");
+                let binding_value = GpuRuntimeBindingValue::new(
+                    binding_key,
+                    [GpuRuntimeBindingResource::TextureView(
+                        GpuRuntimeTextureViewBinding::new(view.clone()),
+                    )],
+                )
+                .unwrap();
+                let _realized_bind_group = context
+                    .realize_bind_group(&realized_layout, [binding_value])
+                    .await
+                    .expect("browser packed sampled binding must realize");
+            }
+            GpuFormatRole::ColorAttachment => {
+                let attachment = GpuRenderColorAttachment::new(
+                    view.clone(),
+                    GpuColorAttachmentLoad::Clear(
+                        GpuColorClearValue::new(0.0, 0.0, 0.0, 0.0).unwrap(),
+                    ),
+                    GpuAttachmentStore::Store,
+                    None,
+                )
+                .unwrap();
+                let render = GpuRenderOperation::new([attachment], None, [], None).unwrap();
+                let mut builder =
+                    GpuWorkFragmentBuilder::new(format_label(name), format_provenance(name));
+                builder.declare_resource(texture.clone().into()).unwrap();
+                builder.declare_resource(view.clone().into()).unwrap();
+                builder
+                    .add_node(
+                        format_label("browser packed color attachment clear"),
+                        GpuWorkOperation::Render(render),
+                        [],
+                        GpuCapabilityRequirements::new(),
+                        GpuExecutionPreference::GraphicsRequired,
+                        format_provenance("browser packed color attachment clear"),
+                    )
+                    .unwrap();
+                let graph =
+                    GpuPreparedWorkGraph::prepare(format_label(name), [builder.finish().unwrap()])
+                        .unwrap();
+                let prepared = context.prepare_submission(graph).await.unwrap();
+                let submission = context.submit_prepared(prepared).unwrap();
+                const MAX_PROGRESS_TICKS: usize = 2_000;
+                let mut completed = false;
+                for _ in 0..MAX_PROGRESS_TICKS {
+                    context.progress();
+                    match submission.status() {
+                        GpuSubmissionStatus::Completed => {
+                            completed = true;
+                            break;
+                        }
+                        GpuSubmissionStatus::Failed(error) => {
+                            panic!("{name} browser render-target qualification failed: {error:?}")
+                        }
+                        GpuSubmissionStatus::Accepted => {}
+                    }
+                    browser_yield().await;
+                }
+                assert!(
+                    completed,
+                    "{name} browser render-target qualification exceeded its bounded progress budget"
+                );
+            }
+            other => panic!("unsupported browser packed qualification role: {other:?}"),
+        }
+
+        drop(realized_view);
+        drop(realized_texture);
+    }
+
+    async fn run_browser_packed32() {
+        const FORMATS: [GpuTextureFormat; 4] = [
+            GpuTextureFormat::Rgb9e5Ufloat,
+            GpuTextureFormat::Rgb10a2Uint,
+            GpuTextureFormat::Rgb10a2Unorm,
+            GpuTextureFormat::Rg11b10Ufloat,
+        ];
+        let copy_mask = run_browser_format_copy(&FORMATS, &[63, 64], 4, "Packed32", true).await;
+        PACKED32_EXERCISED_MASK.with(|slot| *slot.borrow_mut() = copy_mask);
+
+        let census = GpuContext::request(
+            GpuContextDescriptor::new(GpuCapabilityRequirements::new())
+                .with_allowed_backends([GpuBackendFamily::BrowserWebGpu])
+                .with_label("Packed32 browser role census"),
+        )
+        .await
+        .expect("declared browser-conformance environment must provide WebGPU");
+
+        let mut sampled_mask = 0_u32;
+        let mut color_mask = 0_u32;
+        for (index, format) in FORMATS.into_iter().enumerate() {
+            let facts = census
+                .adapter_facts()
+                .supported()
+                .format(format)
+                .expect("packed format must be enumerated");
+
+            if facts.sampled {
+                let context = GpuContext::request(
+                    GpuContextDescriptor::new(GpuCapabilityRequirements::new())
+                        .require_format_role(format, GpuFormatRole::Sampled)
+                        .with_allowed_backends([GpuBackendFamily::BrowserWebGpu])
+                        .with_label(format!("{format:?} browser sampled realization")),
+                )
+                .await
+                .expect("advertised packed sampled role must admit a context");
+                realize_browser_packed_role(
+                    &context,
+                    format,
+                    GpuFormatRole::Sampled,
+                    GpuTextureUsage::Sampled,
+                    &format!("{format:?} browser sampled texture"),
+                )
+                .await;
+                sampled_mask |= 1 << index;
+            }
+
+            if facts.color_attachment {
+                let mut color_requirements = GpuCapabilityRequirements::new();
+                color_requirements
+                    .insert(GpuCapabilityRequirement::Required(
+                        GpuCapabilityFeature::RenderPipeline,
+                    ))
+                    .unwrap();
+                let context = GpuContext::request(
+                    GpuContextDescriptor::new(color_requirements)
+                        .require_format_role(format, GpuFormatRole::ColorAttachment)
+                        .with_allowed_backends([GpuBackendFamily::BrowserWebGpu])
+                        .with_label(format!("{format:?} browser color-attachment realization")),
+                )
+                .await
+                .expect("advertised packed color-attachment role must admit a context");
+                realize_browser_packed_role(
+                    &context,
+                    format,
+                    GpuFormatRole::ColorAttachment,
+                    GpuTextureUsage::ColorAttachment,
+                    &format!("{format:?} browser color-attachment texture"),
+                )
+                .await;
+                color_mask |= 1 << index;
+            }
+        }
+        PACKED32_SAMPLED_MASK.with(|slot| *slot.borrow_mut() = sampled_mask);
+        PACKED32_COLOR_ATTACHMENT_MASK.with(|slot| *slot.borrow_mut() = color_mask);
     }
 
     fn depth_requirements() -> GpuCapabilityRequirements {
@@ -1868,6 +2108,7 @@ fn cs_main() {
         run_browser_rg8_copy().await;
         run_browser_r16_copy().await;
         run_browser_rg16_copy().await;
+        run_browser_packed32().await;
         run_browser_depth_formats().await;
         run_browser_stencil8().await;
         run_browser_depth24plus_stencil8().await;
@@ -1931,6 +2172,21 @@ fn cs_main() {
     #[unsafe(no_mangle)]
     pub extern "C" fn runengpu_browser_rg16_exercised_mask() -> u32 {
         RG16_EXERCISED_MASK.with(|mask| *mask.borrow())
+    }
+
+    #[unsafe(no_mangle)]
+    pub extern "C" fn runengpu_browser_packed32_exercised_mask() -> u32 {
+        PACKED32_EXERCISED_MASK.with(|mask| *mask.borrow())
+    }
+
+    #[unsafe(no_mangle)]
+    pub extern "C" fn runengpu_browser_packed32_sampled_mask() -> u32 {
+        PACKED32_SAMPLED_MASK.with(|mask| *mask.borrow())
+    }
+
+    #[unsafe(no_mangle)]
+    pub extern "C" fn runengpu_browser_packed32_color_attachment_mask() -> u32 {
+        PACKED32_COLOR_ATTACHMENT_MASK.with(|mask| *mask.borrow())
     }
 
     #[unsafe(no_mangle)]
