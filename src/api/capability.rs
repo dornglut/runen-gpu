@@ -243,6 +243,8 @@ pub enum GpuTextureFormat {
     Rgba16Uint,
     Rgba16Sint,
     Rgba16Float,
+    Depth16Unorm,
+    Depth24Plus,
     Depth32Float,
 }
 

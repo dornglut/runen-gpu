@@ -328,14 +328,28 @@ mod tests {
 
     #[test]
     fn render_target_role_checks_keep_current_depth_and_integer_behavior() {
-        assert!(
-            GpuColorTargetStateDescriptor::new(
-                GpuTextureFormat::Depth32Float,
-                GpuBlendMode::Replace,
-                GpuColorWriteMask::ALL,
-            )
-            .is_err()
-        );
+        for format in [
+            GpuTextureFormat::Depth16Unorm,
+            GpuTextureFormat::Depth24Plus,
+            GpuTextureFormat::Depth32Float,
+        ] {
+            assert!(
+                GpuColorTargetStateDescriptor::new(
+                    format,
+                    GpuBlendMode::Replace,
+                    GpuColorWriteMask::ALL,
+                )
+                .is_err()
+            );
+            assert!(
+                GpuDepthStencilStateDescriptor::new(
+                    format,
+                    true,
+                    GpuCompareFunction::LessEqual,
+                )
+                .is_ok()
+            );
+        }
         for format in [
             GpuTextureFormat::R32Uint,
             GpuTextureFormat::R32Sint,

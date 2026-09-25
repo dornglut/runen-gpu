@@ -22,6 +22,10 @@ mod browser {
         static RG8_EXERCISED_MASK: RefCell<u32> = RefCell::new(0);
         static R16_EXERCISED_MASK: RefCell<u32> = RefCell::new(0);
         static RG16_EXERCISED_MASK: RefCell<u32> = RefCell::new(0);
+        static DEPTH_SAMPLED_EXERCISED_MASK: RefCell<u32> = RefCell::new(0);
+        static DEPTH_ATTACHMENT_EXERCISED_MASK: RefCell<u32> = RefCell::new(0);
+        static DEPTH_COPY_EXERCISED_MASK: RefCell<u32> = RefCell::new(0);
+        static DEPTH_LINEAR_EXERCISED_MASK: RefCell<u32> = RefCell::new(0);
     }
 
     struct YieldOnce(bool);
@@ -486,6 +490,413 @@ mod browser {
         RG16_EXERCISED_MASK.with(|slot| *slot.borrow_mut() = mask);
     }
 
+    fn depth_requirements() -> GpuCapabilityRequirements {
+        let mut requirements = GpuCapabilityRequirements::new();
+        for feature in [
+            GpuCapabilityFeature::RenderPipeline,
+            GpuCapabilityFeature::DepthAttachment,
+            GpuCapabilityFeature::Copy,
+        ] {
+            requirements
+                .insert(GpuCapabilityRequirement::Required(feature))
+                .unwrap();
+        }
+        requirements
+    }
+
+    fn browser_depth_texture(
+        allocator: &mut GpuWorkResourceIdAllocator,
+        name: &str,
+        format: GpuTextureFormat,
+        usages: impl IntoIterator<Item = GpuTextureUsage>,
+        initialization: GpuTextureInitialization,
+        width: u32,
+        height: u32,
+    ) -> GpuTextureHandle {
+        let resource_label = format_label(name);
+        allocator
+            .allocate_texture_handle(
+                GpuTextureDescriptor::new(
+                    format_texture_common(name),
+                    GpuTextureDimension::D2,
+                    GpuTextureExtent::new(
+                        &resource_label,
+                        GpuTextureDimension::D2,
+                        width,
+                        height,
+                        1,
+                    )
+                    .unwrap(),
+                    1,
+                    1,
+                    format,
+                    GpuTextureUsages::new(&resource_label, usages).unwrap(),
+                    initialization,
+                )
+                .unwrap(),
+            )
+            .unwrap()
+    }
+
+    async fn run_browser_supported_depth_usages(
+        format: GpuTextureFormat,
+        sampled: bool,
+        depth_stencil: bool,
+        copy_source: bool,
+        copy_destination: bool,
+    ) {
+        let mut descriptor = GpuContextDescriptor::new(depth_requirements())
+            .with_allowed_backends([GpuBackendFamily::BrowserWebGpu])
+            .with_label(format!("{format:?} browser supported-usage realization"));
+        let mut usages = Vec::new();
+
+        if sampled {
+            descriptor = descriptor.require_format_role(format, GpuFormatRole::Sampled);
+            usages.push(GpuTextureUsage::Sampled);
+        }
+        if depth_stencil {
+            descriptor = descriptor.require_format_role(format, GpuFormatRole::DepthStencil);
+            usages.push(GpuTextureUsage::DepthStencilAttachment);
+        }
+        if copy_source {
+            descriptor = descriptor.require_format_role(format, GpuFormatRole::CopySource);
+            usages.push(GpuTextureUsage::CopySource);
+        }
+        if copy_destination {
+            descriptor = descriptor.require_format_role(format, GpuFormatRole::CopyDestination);
+            usages.push(GpuTextureUsage::CopyDestination);
+        }
+
+        if usages.is_empty() {
+            return;
+        }
+
+        let context = GpuContext::request(descriptor)
+            .await
+            .expect("advertised browser depth-format roles must admit the selected format");
+        let mut allocator = GpuWorkResourceIdAllocator::new();
+        let name = format!("{format:?} browser supported-usage realization");
+        let texture = browser_depth_texture(
+            &mut allocator,
+            &name,
+            format,
+            usages,
+            GpuTextureInitialization::Uninitialized,
+            32,
+            16,
+        );
+        let _realized = context.realize_texture(&texture).unwrap();
+    }
+
+    fn browser_depth_view(
+        allocator: &mut GpuWorkResourceIdAllocator,
+        texture: &GpuTextureHandle,
+        name: &str,
+    ) -> GpuTextureViewHandle {
+        let range = GpuTextureSubresourceRange::new(
+            texture.descriptor().common().label(),
+            0,
+            1,
+            0,
+            1,
+            GpuTextureAspect::DepthOnly,
+        )
+        .unwrap();
+        allocator
+            .allocate_texture_view_handle(
+                GpuTextureViewDescriptor::new(
+                    format_texture_common(name),
+                    texture,
+                    None,
+                    GpuTextureViewDimension::D2,
+                    range,
+                )
+                .unwrap(),
+            )
+            .unwrap()
+    }
+
+    fn browser_depth_clear(view: GpuTextureViewHandle) -> GpuRenderOperation {
+        let attachment = GpuRenderDepthStencilAttachment::new(
+            view,
+            GpuDepthStencilAccess::ReadWrite,
+            GpuDepthAttachmentLoad::Clear(GpuDepthClearValue::new(0.5).unwrap()),
+            GpuAttachmentStore::Store,
+        )
+        .unwrap();
+        GpuRenderOperation::new([], Some(attachment), [], None).unwrap()
+    }
+
+    async fn run_browser_depth_clear(format: GpuTextureFormat) {
+        let context = GpuContext::request(
+            GpuContextDescriptor::new(depth_requirements())
+                .require_format_role(format, GpuFormatRole::DepthStencil)
+                .with_allowed_backends([GpuBackendFamily::BrowserWebGpu])
+                .with_label(format!("{format:?} browser depth clear proof")),
+        )
+        .await
+        .expect("observed browser depth role must admit the selected format");
+        let mut allocator = GpuWorkResourceIdAllocator::new();
+        let name = format!("{format:?} browser depth clear");
+        let texture = browser_depth_texture(
+            &mut allocator,
+            &name,
+            format,
+            [GpuTextureUsage::DepthStencilAttachment],
+            GpuTextureInitialization::Uninitialized,
+            32,
+            16,
+        );
+        let view = browser_depth_view(&mut allocator, &texture, &format!("{name} view"));
+        let realized = context.realize_texture(&texture).unwrap();
+        let _realized_view = context.realize_texture_view(&view, &realized).unwrap();
+
+        let mut builder =
+            GpuWorkFragmentBuilder::new(format_label(&name), format_provenance(&name));
+        builder.declare_resource(texture.into()).unwrap();
+        builder.declare_resource(view.clone().into()).unwrap();
+        add_format_operation(
+            &mut builder,
+            &format!("{name} render"),
+            GpuWorkOperation::Render(browser_depth_clear(view)),
+        );
+        let graph =
+            GpuPreparedWorkGraph::prepare(format_label(&name), [builder.finish().unwrap()])
+                .unwrap();
+        let prepared = context.prepare_submission(graph).await.unwrap();
+        let submission = context.submit_prepared(prepared).unwrap();
+        let readbacks = wait_for_terminal_readbacks(&context, &submission, &[]).await;
+        assert!(readbacks.is_empty());
+        assert_execution_drained(&context);
+    }
+
+    async fn run_browser_depth_texture_copy(format: GpuTextureFormat) {
+        let context = GpuContext::request(
+            GpuContextDescriptor::new(depth_requirements())
+                .require_format_role(format, GpuFormatRole::CopySource)
+                .require_format_role(format, GpuFormatRole::CopyDestination)
+                .with_allowed_backends([GpuBackendFamily::BrowserWebGpu])
+                .with_label(format!("{format:?} browser depth texture copy proof")),
+        )
+        .await
+        .expect("observed browser copy roles must admit the selected depth format");
+        let mut allocator = GpuWorkResourceIdAllocator::new();
+        let name = format!("{format:?} browser depth texture copy");
+        let source = browser_depth_texture(
+            &mut allocator,
+            &format!("{name} source"),
+            format,
+            [GpuTextureUsage::CopySource],
+            GpuTextureInitialization::Zeroed,
+            32,
+            16,
+        );
+        let destination = browser_depth_texture(
+            &mut allocator,
+            &format!("{name} destination"),
+            format,
+            [GpuTextureUsage::CopyDestination],
+            GpuTextureInitialization::Uninitialized,
+            32,
+            16,
+        );
+        context.realize_texture(&source).unwrap();
+        context.realize_texture(&destination).unwrap();
+
+        let extent = GpuCopyExtent::new(32, 16, 1).unwrap();
+        let source_region = GpuTextureCopyRegion::new(
+            &source,
+            0,
+            GpuTextureOrigin::new(0, 0, 0),
+            GpuTextureAspect::DepthOnly,
+            extent,
+        )
+        .unwrap();
+        let destination_region = GpuTextureCopyRegion::new(
+            &destination,
+            0,
+            GpuTextureOrigin::new(0, 0, 0),
+            GpuTextureAspect::DepthOnly,
+            extent,
+        )
+        .unwrap();
+        let copy = GpuCopyOperation::texture_to_texture(source_region, destination_region).unwrap();
+
+        let mut builder =
+            GpuWorkFragmentBuilder::new(format_label(&name), format_provenance(&name));
+        builder.declare_resource(source.into()).unwrap();
+        builder.declare_resource(destination.into()).unwrap();
+        add_format_operation(
+            &mut builder,
+            &format!("{name} copy"),
+            GpuWorkOperation::Copy(copy),
+        );
+        let graph =
+            GpuPreparedWorkGraph::prepare(format_label(&name), [builder.finish().unwrap()])
+                .unwrap();
+        let prepared = context.prepare_submission(graph).await.unwrap();
+        let submission = context.submit_prepared(prepared).unwrap();
+        let readbacks = wait_for_terminal_readbacks(&context, &submission, &[]).await;
+        assert!(readbacks.is_empty());
+        assert_execution_drained(&context);
+    }
+
+    async fn run_browser_depth16_linear_roundtrip(width: u32) {
+        let format = GpuTextureFormat::Depth16Unorm;
+        let context = GpuContext::request(
+            GpuContextDescriptor::new(depth_requirements())
+                .require_format_role(format, GpuFormatRole::CopySource)
+                .require_format_role(format, GpuFormatRole::CopyDestination)
+                .with_allowed_backends([GpuBackendFamily::BrowserWebGpu])
+                .with_label("Depth16Unorm browser linear copy proof"),
+        )
+        .await
+        .expect("observed browser Depth16 copy roles must admit the selected format");
+        let height = 2;
+        let name = format!("Depth16Unorm browser {width}x{height}");
+        let expected = (0..width * height * 2)
+            .map(|index| (index % 251) as u8)
+            .collect::<Vec<_>>();
+        let mut allocator = GpuWorkResourceIdAllocator::new();
+        let source = browser_depth_texture(
+            &mut allocator,
+            &format!("{name} source"),
+            format,
+            [GpuTextureUsage::CopySource, GpuTextureUsage::CopyDestination],
+            GpuTextureInitialization::Uninitialized,
+            width,
+            height,
+        );
+        let destination = browser_depth_texture(
+            &mut allocator,
+            &format!("{name} destination"),
+            format,
+            [GpuTextureUsage::CopySource, GpuTextureUsage::CopyDestination],
+            GpuTextureInitialization::Uninitialized,
+            width,
+            height,
+        );
+        let extent = GpuCopyExtent::new(width, height, 1).unwrap();
+        let source_region = GpuTextureCopyRegion::new(
+            &source,
+            0,
+            GpuTextureOrigin::new(0, 0, 0),
+            GpuTextureAspect::DepthOnly,
+            extent,
+        )
+        .unwrap();
+        let destination_region = GpuTextureCopyRegion::new(
+            &destination,
+            0,
+            GpuTextureOrigin::new(0, 0, 0),
+            GpuTextureAspect::DepthOnly,
+            extent,
+        )
+        .unwrap();
+        let upload = GpuUploadOperation::new(
+            source_region.clone().into(),
+            PreparedGpuData::<TransferData>::from_pod_transfer(
+                &name,
+                expected.as_slice(),
+                format_provenance(&name),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        let copy =
+            GpuCopyOperation::texture_to_texture(source_region, destination_region.clone()).unwrap();
+        let readback_id = GpuReadbackId::allocate().unwrap();
+        let readback = GpuReadbackOperation::new(destination_region.into(), readback_id).unwrap();
+        let mut builder =
+            GpuWorkFragmentBuilder::new(format_label(&name), format_provenance(&name));
+        builder.declare_resource(source.into()).unwrap();
+        builder.declare_resource(destination.into()).unwrap();
+        add_format_operation(
+            &mut builder,
+            &format!("{name} upload"),
+            GpuWorkOperation::Upload(upload),
+        );
+        add_format_operation(
+            &mut builder,
+            &format!("{name} copy"),
+            GpuWorkOperation::Copy(copy),
+        );
+        add_format_operation(
+            &mut builder,
+            &format!("{name} readback"),
+            GpuWorkOperation::Readback(readback),
+        );
+        let graph =
+            GpuPreparedWorkGraph::prepare(format_label(&name), [builder.finish().unwrap()])
+                .unwrap();
+        let prepared = context.prepare_submission(graph).await.unwrap();
+        let submission = context.submit_prepared(prepared).unwrap();
+        let readbacks = wait_for_terminal_readbacks(&context, &submission, &[readback_id]).await;
+        assert_eq!(readbacks.len(), 1);
+        assert_eq!(readbacks[0].as_bytes(), expected.as_slice());
+        assert_eq!(readbacks[0].layout().byte_len(), expected.len() as u64);
+        assert_eq!(readbacks[0].texture_format(), Some(format));
+        assert_execution_drained(&context);
+    }
+
+    async fn run_browser_depth_formats() {
+        let census = GpuContext::request(
+            GpuContextDescriptor::new(depth_requirements())
+                .with_allowed_backends([GpuBackendFamily::BrowserWebGpu])
+                .with_label("baseline depth browser format census"),
+        )
+        .await
+        .expect("declared browser-conformance environment must provide depth rendering");
+        let formats = [
+            GpuTextureFormat::Depth16Unorm,
+            GpuTextureFormat::Depth24Plus,
+        ];
+        let mut sampled_mask = 0_u32;
+        let mut attachment_mask = 0_u32;
+        let mut copy_mask = 0_u32;
+        let mut linear_mask = 0_u32;
+
+        for (index, format) in formats.into_iter().enumerate() {
+            let facts = census
+                .adapter_facts()
+                .supported()
+                .format(format)
+                .expect("baseline depth format must be enumerated");
+            run_browser_supported_depth_usages(
+                format,
+                facts.sampled,
+                facts.depth_stencil,
+                facts.copy_source,
+                facts.copy_destination,
+            )
+            .await;
+            if facts.sampled {
+                sampled_mask |= 1 << index;
+            }
+
+            if facts.depth_stencil {
+                run_browser_depth_clear(format).await;
+                attachment_mask |= 1 << index;
+            }
+
+            if facts.copy_source && facts.copy_destination {
+                run_browser_depth_texture_copy(format).await;
+                copy_mask |= 1 << index;
+                if format == GpuTextureFormat::Depth16Unorm {
+                    for width in [127, 128] {
+                        run_browser_depth16_linear_roundtrip(width).await;
+                    }
+                    linear_mask |= 1 << index;
+                }
+            }
+        }
+
+        DEPTH_SAMPLED_EXERCISED_MASK.with(|slot| *slot.borrow_mut() = sampled_mask);
+        DEPTH_ATTACHMENT_EXERCISED_MASK.with(|slot| *slot.borrow_mut() = attachment_mask);
+        DEPTH_COPY_EXERCISED_MASK.with(|slot| *slot.borrow_mut() = copy_mask);
+        DEPTH_LINEAR_EXERCISED_MASK.with(|slot| *slot.borrow_mut() = linear_mask);
+    }
+
     async fn run_browser_webgpu_conformance() {
         run_browser_prefix_scan().await;
         run_browser_offscreen_indexed().await;
@@ -495,6 +906,7 @@ mod browser {
         run_browser_rg8_copy().await;
         run_browser_r16_copy().await;
         run_browser_rg16_copy().await;
+        run_browser_depth_formats().await;
     }
 
     #[unsafe(no_mangle)]
@@ -554,6 +966,26 @@ mod browser {
     #[unsafe(no_mangle)]
     pub extern "C" fn runengpu_browser_rg16_exercised_mask() -> u32 {
         RG16_EXERCISED_MASK.with(|mask| *mask.borrow())
+    }
+
+    #[unsafe(no_mangle)]
+    pub extern "C" fn runengpu_browser_depth_sampled_exercised_mask() -> u32 {
+        DEPTH_SAMPLED_EXERCISED_MASK.with(|mask| *mask.borrow())
+    }
+
+    #[unsafe(no_mangle)]
+    pub extern "C" fn runengpu_browser_depth_attachment_exercised_mask() -> u32 {
+        DEPTH_ATTACHMENT_EXERCISED_MASK.with(|mask| *mask.borrow())
+    }
+
+    #[unsafe(no_mangle)]
+    pub extern "C" fn runengpu_browser_depth_copy_exercised_mask() -> u32 {
+        DEPTH_COPY_EXERCISED_MASK.with(|mask| *mask.borrow())
+    }
+
+    #[unsafe(no_mangle)]
+    pub extern "C" fn runengpu_browser_depth_linear_exercised_mask() -> u32 {
+        DEPTH_LINEAR_EXERCISED_MASK.with(|mask| *mask.borrow())
     }
 }
 
