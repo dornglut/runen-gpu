@@ -334,6 +334,8 @@ pub struct GpuLimits {
     max_color_attachments: u32,
     max_vertex_buffers: u32,
     max_bindings_per_group: u32,
+    max_binding_array_elements_per_shader_stage: u32,
+    max_binding_array_sampler_elements_per_shader_stage: u32,
     max_texture_dimension_2d: u32,
     max_bind_groups: u32,
     max_bind_groups_plus_vertex_buffers: u32,
@@ -356,6 +358,8 @@ impl GpuLimits {
         max_color_attachments: u32,
         max_vertex_buffers: u32,
         max_bindings_per_group: u32,
+        max_binding_array_elements_per_shader_stage: u32,
+        max_binding_array_sampler_elements_per_shader_stage: u32,
         max_texture_dimension_2d: u32,
         max_bind_groups: u32,
         max_bind_groups_plus_vertex_buffers: u32,
@@ -401,6 +405,8 @@ impl GpuLimits {
             max_color_attachments,
             max_vertex_buffers,
             max_bindings_per_group,
+            max_binding_array_elements_per_shader_stage: 0,
+            max_binding_array_sampler_elements_per_shader_stage: 0,
             max_texture_dimension_2d,
             max_bind_groups,
             max_bind_groups_plus_vertex_buffers,
@@ -430,6 +436,23 @@ impl GpuLimits {
     }
     pub const fn max_bindings_per_group(self) -> u32 {
         self.max_bindings_per_group
+    }
+    pub const fn max_binding_array_elements_per_shader_stage(self) -> u32 {
+        self.max_binding_array_elements_per_shader_stage
+    }
+    pub const fn max_binding_array_sampler_elements_per_shader_stage(self) -> u32 {
+        self.max_binding_array_sampler_elements_per_shader_stage
+    }
+    pub const fn with_binding_array_limits(
+        mut self,
+        max_binding_array_elements_per_shader_stage: u32,
+        max_binding_array_sampler_elements_per_shader_stage: u32,
+    ) -> Self {
+        self.max_binding_array_elements_per_shader_stage =
+            max_binding_array_elements_per_shader_stage;
+        self.max_binding_array_sampler_elements_per_shader_stage =
+            max_binding_array_sampler_elements_per_shader_stage;
+        self
     }
     pub const fn max_texture_dimension_2d(self) -> u32 {
         self.max_texture_dimension_2d
@@ -494,6 +517,8 @@ impl GpuLimits {
             max_color_attachments,
             max_vertex_buffers,
             max_bindings_per_group,
+            max_binding_array_elements_per_shader_stage,
+            max_binding_array_sampler_elements_per_shader_stage,
             max_texture_dimension_2d,
             max_bind_groups,
             max_bind_groups_plus_vertex_buffers,
