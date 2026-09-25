@@ -579,7 +579,8 @@ pub(crate) fn stencil_graph() -> (GpuPreparedWorkGraph, GpuReadbackId) {
     )
     .unwrap();
 
-    let (color, color_view) = ordinary_color_target(&mut scope, "transient stencil observable color");
+    let (color, color_view) =
+        ordinary_color_target(&mut scope, "transient stencil observable color");
     let color_attachment = GpuRenderColorAttachment::new(
         color_view,
         GpuColorAttachmentLoad::Clear(GpuColorClearValue::new(0.0, 0.0, 0.0, 1.0).unwrap()),

@@ -449,12 +449,8 @@ fn transient_combined_depth_stencil_requires_and_discards_both_aspects() {
     )
     .unwrap();
     assert!(
-        GpuRenderDepthStencilAttachment::new(
-            view.clone(),
-            Some(read_only_depth),
-            Some(stencil),
-        )
-        .is_err(),
+        GpuRenderDepthStencilAttachment::new(view.clone(), Some(read_only_depth), Some(stencil),)
+            .is_err(),
         "transient depth/stencil aspects must not be read-only"
     );
     let attachment =
