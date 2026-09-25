@@ -469,26 +469,26 @@ fn sampled_texture_class_matches(
     if !texture_format::supports_aspect(format, aspect) {
         return false;
     }
-    sampled_aspect_class_matches(texture_format::scalar_class(format), aspect, sample_class)
-}
-
-fn sampled_aspect_class_matches(
-    scalar_class: GpuTextureScalarClass,
-    aspect: GpuTextureAspect,
-    sample_class: GpuTextureSampleClass,
-) -> bool {
     match aspect {
-        GpuTextureAspect::Color => match sample_class {
-            GpuTextureSampleClass::FloatFilterable | GpuTextureSampleClass::FloatUnfilterable => {
-                scalar_class == GpuTextureScalarClass::Float
-            }
-            GpuTextureSampleClass::Sint => scalar_class == GpuTextureScalarClass::Sint,
-            GpuTextureSampleClass::Uint => scalar_class == GpuTextureScalarClass::Uint,
-            GpuTextureSampleClass::Depth => false,
-        },
+        GpuTextureAspect::Color => texture_format::color_scalar_class(format)
+            .is_some_and(|scalar_class| sampled_color_class_matches(scalar_class, sample_class)),
         GpuTextureAspect::DepthOnly => sample_class == GpuTextureSampleClass::Depth,
         GpuTextureAspect::StencilOnly => sample_class == GpuTextureSampleClass::Uint,
         GpuTextureAspect::All => false,
+    }
+}
+
+fn sampled_color_class_matches(
+    scalar_class: GpuTextureScalarClass,
+    sample_class: GpuTextureSampleClass,
+) -> bool {
+    match sample_class {
+        GpuTextureSampleClass::FloatFilterable | GpuTextureSampleClass::FloatUnfilterable => {
+            scalar_class == GpuTextureScalarClass::Float
+        }
+        GpuTextureSampleClass::Sint => scalar_class == GpuTextureScalarClass::Sint,
+        GpuTextureSampleClass::Uint => scalar_class == GpuTextureScalarClass::Uint,
+        GpuTextureSampleClass::Depth => false,
     }
 }
 
@@ -595,11 +595,6 @@ mod plain_color_sampled_class_tests {
             GpuTextureAspect::DepthOnly,
             GpuTextureSampleClass::FloatUnfilterable,
         ));
-        assert!(sampled_aspect_class_matches(
-            GpuTextureScalarClass::Uint,
-            GpuTextureAspect::StencilOnly,
-            GpuTextureSampleClass::Uint,
-        ));
         assert!(sampled_texture_class_matches(
             GpuTextureFormat::Stencil8,
             GpuTextureAspect::StencilOnly,
@@ -610,11 +605,6 @@ mod plain_color_sampled_class_tests {
             GpuTextureAspect::StencilOnly,
             GpuTextureSampleClass::Depth,
         ));
-        assert!(!sampled_aspect_class_matches(
-            GpuTextureScalarClass::Uint,
-            GpuTextureAspect::StencilOnly,
-            GpuTextureSampleClass::Depth,
-        ));
         assert!(!sampled_texture_class_matches(
             GpuTextureFormat::R8Uint,
             GpuTextureAspect::StencilOnly,
@@ -622,6 +612,31 @@ mod plain_color_sampled_class_tests {
         ));
         assert!(!sampled_texture_class_matches(
             GpuTextureFormat::Depth32Float,
+            GpuTextureAspect::All,
+            GpuTextureSampleClass::Depth,
+        ));
+        assert!(sampled_texture_class_matches(
+            GpuTextureFormat::Depth24PlusStencil8,
+            GpuTextureAspect::DepthOnly,
+            GpuTextureSampleClass::Depth,
+        ));
+        assert!(sampled_texture_class_matches(
+            GpuTextureFormat::Depth24PlusStencil8,
+            GpuTextureAspect::StencilOnly,
+            GpuTextureSampleClass::Uint,
+        ));
+        assert!(!sampled_texture_class_matches(
+            GpuTextureFormat::Depth24PlusStencil8,
+            GpuTextureAspect::DepthOnly,
+            GpuTextureSampleClass::Uint,
+        ));
+        assert!(!sampled_texture_class_matches(
+            GpuTextureFormat::Depth24PlusStencil8,
+            GpuTextureAspect::StencilOnly,
+            GpuTextureSampleClass::Depth,
+        ));
+        assert!(!sampled_texture_class_matches(
+            GpuTextureFormat::Depth24PlusStencil8,
             GpuTextureAspect::All,
             GpuTextureSampleClass::Depth,
         ));

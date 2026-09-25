@@ -299,7 +299,7 @@ fn canonical_aspect(value: GpuTextureAspect, parent: GpuTextureAspect) -> GpuTex
     }
 }
 
-fn intersect_aspects(
+pub(crate) fn intersect_aspects(
     left: GpuTextureAspect,
     right: GpuTextureAspect,
     parent: GpuTextureAspect,
@@ -881,6 +881,42 @@ mod tests {
         let mut hasher = DefaultHasher::new();
         value.hash(&mut hasher);
         hasher.finish()
+    }
+
+    #[test]
+    fn combined_texture_aspect_intersections_preserve_atomic_overlap() {
+        assert_eq!(
+            intersect_aspects(
+                GpuTextureAspect::All,
+                GpuTextureAspect::DepthOnly,
+                GpuTextureAspect::All,
+            ),
+            Some(GpuTextureAspect::DepthOnly)
+        );
+        assert_eq!(
+            intersect_aspects(
+                GpuTextureAspect::StencilOnly,
+                GpuTextureAspect::All,
+                GpuTextureAspect::All,
+            ),
+            Some(GpuTextureAspect::StencilOnly)
+        );
+        assert_eq!(
+            intersect_aspects(
+                GpuTextureAspect::All,
+                GpuTextureAspect::All,
+                GpuTextureAspect::All,
+            ),
+            Some(GpuTextureAspect::All)
+        );
+        assert_eq!(
+            intersect_aspects(
+                GpuTextureAspect::DepthOnly,
+                GpuTextureAspect::StencilOnly,
+                GpuTextureAspect::All,
+            ),
+            None
+        );
     }
 
     #[test]

@@ -320,6 +320,167 @@ fn attachment_store_preserves_and_discard_invalidates_exact_coverage() {
 }
 
 #[test]
+fn combined_depth_stencil_store_and_discard_track_aspects_independently() {
+    let mut allocator = allocator();
+    let resource_label = label("combined initialization");
+    let texture = allocator
+        .allocate_texture_handle(
+            GpuTextureDescriptor::new(
+                common("combined initialization"),
+                GpuTextureDimension::D2,
+                GpuTextureExtent::new(&resource_label, GpuTextureDimension::D2, 8, 8, 1).unwrap(),
+                1,
+                1,
+                GpuTextureFormat::Depth24PlusStencil8,
+                GpuTextureUsages::new(
+                    &resource_label,
+                    [
+                        GpuTextureUsage::DepthStencilAttachment,
+                        GpuTextureUsage::Sampled,
+                    ],
+                )
+                .unwrap(),
+                GpuTextureInitialization::Uninitialized,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+    let all = GpuTextureSubresourceRange::whole(&texture).unwrap();
+    let depth = GpuTextureSubresourceRange::new(
+        texture.descriptor().common().label(),
+        0,
+        1,
+        0,
+        1,
+        GpuTextureAspect::DepthOnly,
+    )
+    .unwrap();
+    let stencil = GpuTextureSubresourceRange::new(
+        texture.descriptor().common().label(),
+        0,
+        1,
+        0,
+        1,
+        GpuTextureAspect::StencilOnly,
+    )
+    .unwrap();
+    let view = texture_view(
+        &mut allocator,
+        &texture,
+        "combined initialization view",
+        all,
+    );
+
+    let render = |depth_store, stencil_store| {
+        GpuWorkOperation::Render(
+            GpuRenderOperation::new(
+                [],
+                Some(
+                    GpuRenderDepthStencilAttachment::new(
+                        view.clone(),
+                        Some(
+                            GpuDepthAttachmentState::new(
+                                GpuDepthStencilAccess::ReadWrite,
+                                GpuDepthAttachmentLoad::Clear(
+                                    GpuDepthClearValue::new(1.0).unwrap(),
+                                ),
+                                depth_store,
+                            )
+                            .unwrap(),
+                        ),
+                        Some(
+                            GpuStencilAttachmentState::new(
+                                GpuDepthStencilAccess::ReadWrite,
+                                GpuStencilAttachmentLoad::Clear(
+                                    GpuStencilClearValue::new(0).unwrap(),
+                                ),
+                                stencil_store,
+                            )
+                            .unwrap(),
+                        ),
+                    )
+                    .unwrap(),
+                ),
+                [],
+                None,
+            )
+            .unwrap(),
+        )
+    };
+
+    let prepare = |name, depth_store, stencil_store, read_range| {
+        let mut fragment = builder(name);
+        fragment
+            .declare_resource(GpuResourceRef::Texture(texture.clone()))
+            .unwrap();
+        fragment
+            .declare_resource(GpuResourceRef::TextureView(view.clone()))
+            .unwrap();
+        fragment
+            .add_node(
+                label("combined clear"),
+                render(depth_store, stencil_store),
+                [],
+                GpuCapabilityRequirements::new(),
+                GpuExecutionPreference::GraphicsRequired,
+                provenance("combined clear"),
+            )
+            .unwrap();
+        add_compute(
+            &mut fragment,
+            "combined aspect read",
+            [texture_access(
+                &texture,
+                read_range,
+                GpuTextureAccessKind::SampledRead,
+            )],
+        );
+        GpuPreparedWorkGraph::prepare(label(name), [fragment.finish().unwrap()])
+    };
+
+    assert!(
+        prepare(
+            "combined depth stored",
+            GpuAttachmentStore::Store,
+            GpuAttachmentStore::Discard,
+            depth,
+        )
+        .is_ok()
+    );
+    assert_eq!(
+        prepare(
+            "combined stencil discarded",
+            GpuAttachmentStore::Store,
+            GpuAttachmentStore::Discard,
+            stencil,
+        )
+        .unwrap_err()
+        .cause(),
+        GpuWorkGraphCause::ReadBeforeInitialization
+    );
+    assert!(
+        prepare(
+            "combined stencil stored",
+            GpuAttachmentStore::Discard,
+            GpuAttachmentStore::Store,
+            stencil,
+        )
+        .is_ok()
+    );
+    assert_eq!(
+        prepare(
+            "combined depth discarded",
+            GpuAttachmentStore::Discard,
+            GpuAttachmentStore::Store,
+            depth,
+        )
+        .unwrap_err()
+        .cause(),
+        GpuWorkGraphCause::ReadBeforeInitialization
+    );
+}
+
+#[test]
 fn depth_attachment_load_clear_store_and_discard_drive_initialization() {
     let mut allocator = allocator();
     let depth = depth_texture(&mut allocator, "depth attachment");

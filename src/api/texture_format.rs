@@ -76,7 +76,7 @@ struct GpuTextureFormatSemantics {
     stencil_copy_block_size: Option<u32>,
     srgb: bool,
     paired_view_format: Option<GpuTextureFormat>,
-    scalar_class: GpuTextureScalarClass,
+    color_scalar_class: Option<GpuTextureScalarClass>,
     component_count: u8,
     has_alpha: bool,
 }
@@ -91,7 +91,7 @@ const fn semantics(format: GpuTextureFormat) -> GpuTextureFormatSemantics {
             stencil_copy_block_size: None,
             srgb: false,
             paired_view_format: None,
-            scalar_class: GpuTextureScalarClass::Float,
+            color_scalar_class: Some(GpuTextureScalarClass::Float),
             component_count: 1,
             has_alpha: false,
         },
@@ -103,7 +103,7 @@ const fn semantics(format: GpuTextureFormat) -> GpuTextureFormatSemantics {
             stencil_copy_block_size: None,
             srgb: false,
             paired_view_format: None,
-            scalar_class: GpuTextureScalarClass::Float,
+            color_scalar_class: Some(GpuTextureScalarClass::Float),
             component_count: 1,
             has_alpha: false,
         },
@@ -115,7 +115,7 @@ const fn semantics(format: GpuTextureFormat) -> GpuTextureFormatSemantics {
             stencil_copy_block_size: None,
             srgb: false,
             paired_view_format: None,
-            scalar_class: GpuTextureScalarClass::Uint,
+            color_scalar_class: Some(GpuTextureScalarClass::Uint),
             component_count: 1,
             has_alpha: false,
         },
@@ -127,7 +127,7 @@ const fn semantics(format: GpuTextureFormat) -> GpuTextureFormatSemantics {
             stencil_copy_block_size: None,
             srgb: false,
             paired_view_format: None,
-            scalar_class: GpuTextureScalarClass::Sint,
+            color_scalar_class: Some(GpuTextureScalarClass::Sint),
             component_count: 1,
             has_alpha: false,
         },
@@ -139,7 +139,7 @@ const fn semantics(format: GpuTextureFormat) -> GpuTextureFormatSemantics {
             stencil_copy_block_size: None,
             srgb: false,
             paired_view_format: None,
-            scalar_class: GpuTextureScalarClass::Float,
+            color_scalar_class: Some(GpuTextureScalarClass::Float),
             component_count: 2,
             has_alpha: false,
         },
@@ -151,7 +151,7 @@ const fn semantics(format: GpuTextureFormat) -> GpuTextureFormatSemantics {
             stencil_copy_block_size: None,
             srgb: false,
             paired_view_format: None,
-            scalar_class: GpuTextureScalarClass::Float,
+            color_scalar_class: Some(GpuTextureScalarClass::Float),
             component_count: 2,
             has_alpha: false,
         },
@@ -163,7 +163,7 @@ const fn semantics(format: GpuTextureFormat) -> GpuTextureFormatSemantics {
             stencil_copy_block_size: None,
             srgb: false,
             paired_view_format: None,
-            scalar_class: GpuTextureScalarClass::Uint,
+            color_scalar_class: Some(GpuTextureScalarClass::Uint),
             component_count: 2,
             has_alpha: false,
         },
@@ -175,7 +175,7 @@ const fn semantics(format: GpuTextureFormat) -> GpuTextureFormatSemantics {
             stencil_copy_block_size: None,
             srgb: false,
             paired_view_format: None,
-            scalar_class: GpuTextureScalarClass::Sint,
+            color_scalar_class: Some(GpuTextureScalarClass::Sint),
             component_count: 2,
             has_alpha: false,
         },
@@ -187,7 +187,7 @@ const fn semantics(format: GpuTextureFormat) -> GpuTextureFormatSemantics {
             stencil_copy_block_size: None,
             srgb: false,
             paired_view_format: None,
-            scalar_class: GpuTextureScalarClass::Uint,
+            color_scalar_class: Some(GpuTextureScalarClass::Uint),
             component_count: 1,
             has_alpha: false,
         },
@@ -199,7 +199,7 @@ const fn semantics(format: GpuTextureFormat) -> GpuTextureFormatSemantics {
             stencil_copy_block_size: None,
             srgb: false,
             paired_view_format: None,
-            scalar_class: GpuTextureScalarClass::Sint,
+            color_scalar_class: Some(GpuTextureScalarClass::Sint),
             component_count: 1,
             has_alpha: false,
         },
@@ -211,7 +211,7 @@ const fn semantics(format: GpuTextureFormat) -> GpuTextureFormatSemantics {
             stencil_copy_block_size: None,
             srgb: false,
             paired_view_format: None,
-            scalar_class: GpuTextureScalarClass::Float,
+            color_scalar_class: Some(GpuTextureScalarClass::Float),
             component_count: 1,
             has_alpha: false,
         },
@@ -223,7 +223,7 @@ const fn semantics(format: GpuTextureFormat) -> GpuTextureFormatSemantics {
             stencil_copy_block_size: None,
             srgb: false,
             paired_view_format: None,
-            scalar_class: GpuTextureScalarClass::Uint,
+            color_scalar_class: Some(GpuTextureScalarClass::Uint),
             component_count: 2,
             has_alpha: false,
         },
@@ -235,7 +235,7 @@ const fn semantics(format: GpuTextureFormat) -> GpuTextureFormatSemantics {
             stencil_copy_block_size: None,
             srgb: false,
             paired_view_format: None,
-            scalar_class: GpuTextureScalarClass::Sint,
+            color_scalar_class: Some(GpuTextureScalarClass::Sint),
             component_count: 2,
             has_alpha: false,
         },
@@ -247,7 +247,7 @@ const fn semantics(format: GpuTextureFormat) -> GpuTextureFormatSemantics {
             stencil_copy_block_size: None,
             srgb: false,
             paired_view_format: None,
-            scalar_class: GpuTextureScalarClass::Float,
+            color_scalar_class: Some(GpuTextureScalarClass::Float),
             component_count: 2,
             has_alpha: false,
         },
@@ -259,7 +259,7 @@ const fn semantics(format: GpuTextureFormat) -> GpuTextureFormatSemantics {
             stencil_copy_block_size: None,
             srgb: false,
             paired_view_format: Some(GpuTextureFormat::Rgba8UnormSrgb),
-            scalar_class: GpuTextureScalarClass::Float,
+            color_scalar_class: Some(GpuTextureScalarClass::Float),
             component_count: 4,
             has_alpha: true,
         },
@@ -271,7 +271,7 @@ const fn semantics(format: GpuTextureFormat) -> GpuTextureFormatSemantics {
             stencil_copy_block_size: None,
             srgb: true,
             paired_view_format: Some(GpuTextureFormat::Rgba8Unorm),
-            scalar_class: GpuTextureScalarClass::Float,
+            color_scalar_class: Some(GpuTextureScalarClass::Float),
             component_count: 4,
             has_alpha: true,
         },
@@ -283,7 +283,7 @@ const fn semantics(format: GpuTextureFormat) -> GpuTextureFormatSemantics {
             stencil_copy_block_size: None,
             srgb: false,
             paired_view_format: None,
-            scalar_class: GpuTextureScalarClass::Float,
+            color_scalar_class: Some(GpuTextureScalarClass::Float),
             component_count: 4,
             has_alpha: true,
         },
@@ -295,7 +295,7 @@ const fn semantics(format: GpuTextureFormat) -> GpuTextureFormatSemantics {
             stencil_copy_block_size: None,
             srgb: false,
             paired_view_format: None,
-            scalar_class: GpuTextureScalarClass::Uint,
+            color_scalar_class: Some(GpuTextureScalarClass::Uint),
             component_count: 4,
             has_alpha: true,
         },
@@ -307,7 +307,7 @@ const fn semantics(format: GpuTextureFormat) -> GpuTextureFormatSemantics {
             stencil_copy_block_size: None,
             srgb: false,
             paired_view_format: None,
-            scalar_class: GpuTextureScalarClass::Sint,
+            color_scalar_class: Some(GpuTextureScalarClass::Sint),
             component_count: 4,
             has_alpha: true,
         },
@@ -319,7 +319,7 @@ const fn semantics(format: GpuTextureFormat) -> GpuTextureFormatSemantics {
             stencil_copy_block_size: None,
             srgb: false,
             paired_view_format: Some(GpuTextureFormat::Bgra8UnormSrgb),
-            scalar_class: GpuTextureScalarClass::Float,
+            color_scalar_class: Some(GpuTextureScalarClass::Float),
             component_count: 4,
             has_alpha: true,
         },
@@ -331,7 +331,7 @@ const fn semantics(format: GpuTextureFormat) -> GpuTextureFormatSemantics {
             stencil_copy_block_size: None,
             srgb: true,
             paired_view_format: Some(GpuTextureFormat::Bgra8Unorm),
-            scalar_class: GpuTextureScalarClass::Float,
+            color_scalar_class: Some(GpuTextureScalarClass::Float),
             component_count: 4,
             has_alpha: true,
         },
@@ -343,7 +343,7 @@ const fn semantics(format: GpuTextureFormat) -> GpuTextureFormatSemantics {
             stencil_copy_block_size: None,
             srgb: false,
             paired_view_format: None,
-            scalar_class: GpuTextureScalarClass::Uint,
+            color_scalar_class: Some(GpuTextureScalarClass::Uint),
             component_count: 1,
             has_alpha: false,
         },
@@ -355,7 +355,7 @@ const fn semantics(format: GpuTextureFormat) -> GpuTextureFormatSemantics {
             stencil_copy_block_size: None,
             srgb: false,
             paired_view_format: None,
-            scalar_class: GpuTextureScalarClass::Sint,
+            color_scalar_class: Some(GpuTextureScalarClass::Sint),
             component_count: 1,
             has_alpha: false,
         },
@@ -367,7 +367,7 @@ const fn semantics(format: GpuTextureFormat) -> GpuTextureFormatSemantics {
             stencil_copy_block_size: None,
             srgb: false,
             paired_view_format: None,
-            scalar_class: GpuTextureScalarClass::Float,
+            color_scalar_class: Some(GpuTextureScalarClass::Float),
             component_count: 1,
             has_alpha: false,
         },
@@ -379,7 +379,7 @@ const fn semantics(format: GpuTextureFormat) -> GpuTextureFormatSemantics {
             stencil_copy_block_size: None,
             srgb: false,
             paired_view_format: None,
-            scalar_class: GpuTextureScalarClass::Uint,
+            color_scalar_class: Some(GpuTextureScalarClass::Uint),
             component_count: 2,
             has_alpha: false,
         },
@@ -391,7 +391,7 @@ const fn semantics(format: GpuTextureFormat) -> GpuTextureFormatSemantics {
             stencil_copy_block_size: None,
             srgb: false,
             paired_view_format: None,
-            scalar_class: GpuTextureScalarClass::Sint,
+            color_scalar_class: Some(GpuTextureScalarClass::Sint),
             component_count: 2,
             has_alpha: false,
         },
@@ -403,7 +403,7 @@ const fn semantics(format: GpuTextureFormat) -> GpuTextureFormatSemantics {
             stencil_copy_block_size: None,
             srgb: false,
             paired_view_format: None,
-            scalar_class: GpuTextureScalarClass::Float,
+            color_scalar_class: Some(GpuTextureScalarClass::Float),
             component_count: 2,
             has_alpha: false,
         },
@@ -415,7 +415,7 @@ const fn semantics(format: GpuTextureFormat) -> GpuTextureFormatSemantics {
             stencil_copy_block_size: None,
             srgb: false,
             paired_view_format: None,
-            scalar_class: GpuTextureScalarClass::Uint,
+            color_scalar_class: Some(GpuTextureScalarClass::Uint),
             component_count: 4,
             has_alpha: true,
         },
@@ -427,7 +427,7 @@ const fn semantics(format: GpuTextureFormat) -> GpuTextureFormatSemantics {
             stencil_copy_block_size: None,
             srgb: false,
             paired_view_format: None,
-            scalar_class: GpuTextureScalarClass::Sint,
+            color_scalar_class: Some(GpuTextureScalarClass::Sint),
             component_count: 4,
             has_alpha: true,
         },
@@ -439,7 +439,7 @@ const fn semantics(format: GpuTextureFormat) -> GpuTextureFormatSemantics {
             stencil_copy_block_size: None,
             srgb: false,
             paired_view_format: None,
-            scalar_class: GpuTextureScalarClass::Float,
+            color_scalar_class: Some(GpuTextureScalarClass::Float),
             component_count: 4,
             has_alpha: true,
         },
@@ -451,7 +451,7 @@ const fn semantics(format: GpuTextureFormat) -> GpuTextureFormatSemantics {
             stencil_copy_block_size: None,
             srgb: false,
             paired_view_format: None,
-            scalar_class: GpuTextureScalarClass::Uint,
+            color_scalar_class: Some(GpuTextureScalarClass::Uint),
             component_count: 4,
             has_alpha: true,
         },
@@ -463,7 +463,7 @@ const fn semantics(format: GpuTextureFormat) -> GpuTextureFormatSemantics {
             stencil_copy_block_size: None,
             srgb: false,
             paired_view_format: None,
-            scalar_class: GpuTextureScalarClass::Sint,
+            color_scalar_class: Some(GpuTextureScalarClass::Sint),
             component_count: 4,
             has_alpha: true,
         },
@@ -475,7 +475,7 @@ const fn semantics(format: GpuTextureFormat) -> GpuTextureFormatSemantics {
             stencil_copy_block_size: None,
             srgb: false,
             paired_view_format: None,
-            scalar_class: GpuTextureScalarClass::Float,
+            color_scalar_class: Some(GpuTextureScalarClass::Float),
             component_count: 4,
             has_alpha: true,
         },
@@ -487,7 +487,7 @@ const fn semantics(format: GpuTextureFormat) -> GpuTextureFormatSemantics {
             stencil_copy_block_size: Some(1),
             srgb: false,
             paired_view_format: None,
-            scalar_class: GpuTextureScalarClass::Uint,
+            color_scalar_class: None,
             component_count: 1,
             has_alpha: false,
         },
@@ -499,7 +499,7 @@ const fn semantics(format: GpuTextureFormat) -> GpuTextureFormatSemantics {
             stencil_copy_block_size: None,
             srgb: false,
             paired_view_format: None,
-            scalar_class: GpuTextureScalarClass::Float,
+            color_scalar_class: None,
             component_count: 1,
             has_alpha: false,
         },
@@ -511,7 +511,19 @@ const fn semantics(format: GpuTextureFormat) -> GpuTextureFormatSemantics {
             stencil_copy_block_size: None,
             srgb: false,
             paired_view_format: None,
-            scalar_class: GpuTextureScalarClass::Float,
+            color_scalar_class: None,
+            component_count: 1,
+            has_alpha: false,
+        },
+        GpuTextureFormat::Depth24PlusStencil8 => GpuTextureFormatSemantics {
+            aspect_class: GpuTextureAspectClass::DepthStencil,
+            block_dimensions: (1, 1),
+            color_copy_block_size: None,
+            depth_copy_block_size: None,
+            stencil_copy_block_size: Some(1),
+            srgb: false,
+            paired_view_format: None,
+            color_scalar_class: None,
             component_count: 1,
             has_alpha: false,
         },
@@ -523,7 +535,7 @@ const fn semantics(format: GpuTextureFormat) -> GpuTextureFormatSemantics {
             stencil_copy_block_size: None,
             srgb: false,
             paired_view_format: None,
-            scalar_class: GpuTextureScalarClass::Float,
+            color_scalar_class: None,
             component_count: 1,
             has_alpha: false,
         },
@@ -621,8 +633,8 @@ pub(crate) fn raw_copy_compatible(source: GpuTextureFormat, destination: GpuText
     source == destination || paired_view_format(source).is_some_and(|paired| paired == destination)
 }
 
-pub(crate) const fn scalar_class(format: GpuTextureFormat) -> GpuTextureScalarClass {
-    semantics(format).scalar_class
+pub(crate) const fn color_scalar_class(format: GpuTextureFormat) -> Option<GpuTextureScalarClass> {
+    semantics(format).color_scalar_class
 }
 
 pub(crate) const fn component_count(format: GpuTextureFormat) -> u8 {
@@ -690,7 +702,7 @@ mod tests {
                 false,
                 false,
                 None,
-                GpuTextureScalarClass::Float,
+                Some(GpuTextureScalarClass::Float),
                 1,
                 false,
             ),
@@ -700,7 +712,7 @@ mod tests {
                 false,
                 false,
                 None,
-                GpuTextureScalarClass::Float,
+                Some(GpuTextureScalarClass::Float),
                 1,
                 false,
             ),
@@ -710,7 +722,7 @@ mod tests {
                 false,
                 false,
                 None,
-                GpuTextureScalarClass::Uint,
+                Some(GpuTextureScalarClass::Uint),
                 1,
                 false,
             ),
@@ -720,7 +732,7 @@ mod tests {
                 false,
                 false,
                 None,
-                GpuTextureScalarClass::Sint,
+                Some(GpuTextureScalarClass::Sint),
                 1,
                 false,
             ),
@@ -730,7 +742,7 @@ mod tests {
                 false,
                 false,
                 None,
-                GpuTextureScalarClass::Float,
+                Some(GpuTextureScalarClass::Float),
                 2,
                 false,
             ),
@@ -740,7 +752,7 @@ mod tests {
                 false,
                 false,
                 None,
-                GpuTextureScalarClass::Float,
+                Some(GpuTextureScalarClass::Float),
                 2,
                 false,
             ),
@@ -750,7 +762,7 @@ mod tests {
                 false,
                 false,
                 None,
-                GpuTextureScalarClass::Uint,
+                Some(GpuTextureScalarClass::Uint),
                 2,
                 false,
             ),
@@ -760,7 +772,7 @@ mod tests {
                 false,
                 false,
                 None,
-                GpuTextureScalarClass::Sint,
+                Some(GpuTextureScalarClass::Sint),
                 2,
                 false,
             ),
@@ -770,7 +782,7 @@ mod tests {
                 false,
                 false,
                 None,
-                GpuTextureScalarClass::Uint,
+                Some(GpuTextureScalarClass::Uint),
                 1,
                 false,
             ),
@@ -780,7 +792,7 @@ mod tests {
                 false,
                 false,
                 None,
-                GpuTextureScalarClass::Sint,
+                Some(GpuTextureScalarClass::Sint),
                 1,
                 false,
             ),
@@ -790,7 +802,7 @@ mod tests {
                 false,
                 false,
                 None,
-                GpuTextureScalarClass::Float,
+                Some(GpuTextureScalarClass::Float),
                 1,
                 false,
             ),
@@ -800,7 +812,7 @@ mod tests {
                 false,
                 false,
                 None,
-                GpuTextureScalarClass::Uint,
+                Some(GpuTextureScalarClass::Uint),
                 2,
                 false,
             ),
@@ -810,7 +822,7 @@ mod tests {
                 false,
                 false,
                 None,
-                GpuTextureScalarClass::Sint,
+                Some(GpuTextureScalarClass::Sint),
                 2,
                 false,
             ),
@@ -820,7 +832,7 @@ mod tests {
                 false,
                 false,
                 None,
-                GpuTextureScalarClass::Float,
+                Some(GpuTextureScalarClass::Float),
                 2,
                 false,
             ),
@@ -830,7 +842,7 @@ mod tests {
                 false,
                 false,
                 Some(GpuTextureFormat::Rgba8UnormSrgb),
-                GpuTextureScalarClass::Float,
+                Some(GpuTextureScalarClass::Float),
                 4,
                 true,
             ),
@@ -840,7 +852,7 @@ mod tests {
                 false,
                 true,
                 Some(GpuTextureFormat::Rgba8Unorm),
-                GpuTextureScalarClass::Float,
+                Some(GpuTextureScalarClass::Float),
                 4,
                 true,
             ),
@@ -850,7 +862,7 @@ mod tests {
                 false,
                 false,
                 None,
-                GpuTextureScalarClass::Float,
+                Some(GpuTextureScalarClass::Float),
                 4,
                 true,
             ),
@@ -860,7 +872,7 @@ mod tests {
                 false,
                 false,
                 None,
-                GpuTextureScalarClass::Uint,
+                Some(GpuTextureScalarClass::Uint),
                 4,
                 true,
             ),
@@ -870,7 +882,7 @@ mod tests {
                 false,
                 false,
                 None,
-                GpuTextureScalarClass::Sint,
+                Some(GpuTextureScalarClass::Sint),
                 4,
                 true,
             ),
@@ -880,7 +892,7 @@ mod tests {
                 false,
                 false,
                 Some(GpuTextureFormat::Bgra8UnormSrgb),
-                GpuTextureScalarClass::Float,
+                Some(GpuTextureScalarClass::Float),
                 4,
                 true,
             ),
@@ -890,7 +902,7 @@ mod tests {
                 false,
                 true,
                 Some(GpuTextureFormat::Bgra8Unorm),
-                GpuTextureScalarClass::Float,
+                Some(GpuTextureScalarClass::Float),
                 4,
                 true,
             ),
@@ -900,7 +912,7 @@ mod tests {
                 false,
                 false,
                 None,
-                GpuTextureScalarClass::Uint,
+                Some(GpuTextureScalarClass::Uint),
                 1,
                 false,
             ),
@@ -910,7 +922,7 @@ mod tests {
                 false,
                 false,
                 None,
-                GpuTextureScalarClass::Sint,
+                Some(GpuTextureScalarClass::Sint),
                 1,
                 false,
             ),
@@ -920,7 +932,7 @@ mod tests {
                 false,
                 false,
                 None,
-                GpuTextureScalarClass::Float,
+                Some(GpuTextureScalarClass::Float),
                 1,
                 false,
             ),
@@ -930,7 +942,7 @@ mod tests {
                 false,
                 false,
                 None,
-                GpuTextureScalarClass::Uint,
+                Some(GpuTextureScalarClass::Uint),
                 2,
                 false,
             ),
@@ -940,7 +952,7 @@ mod tests {
                 false,
                 false,
                 None,
-                GpuTextureScalarClass::Sint,
+                Some(GpuTextureScalarClass::Sint),
                 2,
                 false,
             ),
@@ -950,7 +962,7 @@ mod tests {
                 false,
                 false,
                 None,
-                GpuTextureScalarClass::Float,
+                Some(GpuTextureScalarClass::Float),
                 2,
                 false,
             ),
@@ -960,7 +972,7 @@ mod tests {
                 false,
                 false,
                 None,
-                GpuTextureScalarClass::Uint,
+                Some(GpuTextureScalarClass::Uint),
                 4,
                 true,
             ),
@@ -970,7 +982,7 @@ mod tests {
                 false,
                 false,
                 None,
-                GpuTextureScalarClass::Sint,
+                Some(GpuTextureScalarClass::Sint),
                 4,
                 true,
             ),
@@ -980,7 +992,7 @@ mod tests {
                 false,
                 false,
                 None,
-                GpuTextureScalarClass::Float,
+                Some(GpuTextureScalarClass::Float),
                 4,
                 true,
             ),
@@ -990,7 +1002,7 @@ mod tests {
                 false,
                 false,
                 None,
-                GpuTextureScalarClass::Uint,
+                Some(GpuTextureScalarClass::Uint),
                 4,
                 true,
             ),
@@ -1000,7 +1012,7 @@ mod tests {
                 false,
                 false,
                 None,
-                GpuTextureScalarClass::Sint,
+                Some(GpuTextureScalarClass::Sint),
                 4,
                 true,
             ),
@@ -1010,7 +1022,7 @@ mod tests {
                 false,
                 false,
                 None,
-                GpuTextureScalarClass::Float,
+                Some(GpuTextureScalarClass::Float),
                 4,
                 true,
             ),
@@ -1020,7 +1032,7 @@ mod tests {
                 false,
                 false,
                 None,
-                GpuTextureScalarClass::Uint,
+                None,
                 1,
                 false,
             ),
@@ -1030,7 +1042,7 @@ mod tests {
                 true,
                 false,
                 None,
-                GpuTextureScalarClass::Float,
+                None,
                 1,
                 false,
             ),
@@ -1040,7 +1052,17 @@ mod tests {
                 true,
                 false,
                 None,
-                GpuTextureScalarClass::Float,
+                None,
+                1,
+                false,
+            ),
+            (
+                GpuTextureFormat::Depth24PlusStencil8,
+                None,
+                true,
+                false,
+                None,
+                None,
                 1,
                 false,
             ),
@@ -1050,16 +1072,19 @@ mod tests {
                 true,
                 false,
                 None,
-                GpuTextureScalarClass::Float,
+                None,
                 1,
                 false,
             ),
         ];
 
-        assert_eq!(cases.len(), 37);
+        assert_eq!(cases.len(), 38);
         for (format, bytes, depth, srgb, pair, class, components, alpha) in cases {
-            let stencil = matches!(format, GpuTextureFormat::Stencil8);
-            let explicit_aspect = if depth {
+            let stencil = is_stencil(format);
+            let combined = depth && stencil;
+            let explicit_aspect = if combined {
+                GpuTextureAspect::All
+            } else if depth {
                 GpuTextureAspect::DepthOnly
             } else if stencil {
                 GpuTextureAspect::StencilOnly
@@ -1079,7 +1104,7 @@ mod tests {
             assert_eq!(is_stencil(format), stencil);
             assert_eq!(is_srgb(format), srgb);
             assert_eq!(paired_view_format(format), pair);
-            assert_eq!(scalar_class(format), class);
+            assert_eq!(color_scalar_class(format), class);
             assert_eq!(component_count(format), components);
             assert_eq!(has_alpha(format), alpha);
             assert!(supports_aspect(format, GpuTextureAspect::All));
@@ -1094,7 +1119,11 @@ mod tests {
             );
             assert_eq!(
                 canonical_copy_aspect(format, GpuTextureAspect::All),
-                Some(explicit_aspect)
+                if combined {
+                    None
+                } else {
+                    Some(explicit_aspect)
+                }
             );
             match bytes {
                 Some(bytes) => {
@@ -1368,7 +1397,7 @@ mod tests {
             stencil_copy_block_size: None,
             srgb: false,
             paired_view_format: None,
-            scalar_class: GpuTextureScalarClass::Float,
+            color_scalar_class: None,
             component_count: 1,
             has_alpha: false,
         };
@@ -1378,6 +1407,46 @@ mod tests {
             Some(GpuTextureAspect::DepthOnly)
         );
         assert_eq!(synthetic.depth_copy_block_size, None);
+    }
+
+    #[test]
+    fn depth24plus_stencil8_keeps_aspect_identity_separate_from_copy_footprint() {
+        let format = GpuTextureFormat::Depth24PlusStencil8;
+        assert!(is_depth(format));
+        assert!(is_stencil(format));
+        assert_eq!(block_dimensions(format), (1, 1));
+        assert_eq!(
+            canonical_aspect(format, GpuTextureAspect::All),
+            Some(GpuTextureAspect::All)
+        );
+        assert_eq!(
+            canonical_aspect(format, GpuTextureAspect::DepthOnly),
+            Some(GpuTextureAspect::DepthOnly)
+        );
+        assert_eq!(
+            canonical_aspect(format, GpuTextureAspect::StencilOnly),
+            Some(GpuTextureAspect::StencilOnly)
+        );
+        assert!(!supports_aspect(format, GpuTextureAspect::Color));
+        assert_eq!(copy_block_size(format, GpuTextureAspect::All), None);
+        assert_eq!(copy_block_size(format, GpuTextureAspect::DepthOnly), None);
+        assert_eq!(
+            copy_block_size(format, GpuTextureAspect::StencilOnly),
+            Some(1)
+        );
+        assert!(texture_to_texture_copy_aspect_valid(
+            format,
+            GpuTextureAspect::All
+        ));
+        assert!(!texture_to_texture_copy_aspect_valid(
+            format,
+            GpuTextureAspect::DepthOnly
+        ));
+        assert!(!texture_to_texture_copy_aspect_valid(
+            format,
+            GpuTextureAspect::StencilOnly
+        ));
+        assert_eq!(color_scalar_class(format), None);
     }
 
     #[test]

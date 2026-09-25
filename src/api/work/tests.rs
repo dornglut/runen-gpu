@@ -647,6 +647,136 @@ fn depth_attachment_load_clear_store_and_requirements_are_typed() {
 }
 
 #[test]
+fn combined_depth_stencil_attachment_and_copy_aspects_are_independent() {
+    let mut allocator = allocator();
+    let combined = texture(
+        &mut allocator,
+        "combined depth stencil",
+        1,
+        GpuTextureFormat::Depth24PlusStencil8,
+        [
+            GpuTextureUsage::DepthStencilAttachment,
+            GpuTextureUsage::CopySource,
+            GpuTextureUsage::CopyDestination,
+        ],
+    );
+    let view = single_view(
+        &mut allocator,
+        &combined,
+        "combined depth stencil view",
+        0,
+        0,
+        GpuTextureAspect::All,
+    );
+    let depth = GpuDepthAttachmentState::new(
+        GpuDepthStencilAccess::ReadOnly,
+        GpuDepthAttachmentLoad::Load,
+        GpuAttachmentStore::Store,
+    )
+    .unwrap();
+    let stencil = GpuStencilAttachmentState::new(
+        GpuDepthStencilAccess::ReadWrite,
+        GpuStencilAttachmentLoad::Clear(GpuStencilClearValue::new(7).unwrap()),
+        GpuAttachmentStore::Store,
+    )
+    .unwrap();
+    let attachment =
+        GpuRenderDepthStencilAttachment::new(view, Some(depth), Some(stencil)).unwrap();
+    let depth_access = attachment.depth_access().unwrap();
+    let stencil_access = attachment.stencil_access().unwrap();
+    assert_eq!(
+        depth_access.normalized_subresources().aspect(),
+        GpuTextureAspect::DepthOnly
+    );
+    assert_eq!(
+        stencil_access.normalized_subresources().aspect(),
+        GpuTextureAspect::StencilOnly
+    );
+    assert!(depth_access.kind().reads());
+    assert!(!depth_access.kind().writes());
+    assert!(!stencil_access.kind().reads());
+    assert!(stencil_access.kind().writes());
+
+    let destination = texture(
+        &mut allocator,
+        "combined copy destination",
+        1,
+        GpuTextureFormat::Depth24PlusStencil8,
+        [GpuTextureUsage::CopyDestination],
+    );
+    let extent = GpuCopyExtent::new(16, 16, 1).unwrap();
+    let source_all = GpuTextureCopyRegion::new(
+        &combined,
+        0,
+        GpuTextureOrigin::new(0, 0, 0),
+        GpuTextureAspect::All,
+        extent,
+    )
+    .unwrap();
+    let destination_all = GpuTextureCopyRegion::new(
+        &destination,
+        0,
+        GpuTextureOrigin::new(0, 0, 0),
+        GpuTextureAspect::All,
+        extent,
+    )
+    .unwrap();
+    assert!(GpuCopyOperation::texture_to_texture(source_all, destination_all).is_ok());
+
+    for aspect in [GpuTextureAspect::DepthOnly, GpuTextureAspect::StencilOnly] {
+        let source =
+            GpuTextureCopyRegion::new(&combined, 0, GpuTextureOrigin::new(0, 0, 0), aspect, extent)
+                .unwrap();
+        let destination_region = GpuTextureCopyRegion::new(
+            &destination,
+            0,
+            GpuTextureOrigin::new(0, 0, 0),
+            aspect,
+            extent,
+        )
+        .unwrap();
+        assert!(GpuCopyOperation::texture_to_texture(source, destination_region).is_err());
+    }
+
+    let upload = buffer(
+        &mut allocator,
+        "combined stencil upload",
+        4096,
+        [GpuBufferUsage::CopySource],
+    );
+    let layout = GpuBufferTextureLayout::new(&upload, 0, 16, 0).unwrap();
+    let stencil_region = GpuTextureCopyRegion::new(
+        &combined,
+        0,
+        GpuTextureOrigin::new(0, 0, 0),
+        GpuTextureAspect::StencilOnly,
+        extent,
+    )
+    .unwrap();
+    assert!(GpuCopyOperation::buffer_to_texture(layout.clone(), stencil_region).is_ok());
+
+    let depth_region = GpuTextureCopyRegion::new(
+        &combined,
+        0,
+        GpuTextureOrigin::new(0, 0, 0),
+        GpuTextureAspect::DepthOnly,
+        extent,
+    )
+    .unwrap();
+    assert!(GpuCopyOperation::buffer_to_texture(layout.clone(), depth_region).is_err());
+
+    let all_region = GpuTextureCopyRegion::new(
+        &combined,
+        0,
+        GpuTextureOrigin::new(0, 0, 0),
+        GpuTextureAspect::All,
+        extent,
+    )
+    .unwrap();
+    assert!(GpuCopyOperation::buffer_to_texture(layout, all_region).is_err());
+}
+
+#[test]
 fn depth_texture_to_texture_copy_accepts_canonical_whole_aspect() {
     let mut allocator = allocator();
     let source = texture(

@@ -84,8 +84,8 @@ impl GpuColorTargetStateDescriptor {
         }
         if blend == GpuBlendMode::Alpha
             && matches!(
-                texture_format::scalar_class(format),
-                GpuTextureScalarClass::Sint | GpuTextureScalarClass::Uint
+                texture_format::color_scalar_class(format),
+                Some(GpuTextureScalarClass::Sint | GpuTextureScalarClass::Uint)
             )
         {
             return Err(invalid_attachment_state(
@@ -117,7 +117,9 @@ impl GpuColorTargetStateDescriptor {
     }
 
     pub fn shader_io_type(self) -> GpuShaderIoValueType {
-        let class = match texture_format::scalar_class(self.format) {
+        let class = match texture_format::color_scalar_class(self.format)
+            .expect("validated color targets retain a color scalar class")
+        {
             GpuTextureScalarClass::Float => GpuShaderIoScalarClass::Float,
             GpuTextureScalarClass::Sint => GpuShaderIoScalarClass::Sint,
             GpuTextureScalarClass::Uint => GpuShaderIoScalarClass::Uint,
@@ -544,6 +546,32 @@ mod tests {
                 .unwrap();
         assert_eq!(state.stencil(), Some(stencil));
         assert!(stencil.may_write());
+
+        let depth = GpuDepthStateDescriptor::new(true, GpuCompareFunction::LessEqual);
+        assert!(
+            GpuDepthStencilStateDescriptor::new(
+                GpuTextureFormat::Depth24PlusStencil8,
+                Some(depth),
+                None,
+            )
+            .is_ok()
+        );
+        assert!(
+            GpuDepthStencilStateDescriptor::new(
+                GpuTextureFormat::Depth24PlusStencil8,
+                None,
+                Some(stencil),
+            )
+            .is_ok()
+        );
+        let combined = GpuDepthStencilStateDescriptor::new(
+            GpuTextureFormat::Depth24PlusStencil8,
+            Some(depth),
+            Some(stencil),
+        )
+        .unwrap();
+        assert_eq!(combined.depth(), Some(depth));
+        assert_eq!(combined.stencil(), Some(stencil));
         assert!(
             GpuDepthStencilStateDescriptor::new(
                 GpuTextureFormat::Stencil8,

@@ -246,6 +246,7 @@ pub enum GpuTextureFormat {
     Stencil8,
     Depth16Unorm,
     Depth24Plus,
+    Depth24PlusStencil8,
     Depth32Float,
 }
 
@@ -715,6 +716,7 @@ mod tests {
             (GpuTextureFormat::Stencil8, Some(1)),
             (GpuTextureFormat::Depth16Unorm, Some(2)),
             (GpuTextureFormat::Depth24Plus, None),
+            (GpuTextureFormat::Depth24PlusStencil8, None),
         ] {
             let input = GpuTextureFormatCapabilities {
                 sampled: true,
