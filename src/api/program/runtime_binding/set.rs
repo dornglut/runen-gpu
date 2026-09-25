@@ -523,4 +523,3 @@ mod binding_array_limit_tests {
         );
     }
 }
-
