@@ -27,7 +27,9 @@ fn requirements() -> GpuCapabilityRequirements {
         GpuCapabilityFeature::DepthAttachment,
         GpuCapabilityFeature::Copy,
     ] {
-        requirements.insert(GpuCapabilityRequirement::Required(feature)).unwrap();
+        requirements
+            .insert(GpuCapabilityRequirement::Required(feature))
+            .unwrap();
     }
     requirements
 }
@@ -72,18 +74,22 @@ fn depth_texture(
     height: u32,
 ) -> GpuTextureHandle {
     let resource_label = label(name);
-    allocator.allocate_texture_handle(
-        GpuTextureDescriptor::new(
-            common(name),
-            GpuTextureDimension::D2,
-            GpuTextureExtent::new(&resource_label, GpuTextureDimension::D2, width, height, 1).unwrap(),
-            1,
-            1,
-            format,
-            GpuTextureUsages::new(&resource_label, usages).unwrap(),
-            initialization,
-        ).unwrap()
-    ).unwrap()
+    allocator
+        .allocate_texture_handle(
+            GpuTextureDescriptor::new(
+                common(name),
+                GpuTextureDimension::D2,
+                GpuTextureExtent::new(&resource_label, GpuTextureDimension::D2, width, height, 1)
+                    .unwrap(),
+                1,
+                1,
+                format,
+                GpuTextureUsages::new(&resource_label, usages).unwrap(),
+                initialization,
+            )
+            .unwrap(),
+        )
+        .unwrap()
 }
 
 fn run_native_supported_usage_realization(
@@ -152,28 +158,38 @@ fn depth_view(
 ) -> GpuTextureViewHandle {
     let range = GpuTextureSubresourceRange::new(
         texture.descriptor().common().label(),
-        0, 1, 0, 1, GpuTextureAspect::DepthOnly,
-    ).unwrap();
-    allocator.allocate_texture_view_handle(
-        GpuTextureViewDescriptor::new(
-            common(name),
-            texture,
-            None,
-            GpuTextureViewDimension::D2,
-            range,
-        ).unwrap()
-    ).unwrap()
+        0,
+        1,
+        0,
+        1,
+        GpuTextureAspect::DepthOnly,
+    )
+    .unwrap();
+    allocator
+        .allocate_texture_view_handle(
+            GpuTextureViewDescriptor::new(
+                common(name),
+                texture,
+                None,
+                GpuTextureViewDimension::D2,
+                range,
+            )
+            .unwrap(),
+        )
+        .unwrap()
 }
 
 fn add_node(builder: &mut GpuWorkFragmentBuilder, name: &str, operation: GpuWorkOperation) {
-    builder.add_node(
-        label(name),
-        operation,
-        [],
-        GpuCapabilityRequirements::new(),
-        GpuExecutionPreference::Automatic,
-        provenance(name),
-    ).unwrap();
+    builder
+        .add_node(
+            label(name),
+            operation,
+            [],
+            GpuCapabilityRequirements::new(),
+            GpuExecutionPreference::Automatic,
+            provenance(name),
+        )
+        .unwrap();
 }
 
 fn wait_submission(context: &GpuContext, submission: &GpuSubmission, name: &str) {
@@ -196,7 +212,8 @@ fn clear_operation(view: GpuTextureViewHandle) -> GpuRenderOperation {
         GpuDepthStencilAccess::ReadWrite,
         GpuDepthAttachmentLoad::Clear(GpuDepthClearValue::new(0.5).unwrap()),
         GpuAttachmentStore::Store,
-    ).unwrap();
+    )
+    .unwrap();
     GpuRenderOperation::new([], Some(attachment), [], None).unwrap()
 }
 
@@ -220,7 +237,11 @@ fn run_native_clear(format: GpuTextureFormat) {
     let mut builder = GpuWorkFragmentBuilder::new(label(&name), provenance(&name));
     builder.declare_resource(texture.into()).unwrap();
     builder.declare_resource(view.clone().into()).unwrap();
-    add_node(&mut builder, &format!("{name} render"), GpuWorkOperation::Render(clear_operation(view)));
+    add_node(
+        &mut builder,
+        &format!("{name} render"),
+        GpuWorkOperation::Render(clear_operation(view)),
+    );
     let graph = GpuPreparedWorkGraph::prepare(label(&name), [builder.finish().unwrap()]).unwrap();
     let prepared = pollster::block_on(context.prepare_submission(graph)).unwrap();
     let submission = context.submit_prepared(prepared).unwrap();
@@ -322,11 +343,21 @@ fn run_depth16_linear_roundtrip(width: u32) {
     );
     let extent = GpuCopyExtent::new(width, height, 1).unwrap();
     let source_region = GpuTextureCopyRegion::new(
-        &source, 0, GpuTextureOrigin::new(0, 0, 0), GpuTextureAspect::DepthOnly, extent,
-    ).unwrap();
+        &source,
+        0,
+        GpuTextureOrigin::new(0, 0, 0),
+        GpuTextureAspect::DepthOnly,
+        extent,
+    )
+    .unwrap();
     let destination_region = GpuTextureCopyRegion::new(
-        &destination, 0, GpuTextureOrigin::new(0, 0, 0), GpuTextureAspect::DepthOnly, extent,
-    ).unwrap();
+        &destination,
+        0,
+        GpuTextureOrigin::new(0, 0, 0),
+        GpuTextureAspect::DepthOnly,
+        extent,
+    )
+    .unwrap();
     let upload = GpuUploadOperation::new(
         source_region.clone().into(),
         PreparedGpuData::<TransferData>::from_pod_transfer(
