@@ -143,12 +143,8 @@ impl GpuTextureCopyRegion {
         };
         let (mip_width, mip_height, mip_depth_or_layers) = mip_extent(texture, mip_level);
         let (block_width, block_height) = texture_format::block_dimensions(descriptor.format());
-        let physical_mip_width = mip_width
-            .div_ceil(block_width)
-            .checked_mul(block_width);
-        let physical_mip_height = mip_height
-            .div_ceil(block_height)
-            .checked_mul(block_height);
+        let physical_mip_width = mip_width.div_ceil(block_width).checked_mul(block_width);
+        let physical_mip_height = mip_height.div_ceil(block_height).checked_mul(block_height);
         let block_geometry_valid = origin.x().is_multiple_of(block_width)
             && origin.y().is_multiple_of(block_height)
             && extent.width().is_multiple_of(block_width)
@@ -272,12 +268,8 @@ impl GpuTextureCopyRegion {
         let (mip_width, mip_height, mip_depth_or_layers) =
             mip_extent(&self.texture, self.mip_level);
         let (block_width, block_height) = texture_format::block_dimensions(descriptor.format());
-        let physical_mip_width = mip_width
-            .div_ceil(block_width)
-            .checked_mul(block_width);
-        let physical_mip_height = mip_height
-            .div_ceil(block_height)
-            .checked_mul(block_height);
+        let physical_mip_width = mip_width.div_ceil(block_width).checked_mul(block_width);
+        let physical_mip_height = mip_height.div_ceil(block_height).checked_mul(block_height);
         if self.origin.x() != 0
             || self.origin.y() != 0
             || physical_mip_width != Some(self.extent.width())

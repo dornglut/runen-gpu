@@ -1,8 +1,7 @@
 use super::{
     GpuBufferAccess, GpuBufferAccessKind, GpuBufferRegion, GpuReadbackId, GpuResourceAccess,
     GpuTextureAccess, GpuTextureAccessKind, GpuTextureAccessResource, GpuTextureCopyRegion,
-    GpuWorkOperationCause, GpuWorkOperationError, PreparedGpuData,
-    TransferData,
+    GpuWorkOperationCause, GpuWorkOperationError, PreparedGpuData, TransferData,
 };
 
 /// Exact logical source/destination region for CPU/GPU transfer work.

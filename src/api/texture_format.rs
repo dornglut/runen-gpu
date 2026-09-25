@@ -1808,20 +1808,53 @@ mod tests {
             (GpuTextureFormat::Bc5RgSnorm, 16, false, None, 2, false),
             (GpuTextureFormat::Bc6hRgbUfloat, 16, false, None, 3, false),
             (GpuTextureFormat::Bc6hRgbFloat, 16, false, None, 3, false),
-            (GpuTextureFormat::Bc7RgbaUnorm, 16, false, Some(GpuTextureFormat::Bc7RgbaUnormSrgb), 4, true),
-            (GpuTextureFormat::Bc7RgbaUnormSrgb, 16, true, Some(GpuTextureFormat::Bc7RgbaUnorm), 4, true),
+            (
+                GpuTextureFormat::Bc7RgbaUnorm,
+                16,
+                false,
+                Some(GpuTextureFormat::Bc7RgbaUnormSrgb),
+                4,
+                true,
+            ),
+            (
+                GpuTextureFormat::Bc7RgbaUnormSrgb,
+                16,
+                true,
+                Some(GpuTextureFormat::Bc7RgbaUnorm),
+                4,
+                true,
+            ),
         ];
         assert_eq!(cases.len(), 14);
         for (format, block_bytes, srgb, pair, components, alpha) in cases {
-            assert_eq!(compression_family(format), Some(GpuTextureCompressionFamily::Bc));
+            assert_eq!(
+                compression_family(format),
+                Some(GpuTextureCompressionFamily::Bc)
+            );
             assert!(is_block_compressed(format));
             assert_eq!(block_dimensions(format), (4, 4), "{format:?}");
-            assert_eq!(copy_block_size(format, GpuTextureAspect::Color), Some(block_bytes), "{format:?}");
-            assert_eq!(copy_block_size(format, GpuTextureAspect::All), Some(block_bytes), "{format:?}");
-            assert_eq!(copy_block_size(format, GpuTextureAspect::DepthOnly), None, "{format:?}");
+            assert_eq!(
+                copy_block_size(format, GpuTextureAspect::Color),
+                Some(block_bytes),
+                "{format:?}"
+            );
+            assert_eq!(
+                copy_block_size(format, GpuTextureAspect::All),
+                Some(block_bytes),
+                "{format:?}"
+            );
+            assert_eq!(
+                copy_block_size(format, GpuTextureAspect::DepthOnly),
+                None,
+                "{format:?}"
+            );
             assert_eq!(is_srgb(format), srgb, "{format:?}");
             assert_eq!(paired_view_format(format), pair, "{format:?}");
-            assert_eq!(color_scalar_class(format), Some(GpuTextureScalarClass::Float), "{format:?}");
+            assert_eq!(
+                color_scalar_class(format),
+                Some(GpuTextureScalarClass::Float),
+                "{format:?}"
+            );
             assert_eq!(component_count(format), components, "{format:?}");
             assert_eq!(has_alpha(format), alpha, "{format:?}");
         }
