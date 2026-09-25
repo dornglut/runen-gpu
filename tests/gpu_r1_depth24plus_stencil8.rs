@@ -143,15 +143,9 @@ fn combined_aspect_view(
     name: &str,
     aspect: GpuTextureAspect,
 ) -> GpuTextureViewHandle {
-    let subresources = GpuTextureSubresourceRange::new(
-        texture.descriptor().common().label(),
-        0,
-        1,
-        0,
-        1,
-        aspect,
-    )
-    .unwrap();
+    let subresources =
+        GpuTextureSubresourceRange::new(texture.descriptor().common().label(), 0, 1, 0, 1, aspect)
+            .unwrap();
     allocator
         .allocate_texture_view_handle(
             GpuTextureViewDescriptor::new(
@@ -253,10 +247,7 @@ fn sampled_pipeline() -> GpuComputePipelineDescriptor {
     GpuComputePipelineDescriptor::new(program, entry, GpuPipelineConfiguration::default()).unwrap()
 }
 
-fn sampled_texture_binding(
-    binding: u32,
-    view: &GpuTextureViewHandle,
-) -> GpuRuntimeBindingValue {
+fn sampled_texture_binding(binding: u32, view: &GpuTextureViewHandle) -> GpuRuntimeBindingValue {
     GpuRuntimeBindingValue::new(
         GpuBindingKey::try_new(0, u64::from(binding)).unwrap(),
         [GpuRuntimeBindingResource::TextureView(
@@ -537,7 +528,9 @@ fn run_native_combined(width: u32) {
     }
     if let Some((depth_view, stencil_view)) = &sampled_views {
         builder.declare_resource(depth_view.clone().into()).unwrap();
-        builder.declare_resource(stencil_view.clone().into()).unwrap();
+        builder
+            .declare_resource(stencil_view.clone().into())
+            .unwrap();
     }
     for (node, operation) in [
         (
