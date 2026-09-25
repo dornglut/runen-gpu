@@ -2437,14 +2437,8 @@ mod tests {
                 GpuTextureDescriptor::new(
                     common("transient combined view texture"),
                     GpuTextureDimension::D2,
-                    GpuTextureExtent::new(
-                        &combined_label,
-                        GpuTextureDimension::D2,
-                        8,
-                        8,
-                        1,
-                    )
-                    .unwrap(),
+                    GpuTextureExtent::new(&combined_label, GpuTextureDimension::D2, 8, 8, 1)
+                        .unwrap(),
                     1,
                     1,
                     GpuTextureFormat::Depth24PlusStencil8,
