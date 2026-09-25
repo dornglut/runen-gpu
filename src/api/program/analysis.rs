@@ -2,9 +2,9 @@ use super::contract_diagnostics::{GpuProgramContractCause, GpuProgramContractErr
 use super::entry_point::{GpuEntryPointDescriptor, GpuEntryPointName};
 use super::interface::{
     GpuBindingClass, GpuBindingDeclaration, GpuBindingKey, GpuBindingKind,
-    GpuBindingLayoutRefinement, GpuBindingProvenance, GpuProgramInterfaceDescriptor, GpuSamplerClass, GpuShaderStage,
-    GpuShaderStages, GpuStorageBufferAccess, GpuStorageTextureAccess, GpuTextureSampleClass,
-    GpuTextureViewDimension,
+    GpuBindingLayoutRefinement, GpuBindingProvenance, GpuProgramInterfaceDescriptor,
+    GpuSamplerClass, GpuShaderStage, GpuShaderStages, GpuStorageBufferAccess,
+    GpuStorageTextureAccess, GpuTextureSampleClass, GpuTextureViewDimension,
 };
 use super::source::GpuAdmittedProgramSource;
 use super::stage_io::{
@@ -282,15 +282,16 @@ pub(crate) fn analyze_program(
 
         let compiler_kind = match module_array_kind {
             Some(compiler_kind) => compiler_kind,
-            None => compiler_binding_kind(&module, &module_info, global.space, base_type)
-                .map_err(|detail| {
+            None => compiler_binding_kind(&module, &module_info, global.space, base_type).map_err(
+                |detail| {
                     invalid(
                         operation,
                         &format!("binding {key}"),
                         GpuProgramContractCause::ProgramInterfaceMismatch,
                         detail,
                     )
-                })?,
+                },
+            )?,
         };
         let observed_visibility = GpuShaderStages::new(used_stages)?;
         let refinement_index = refinements
