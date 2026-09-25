@@ -1223,7 +1223,8 @@ mod tests {
     }
 
     #[test]
-    fn transient_attachment_access_is_clear_discard_only_and_never_present_or_resolve_destination() {
+    fn transient_attachment_access_is_clear_discard_only_and_never_present_or_resolve_destination()
+    {
         let mut allocator = allocator();
         let texture_label = label("transient attachment access");
         let texture = allocator
