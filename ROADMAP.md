@@ -249,6 +249,7 @@ This is intentionally family-level rather than a mirror of WGPU's feature list.
 | Subgroups and subgroup-size control | `ADVANCED` | `DEFER` until standardized semantics, WGPU behavior, and retained backend conformance align |
 | Immediates | `ADVANCED` | `DEFER` until standards/deployment maturity is sufficient |
 | Acceleration structures and hardware ray traversal | `DEFERRED` | `DEFER` until stable accepted WGPU semantics, positive Metal/M3 build-order-traversal proof, usable update/refit disposition, and normalized lifetime/access/graph authority exist |
+| Ray-tracing pipelines | `DEFERRED` | `DEFER` until cross-backend pipeline semantics are stable and do not force a Vulkan/DX12 execution model onto Metal; not required for compute/wavefront traversal |
 | Mesh shaders | `DEFERRED` | `DEFER` until canonical WGSL/Naga/WGPU realization is mature on intended native targets without passthrough authority |
 | Cooperative matrices | `DEFERRED` | `DEFER` until semantics and backend maturity support stable normalized authority |
 | Raw backend resources/devices/queues/handles | `OUT-OF-SCOPE` | `OUT-OF-SCOPE` |
