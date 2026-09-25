@@ -450,6 +450,85 @@ pub(crate) fn depth_graph() -> (GpuPreparedWorkGraph, GpuReadbackId) {
     )
 }
 
+fn stencil_pipeline() -> GpuRenderPipelineDescriptor {
+    let identity = GpuProgramSourceIdentity::new(
+        GpuProgramSourceOwnerId::allocate().unwrap(),
+        GpuProgramSourceKey::new("proof.transient.stencil").unwrap(),
+        GpuProgramSourceRevision::try_from_raw(1).unwrap(),
+    );
+    let mut sources = GpuProgramSourceRegistry::new(2, 4096).unwrap();
+    let source = sources
+        .admit_wgsl(
+            identity,
+            DEPTH_WGSL,
+            GpuProgramSourceProvenance::new("transient Stencil8 retained proof", None).unwrap(),
+        )
+        .unwrap();
+    let vertex = GpuEntryPointName::new("vs_main").unwrap();
+    let fragment = GpuEntryPointName::new("fs_main").unwrap();
+    let program = GpuProgramDescriptor::new(
+        source,
+        [vertex.clone(), fragment.clone()],
+        std::iter::empty::<GpuBindingLayoutRefinement>(),
+    )
+    .unwrap();
+    let color_target = GpuColorTargetStateDescriptor::new(
+        GpuTextureFormat::Rgba8Unorm,
+        None,
+        GpuColorWriteMask::ALL,
+    )
+    .unwrap();
+    let face = GpuStencilFaceStateDescriptor::new(
+        GpuCompareFunction::Equal,
+        GpuStencilOperation::Keep,
+        GpuStencilOperation::Keep,
+        GpuStencilOperation::Keep,
+    );
+    let stencil = GpuStencilStateDescriptor::new(face, face, u32::MAX, 0);
+    let depth_stencil = GpuDepthStencilStateDescriptor::new(
+        GpuTextureFormat::Stencil8,
+        None,
+        Some(stencil),
+        GpuDepthBiasState::default(),
+    )
+    .unwrap();
+    let state = GpuRenderPipelineStateDescriptor::new(
+        GpuVertexInputStateDescriptor::new([]).unwrap(),
+        Some(GpuFragmentOutputStateDescriptor::new([color_target])),
+        GpuPrimitiveStateDescriptor::default(),
+        Some(depth_stencil),
+        GpuMultisampleStateDescriptor::default(),
+    )
+    .unwrap();
+    GpuRenderPipelineDescriptor::new(
+        program,
+        GpuRenderEntryPoints::new(vertex, Some(fragment)),
+        state,
+        GpuPipelineConfiguration::default(),
+    )
+    .unwrap()
+}
+
+fn stencil_draw() -> GpuRenderDraw {
+    let pipeline = stencil_pipeline();
+    let bindings = GpuRuntimeBindingSet::new(pipeline.layout().clone(), []).unwrap();
+    GpuRenderDraw::new(
+        pipeline,
+        bindings,
+        [],
+        None,
+        GpuDrawIntent::direct(
+            GpuDrawRange::new(0, 3).unwrap(),
+            GpuDrawRange::new(0, 1).unwrap(),
+        ),
+        GpuViewport::new(0.0, 0.0, WIDTH as f32, HEIGHT as f32, 0.0, 1.0).unwrap(),
+        GpuScissorRect::new(0, 0, WIDTH, HEIGHT).unwrap(),
+        GpuBlendConstant::new(0.0, 0.0, 0.0, 0.0).unwrap(),
+        7,
+    )
+    .unwrap()
+}
+
 pub(crate) fn stencil_graph() -> (GpuPreparedWorkGraph, GpuReadbackId) {
     let mut scope = GpuResourceScope::new();
     let stencil_name = "transient stencil attachment";
@@ -499,16 +578,19 @@ pub(crate) fn stencil_graph() -> (GpuPreparedWorkGraph, GpuReadbackId) {
         ),
     )
     .unwrap();
-    let stencil_render = GpuRenderOperation::new([], Some(stencil_attachment), [], None).unwrap();
 
-    let (color, color_view) = ordinary_color_target(&mut scope, "transient stencil terminal color");
-    let terminal_render = GpuRenderOperation::new(
-        [
-            GpuRenderColorAttachment::new(color_view, clear(), GpuAttachmentStore::Store, None)
-                .unwrap(),
-        ],
+    let (color, color_view) = ordinary_color_target(&mut scope, "transient stencil observable color");
+    let color_attachment = GpuRenderColorAttachment::new(
+        color_view,
+        GpuColorAttachmentLoad::Clear(GpuColorClearValue::new(0.0, 0.0, 0.0, 1.0).unwrap()),
+        GpuAttachmentStore::Store,
         None,
-        [],
+    )
+    .unwrap();
+    let stencil_render = GpuRenderOperation::new(
+        [color_attachment],
+        Some(stencil_attachment),
+        [stencil_draw()],
         None,
     )
     .unwrap();
@@ -528,9 +610,8 @@ pub(crate) fn stencil_graph() -> (GpuPreparedWorkGraph, GpuReadbackId) {
     .unwrap();
 
     let fragment = GpuWorkFragment::build("transient stencil retained proof", |builder| {
-        builder.operation("clear discard transient stencil", stencil_render)?;
-        builder.operation("clear terminal color", terminal_render)?;
-        builder.operation("read transient stencil terminal color", readback)?;
+        builder.operation("draw through transient stencil", stencil_render)?;
+        builder.operation("read transient stencil observable color", readback)?;
         Ok(())
     })
     .unwrap();
