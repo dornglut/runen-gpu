@@ -310,11 +310,11 @@ fn run_native_stencil8(width: u32) {
 
     let graph = GpuPreparedWorkGraph::prepare(label(&name), [builder.finish().unwrap()]).unwrap();
     let prepared = pollster::block_on(context.prepare_submission(graph)).unwrap();
-    let readback = prepared
-        .readback(readback_id)
-        .expect("Stencil8 readback handle must be prepared")
-        .clone();
     let submission = context.submit_prepared(prepared).unwrap();
+    let readback = submission
+        .readback(readback_id)
+        .expect("Stencil8 readback handle must be submitted")
+        .clone();
     let bytes = wait_for_readback(&context, &submission, &readback);
     assert_eq!(bytes.texture_format(), Some(GpuTextureFormat::Stencil8));
     assert_eq!(

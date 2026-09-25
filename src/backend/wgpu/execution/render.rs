@@ -12,10 +12,9 @@ use super::{
 use crate::{
     GpuAttachmentStore, GpuColorAttachmentLoad, GpuContext, GpuDepthAttachmentLoad,
     GpuDepthAttachmentState, GpuDepthStencilAccess, GpuDrawIntent, GpuIndexFormat,
-    GpuRealizedBuffer, GpuStencilAttachmentLoad, GpuStencilAttachmentState,
-    GpuRealizedRenderPipeline, GpuRealizedTextureView, GpuRenderDraw, GpuRenderOperation,
-    GpuSubmissionFailure, GpuSubmissionPreparationError, GpuSubmissionPreparationErrorKind,
-    GpuWorkResourceId,
+    GpuRealizedBuffer, GpuRealizedRenderPipeline, GpuRealizedTextureView, GpuRenderDraw,
+    GpuRenderOperation, GpuStencilAttachmentLoad, GpuStencilAttachmentState, GpuSubmissionFailure,
+    GpuSubmissionPreparationError, GpuSubmissionPreparationErrorKind, GpuWorkResourceId,
 };
 use std::collections::BTreeMap;
 use wgpu::{

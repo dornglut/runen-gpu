@@ -627,8 +627,7 @@ fn depth_attachment_load_clear_store_and_requirements_are_typed() {
         GpuAttachmentStore::Discard,
     )
     .unwrap();
-    let clear =
-        GpuRenderDepthStencilAttachment::new(depth_view, Some(clear_state), None).unwrap();
+    let clear = GpuRenderDepthStencilAttachment::new(depth_view, Some(clear_state), None).unwrap();
     assert!(!clear.depth_access().unwrap().kind().reads());
     assert!(clear.depth_access().unwrap().kind().writes());
     let operation =

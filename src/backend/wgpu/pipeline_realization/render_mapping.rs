@@ -169,14 +169,38 @@ mod tests {
             CompareFunction::LessEqual
         );
         for (normalized, native) in [
-            (crate::GpuStencilOperation::Keep, wgpu::StencilOperation::Keep),
-            (crate::GpuStencilOperation::Zero, wgpu::StencilOperation::Zero),
-            (crate::GpuStencilOperation::Replace, wgpu::StencilOperation::Replace),
-            (crate::GpuStencilOperation::Invert, wgpu::StencilOperation::Invert),
-            (crate::GpuStencilOperation::IncrementClamp, wgpu::StencilOperation::IncrementClamp),
-            (crate::GpuStencilOperation::DecrementClamp, wgpu::StencilOperation::DecrementClamp),
-            (crate::GpuStencilOperation::IncrementWrap, wgpu::StencilOperation::IncrementWrap),
-            (crate::GpuStencilOperation::DecrementWrap, wgpu::StencilOperation::DecrementWrap),
+            (
+                crate::GpuStencilOperation::Keep,
+                wgpu::StencilOperation::Keep,
+            ),
+            (
+                crate::GpuStencilOperation::Zero,
+                wgpu::StencilOperation::Zero,
+            ),
+            (
+                crate::GpuStencilOperation::Replace,
+                wgpu::StencilOperation::Replace,
+            ),
+            (
+                crate::GpuStencilOperation::Invert,
+                wgpu::StencilOperation::Invert,
+            ),
+            (
+                crate::GpuStencilOperation::IncrementClamp,
+                wgpu::StencilOperation::IncrementClamp,
+            ),
+            (
+                crate::GpuStencilOperation::DecrementClamp,
+                wgpu::StencilOperation::DecrementClamp,
+            ),
+            (
+                crate::GpuStencilOperation::IncrementWrap,
+                wgpu::StencilOperation::IncrementWrap,
+            ),
+            (
+                crate::GpuStencilOperation::DecrementWrap,
+                wgpu::StencilOperation::DecrementWrap,
+            ),
         ] {
             assert_eq!(stencil_operation(normalized), native);
         }

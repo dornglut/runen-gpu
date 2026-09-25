@@ -274,12 +274,22 @@ impl GpuStencilAttachmentState {
             load.kind(),
             store,
         )?;
-        Ok(Self { access, load, store })
+        Ok(Self {
+            access,
+            load,
+            store,
+        })
     }
 
-    pub const fn access(self) -> GpuDepthStencilAccess { self.access }
-    pub const fn load(self) -> GpuStencilAttachmentLoad { self.load }
-    pub const fn store(self) -> GpuAttachmentStore { self.store }
+    pub const fn access(self) -> GpuDepthStencilAccess {
+        self.access
+    }
+    pub const fn load(self) -> GpuStencilAttachmentLoad {
+        self.load
+    }
+    pub const fn store(self) -> GpuAttachmentStore {
+        self.store
+    }
 }
 
 fn validate_read_only_attachment_state(

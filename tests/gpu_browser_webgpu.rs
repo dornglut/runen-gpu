@@ -878,14 +878,8 @@ fn vs_main(@builtin(vertex_index) index: u32) -> @builtin(position) vec4f {
                     )
                     .unwrap(),
                     GpuTextureDimension::D2,
-                    GpuTextureExtent::new(
-                        &resource_label,
-                        GpuTextureDimension::D2,
-                        width,
-                        2,
-                        1,
-                    )
-                    .unwrap(),
+                    GpuTextureExtent::new(&resource_label, GpuTextureDimension::D2, width, 2, 1)
+                        .unwrap(),
                     1,
                     1,
                     GpuTextureFormat::Stencil8,
@@ -977,12 +971,8 @@ fn vs_main(@builtin(vertex_index) index: u32) -> @builtin(position) vec4f {
         } else {
             browser_stencil_face(GpuCompareFunction::Equal, GpuStencilOperation::Keep)
         };
-        let stencil = GpuStencilStateDescriptor::new(
-            face,
-            face,
-            u32::MAX,
-            if write { 0xff } else { 0 },
-        );
+        let stencil =
+            GpuStencilStateDescriptor::new(face, face, u32::MAX, if write { 0xff } else { 0 });
         let depth_stencil =
             GpuDepthStencilStateDescriptor::new(GpuTextureFormat::Stencil8, None, Some(stencil))
                 .unwrap();
@@ -1089,7 +1079,10 @@ fn vs_main(@builtin(vertex_index) index: u32) -> @builtin(position) vec4f {
         builder.declare_resource(texture.into()).unwrap();
         builder.declare_resource(view.into()).unwrap();
         for (node, operation) in [
-            ("browser Stencil8 write", GpuWorkOperation::Render(write_render)),
+            (
+                "browser Stencil8 write",
+                GpuWorkOperation::Render(write_render),
+            ),
             (
                 "browser Stencil8 read-only test",
                 GpuWorkOperation::Render(read_render),

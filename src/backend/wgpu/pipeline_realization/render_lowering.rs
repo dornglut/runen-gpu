@@ -278,7 +278,9 @@ fn lower_depth_stencil(state: crate::GpuDepthStencilStateDescriptor) -> DepthSte
     DepthStencilState {
         format: render_mapping::texture_format(state.format()),
         depth_write_enabled: depth.map(crate::GpuDepthStateDescriptor::write_enabled),
-        depth_compare: depth.map(crate::GpuDepthStateDescriptor::compare).map(render_mapping::compare_function),
+        depth_compare: depth
+            .map(crate::GpuDepthStateDescriptor::compare)
+            .map(render_mapping::compare_function),
         stencil: stencil.map(lower_stencil_state).unwrap_or_default(),
         bias: DepthBiasState::default(),
     }
