@@ -122,8 +122,7 @@ fn prepared_texture(
     usages: impl IntoIterator<Item = GpuTextureUsage>,
 ) -> (GpuTextureHandle, GpuTextureViewHandle) {
     let texture_label = label(name);
-    let extent =
-        GpuTextureExtent::new(&texture_label, GpuTextureDimension::D2, 1, 1, 1).unwrap();
+    let extent = GpuTextureExtent::new(&texture_label, GpuTextureDimension::D2, 1, 1, 1).unwrap();
     let prepared = GpuPreparedTextureData::new(
         &texture_label,
         PreparedGpuData::<TransferData>::from_pod_transfer(name, bytes, provenance(name)).unwrap(),
@@ -172,8 +171,7 @@ fn uninitialized_storage_texture(
     name: &str,
 ) -> (GpuTextureHandle, GpuTextureViewHandle) {
     let texture_label = label(name);
-    let extent =
-        GpuTextureExtent::new(&texture_label, GpuTextureDimension::D2, 1, 1, 1).unwrap();
+    let extent = GpuTextureExtent::new(&texture_label, GpuTextureDimension::D2, 1, 1, 1).unwrap();
     let texture = resources
         .texture(
             GpuTextureDescriptor::new(
@@ -379,10 +377,7 @@ fn texture_binding(binding: u32, view: &GpuTextureViewHandle) -> GpuRuntimeBindi
     .unwrap()
 }
 
-fn sampler_array_binding(
-    binding: u32,
-    samplers: [&GpuSamplerHandle; 2],
-) -> GpuRuntimeBindingValue {
+fn sampler_array_binding(binding: u32, samplers: [&GpuSamplerHandle; 2]) -> GpuRuntimeBindingValue {
     GpuRuntimeBindingValue::new(
         GpuBindingKey::try_new(0, u64::from(binding)).unwrap(),
         samplers
@@ -531,10 +526,7 @@ fn sampler_proof_graph() -> (GpuPreparedWorkGraph, GpuReadbackId) {
     )
 }
 
-fn storage_texture_proof_graph() -> (
-    GpuPreparedWorkGraph,
-    [GpuReadbackId; 2],
-) {
+fn storage_texture_proof_graph() -> (GpuPreparedWorkGraph, [GpuReadbackId; 2]) {
     let mut resources = GpuResourceScope::new();
     let (first_texture, first_view) =
         uninitialized_storage_texture(&mut resources, "fixed-array storage texture first");
@@ -899,7 +891,10 @@ pub(crate) async fn run_storage_texture_array_proof(
     assert_eq!(first.as_bytes().len(), 4);
     assert_eq!(second.as_bytes().len(), 4);
     assert_eq!(u32::from_le_bytes(first.as_bytes().try_into().unwrap()), 17);
-    assert_eq!(u32::from_le_bytes(second.as_bytes().try_into().unwrap()), 25);
+    assert_eq!(
+        u32::from_le_bytes(second.as_bytes().try_into().unwrap()),
+        25
+    );
     println!("Fixed binding arrays: EXERCISED (storage-texture array + exact readback)");
     true
 }
