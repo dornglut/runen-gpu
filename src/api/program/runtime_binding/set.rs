@@ -529,11 +529,8 @@ mod binding_array_limit_tests {
         let multi_stage_visibility =
             GpuShaderStages::new([GpuShaderStage::Vertex, GpuShaderStage::Fragment]).unwrap();
         let multi_stage = GpuPipelineLayoutDescriptor::new([
-            GpuBindGroupLayoutDescriptor::new(
-                0,
-                [storage_array(0, 0, multi_stage_visibility, 6)],
-            )
-            .unwrap(),
+            GpuBindGroupLayoutDescriptor::new(0, [storage_array(0, 0, multi_stage_visibility, 6)])
+                .unwrap(),
             GpuBindGroupLayoutDescriptor::new(
                 1,
                 [storage_array(
