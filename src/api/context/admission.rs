@@ -1188,6 +1188,41 @@ mod tests {
     }
 
     #[test]
+    fn texture_binding_array_feature_rejects_sampler_budget_below_guaranteed_minimum() {
+        let mut requirements = GpuCapabilityRequirements::new();
+        requirements
+            .insert(GpuCapabilityRequirement::Required(
+                GpuCapabilityFeature::TextureBindingArray,
+            ))
+            .unwrap();
+        let below = limits().with_binding_array_limits(500_000, 999);
+        let candidate = GpuAdapterFacts::new(
+            GpuBackendFamily::Vulkan,
+            GpuAdapterClass::Discrete,
+            GpuSoftwareStatus::Hardware,
+            GpuFallbackStatus::ConfirmedNotFallback,
+            GpuCapabilities::from_normalized_facts(
+                [GpuCapabilityFeature::TextureBindingArray],
+                below,
+                [],
+            ),
+            GpuAdapterLimits::new(below),
+            alignments(),
+        );
+
+        let error = evaluate_candidate(&GpuContextDescriptor::new(requirements), candidate, true)
+            .unwrap_err();
+        assert_eq!(
+            error.limit_rejection(),
+            Some((
+                GpuLimitKind::MaxBindingArraySamplerElementsPerShaderStage,
+                1_000,
+                999,
+            ))
+        );
+    }
+
+    #[test]
     fn portability_uses_admitted_contract_not_backend_preference() {
         let baseline = evaluate_candidate(
             &GpuContextDescriptor::new(GpuCapabilityRequirements::new())
