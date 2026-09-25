@@ -600,6 +600,16 @@ mod plain_color_sampled_class_tests {
             GpuTextureAspect::StencilOnly,
             GpuTextureSampleClass::Uint,
         ));
+        assert!(sampled_texture_class_matches(
+            GpuTextureFormat::Stencil8,
+            GpuTextureAspect::StencilOnly,
+            GpuTextureSampleClass::Uint,
+        ));
+        assert!(!sampled_texture_class_matches(
+            GpuTextureFormat::Stencil8,
+            GpuTextureAspect::StencilOnly,
+            GpuTextureSampleClass::Depth,
+        ));
         assert!(!sampled_aspect_class_matches(
             GpuTextureScalarClass::Uint,
             GpuTextureAspect::StencilOnly,

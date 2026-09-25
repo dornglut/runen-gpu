@@ -20,8 +20,10 @@ mod present;
 mod query;
 
 pub use attachment::{
-    GpuColorAttachmentLoad, GpuColorClearValue, GpuDepthAttachmentLoad, GpuDepthClearValue,
-    GpuMultisampleResolveTarget, GpuRenderColorAttachment, GpuRenderDepthStencilAttachment,
+    GpuColorAttachmentLoad, GpuColorClearValue, GpuDepthAttachmentLoad, GpuDepthAttachmentState,
+    GpuDepthClearValue, GpuMultisampleResolveTarget, GpuRenderColorAttachment,
+    GpuRenderDepthStencilAttachment, GpuStencilAttachmentLoad, GpuStencilAttachmentState,
+    GpuStencilClearValue,
 };
 pub use clear::GpuClearOperation;
 pub use compute::{GpuComputeOperation, GpuDispatchSize};

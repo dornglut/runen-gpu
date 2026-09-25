@@ -80,6 +80,19 @@ pub(super) const fn cull_mode(value: GpuCullMode) -> Option<Face> {
     }
 }
 
+pub(super) const fn stencil_operation(value: crate::GpuStencilOperation) -> wgpu::StencilOperation {
+    match value {
+        crate::GpuStencilOperation::Keep => wgpu::StencilOperation::Keep,
+        crate::GpuStencilOperation::Zero => wgpu::StencilOperation::Zero,
+        crate::GpuStencilOperation::Replace => wgpu::StencilOperation::Replace,
+        crate::GpuStencilOperation::Invert => wgpu::StencilOperation::Invert,
+        crate::GpuStencilOperation::IncrementClamp => wgpu::StencilOperation::IncrementClamp,
+        crate::GpuStencilOperation::DecrementClamp => wgpu::StencilOperation::DecrementClamp,
+        crate::GpuStencilOperation::IncrementWrap => wgpu::StencilOperation::IncrementWrap,
+        crate::GpuStencilOperation::DecrementWrap => wgpu::StencilOperation::DecrementWrap,
+    }
+}
+
 pub(super) const fn compare_function(value: GpuCompareFunction) -> CompareFunction {
     match value {
         GpuCompareFunction::Never => CompareFunction::Never,
@@ -154,6 +167,18 @@ mod tests {
             compare_function(GpuCompareFunction::LessEqual),
             CompareFunction::LessEqual
         );
+        for (normalized, native) in [
+            (crate::GpuStencilOperation::Keep, wgpu::StencilOperation::Keep),
+            (crate::GpuStencilOperation::Zero, wgpu::StencilOperation::Zero),
+            (crate::GpuStencilOperation::Replace, wgpu::StencilOperation::Replace),
+            (crate::GpuStencilOperation::Invert, wgpu::StencilOperation::Invert),
+            (crate::GpuStencilOperation::IncrementClamp, wgpu::StencilOperation::IncrementClamp),
+            (crate::GpuStencilOperation::DecrementClamp, wgpu::StencilOperation::DecrementClamp),
+            (crate::GpuStencilOperation::IncrementWrap, wgpu::StencilOperation::IncrementWrap),
+            (crate::GpuStencilOperation::DecrementWrap, wgpu::StencilOperation::DecrementWrap),
+        ] {
+            assert_eq!(stencil_operation(normalized), native);
+        }
         for (normalized, native) in [
             (GpuTextureFormat::Rgba8Snorm, TextureFormat::Rgba8Snorm),
             (GpuTextureFormat::Rgba8Uint, TextureFormat::Rgba8Uint),

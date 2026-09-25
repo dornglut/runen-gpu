@@ -1,6 +1,6 @@
 use runen_gpu::{
     GpuBlendMode, GpuColorTargetStateDescriptor, GpuColorWriteMask, GpuCompareFunction,
-    GpuDepthStencilStateDescriptor, GpuFragmentOutputStateDescriptor,
+    GpuDepthStateDescriptor, GpuDepthStencilStateDescriptor, GpuFragmentOutputStateDescriptor,
     GpuMultisampleStateDescriptor, GpuPrimitiveStateDescriptor, GpuProgramContractCause,
     GpuRenderPipelineStateDescriptor, GpuTextureFormat, GpuVertexInputStateDescriptor,
 };
@@ -19,8 +19,11 @@ fn color_target(format: GpuTextureFormat) -> GpuColorTargetStateDescriptor {
 fn depth_state() -> GpuDepthStencilStateDescriptor {
     GpuDepthStencilStateDescriptor::new(
         GpuTextureFormat::Depth32Float,
-        true,
-        GpuCompareFunction::LessEqual,
+        Some(GpuDepthStateDescriptor::new(
+            true,
+            GpuCompareFunction::LessEqual,
+        )),
+        None,
     )
     .expect("test depth state should be valid")
 }
