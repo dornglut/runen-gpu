@@ -6,10 +6,9 @@ use runen_gpu::{
     GpuReconstruction, GpuResourceCommon, GpuResourceLabel, GpuResourceLifetime,
     GpuResourceOwnership, GpuResourceProvenance, GpuResourceRealizationErrorCategory,
     GpuResourceRealizationPolicy, GpuSamplerDescriptor, GpuSamplerFilterState,
-    GpuTextureDescriptor, GpuTextureDimension,
-    GpuTextureExtent, GpuTextureFormat, GpuTextureInitialization, GpuTextureSubresourceRange,
-    GpuTextureUsage, GpuTextureUsages, GpuTextureViewDescriptor, GpuTextureViewDimension,
-    GpuWorkResourceIdAllocator,
+    GpuTextureDescriptor, GpuTextureDimension, GpuTextureExtent, GpuTextureFormat,
+    GpuTextureInitialization, GpuTextureSubresourceRange, GpuTextureUsage, GpuTextureUsages,
+    GpuTextureViewDescriptor, GpuTextureViewDimension, GpuWorkResourceIdAllocator,
 };
 use std::num::NonZeroUsize;
 
