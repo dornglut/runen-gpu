@@ -5,8 +5,8 @@ use super::{
 use crate::{
     GpuBindingClass, GpuBindingDeclaration, GpuBufferAccess, GpuBufferAccessKind, GpuBufferRange,
     GpuPipelineLayoutDescriptor, GpuProgramContractCause, GpuProgramContractError,
-    GpuResourceAccess, GpuSamplerUse, GpuShaderStage, GpuStorageBufferAccess, GpuStorageTextureAccess,
-    GpuTextureAccess, GpuTextureAccessKind, GpuTextureAccessResource,
+    GpuResourceAccess, GpuSamplerUse, GpuShaderStage, GpuStorageBufferAccess,
+    GpuStorageTextureAccess, GpuTextureAccess, GpuTextureAccessKind, GpuTextureAccessResource,
 };
 use core::hash::{Hash, Hasher};
 use std::collections::BTreeMap;
@@ -343,8 +343,7 @@ fn validate_pipeline_binding_limits(
         ));
     }
 
-    let required_binding_array_elements =
-        binding_array_elements.into_iter().max().unwrap_or(0);
+    let required_binding_array_elements = binding_array_elements.into_iter().max().unwrap_or(0);
     if required_binding_array_elements > device_facts.max_binding_array_elements_per_shader_stage()
     {
         return Err(device_incompatible(
@@ -388,7 +387,9 @@ fn required_bind_group_slots(layout: &GpuPipelineLayoutDescriptor) -> u64 {
 #[cfg(test)]
 mod binding_array_limit_tests {
     use super::*;
-    use crate::{GpuBindGroupLayoutDescriptor, GpuBindingKind, GpuBindingProvenance, GpuSamplerClass};
+    use crate::{
+        GpuBindGroupLayoutDescriptor, GpuBindingKind, GpuBindingProvenance, GpuSamplerClass,
+    };
     use core::num::NonZeroU32;
 
     fn storage_array(
@@ -477,18 +478,16 @@ mod binding_array_limit_tests {
 
     #[test]
     fn sampler_arrays_consume_both_general_and_sampler_specific_limits() {
-        let layout = GpuPipelineLayoutDescriptor::new([
-            GpuBindGroupLayoutDescriptor::new(
+        let layout = GpuPipelineLayoutDescriptor::new([GpuBindGroupLayoutDescriptor::new(
+            0,
+            [sampler_array(
                 0,
-                [sampler_array(
-                    0,
-                    0,
-                    GpuShaderStages::one(GpuShaderStage::Compute),
-                    4,
-                )],
-            )
-            .unwrap(),
-        ])
+                0,
+                GpuShaderStages::one(GpuShaderStage::Compute),
+                4,
+            )],
+        )
+        .unwrap()])
         .unwrap();
 
         assert!(validate_pipeline_binding_limits(&layout, &facts(4, 4)).is_ok());
