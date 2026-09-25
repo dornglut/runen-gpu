@@ -72,31 +72,33 @@ pub(crate) fn analyze_program(
     let operation = "admit canonical WGSL program";
     let source_label = source.identity().diagnostic_label();
     let baseline_capabilities = baseline_analysis_capabilities();
-    let (module, analysis_capabilities, required_features) =
-        match parse_wgsl(source.canonical_wgsl(), baseline_capabilities) {
-            Ok(module) => (module, baseline_capabilities, Vec::new()),
-            Err(baseline_error) => {
-                let f16_capabilities =
-                    baseline_capabilities | naga::valid::Capabilities::SHADER_FLOAT16;
-                match parse_wgsl(source.canonical_wgsl(), f16_capabilities) {
-                    Ok(module) => (
-                        module,
-                        f16_capabilities,
-                        vec![GpuCapabilityFeature::ShaderF16],
-                    ),
-                    Err(f16_error) => {
-                        return Err(invalid(
-                            operation,
-                            &source_label,
-                            GpuProgramContractCause::CanonicalWgslInvalid,
-                            format!(
-                                "canonical WGSL parse failed under baseline capabilities: {baseline_error}; retry with ShaderF16 also failed: {f16_error}"
-                            ),
-                        ));
-                    }
+    let (module, analysis_capabilities, required_features) = match parse_wgsl(
+        source.canonical_wgsl(),
+        baseline_capabilities,
+    ) {
+        Ok(module) => (module, baseline_capabilities, Vec::new()),
+        Err(baseline_error) => {
+            let f16_capabilities =
+                baseline_capabilities | naga::valid::Capabilities::SHADER_FLOAT16;
+            match parse_wgsl(source.canonical_wgsl(), f16_capabilities) {
+                Ok(module) => (
+                    module,
+                    f16_capabilities,
+                    vec![GpuCapabilityFeature::ShaderF16],
+                ),
+                Err(f16_error) => {
+                    return Err(invalid(
+                        operation,
+                        &source_label,
+                        GpuProgramContractCause::CanonicalWgslInvalid,
+                        format!(
+                            "canonical WGSL parse failed under baseline capabilities: {baseline_error}; retry with ShaderF16 also failed: {f16_error}"
+                        ),
+                    ));
                 }
             }
-        };
+        }
+    };
     reject_f16_overrides(&module, &source_label)?;
     let module_info =
         naga::valid::Validator::new(naga::valid::ValidationFlags::all(), analysis_capabilities)
@@ -291,11 +293,10 @@ fn parse_wgsl(
     source: &str,
     capabilities: naga::valid::Capabilities,
 ) -> Result<naga::Module, naga::front::wgsl::ParseError> {
-    let mut frontend =
-        naga::front::wgsl::Frontend::new_with_options(naga::front::wgsl::Options {
-            parse_doc_comments: false,
-            capabilities,
-        });
+    let mut frontend = naga::front::wgsl::Frontend::new_with_options(naga::front::wgsl::Options {
+        parse_doc_comments: false,
+        capabilities,
+    });
     frontend.parse(source)
 }
 

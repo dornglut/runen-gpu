@@ -147,12 +147,8 @@ fn shader_f16_requirement_is_compiler_derived_and_buffer_layout_is_retained() {
 
 #[test]
 fn shader_f16_invalid_and_unrepresentable_forms_fail_closed() {
-    let missing_enable = program(
-        "r3.f16.missing-enable",
-        F16_WITHOUT_ENABLE_WGSL,
-        "cs_main",
-    )
-    .unwrap_err();
+    let missing_enable =
+        program("r3.f16.missing-enable", F16_WITHOUT_ENABLE_WGSL, "cs_main").unwrap_err();
     assert_eq!(
         missing_enable.cause(),
         GpuProgramContractCause::CanonicalWgslInvalid
@@ -248,12 +244,7 @@ fn f16_graph() -> (GpuPreparedWorkGraph, GpuReadbackId) {
     let binding = GpuRuntimeBindingValue::new(
         GpuBindingKey::try_new(0, 0).unwrap(),
         [GpuRuntimeBindingResource::Buffer(
-            GpuRuntimeBufferBinding::new(
-                buffer.clone(),
-                0,
-                NonZeroU64::new(16).unwrap(),
-                None,
-            ),
+            GpuRuntimeBufferBinding::new(buffer.clone(), 0, NonZeroU64::new(16).unwrap(), None),
         )],
     )
     .unwrap();
