@@ -131,7 +131,7 @@ jobs:
           report_path, expected_revision = sys.argv[1:3]
           with open(report_path, encoding="utf-8") as handle:
               report = json.load(handle)
-          assert report["schema_version"] == 1
+          assert report["schema_version"] == 2
           assert report["qualification_level"] == "generic_metal"
           assert report["revision"] == expected_revision
           assert report["environment"]["architecture"] == "arm64"
@@ -139,6 +139,48 @@ jobs:
           assert report["environment"]["chip_type"]
           assert report["adapter"]["backend"] == "Metal"
           assert report["adapter"]["name"]
+          wgpu_characterization = report["wgpu_characterization"]
+          assert wgpu_characterization["authority"] == "private_backend_characterization_only"
+          assert wgpu_characterization["adapter"]["backend"] == "Metal"
+          assert wgpu_characterization["adapter"]["name"] == report["adapter"]["name"]
+          assert wgpu_characterization["adapter"]["vendor"] == report["adapter"]["vendor"]
+          assert wgpu_characterization["adapter"]["device"] == report["adapter"]["device"]
+          expected_wgpu_features = {
+              "shader_f16",
+              "timestamp_query",
+              "indirect_first_instance",
+              "depth_clip_control",
+              "texture_binding_array",
+              "buffer_binding_array",
+              "storage_resource_binding_array",
+              "uniform_buffer_binding_arrays",
+              "sampled_texture_and_storage_buffer_array_non_uniform_indexing",
+              "storage_texture_array_non_uniform_indexing",
+              "partially_bound_binding_array",
+              "mappable_primary_buffers",
+              "multi_draw_indirect_count",
+          }
+          assert set(wgpu_characterization["features"]) == expected_wgpu_features
+          assert all(
+              type(value) is bool
+              for value in wgpu_characterization["features"].values()
+          )
+          expected_wgpu_limits = {
+              "max_sampled_textures_per_shader_stage",
+              "max_samplers_per_shader_stage",
+              "max_storage_buffers_per_shader_stage",
+              "max_storage_textures_per_shader_stage",
+              "max_uniform_buffers_per_shader_stage",
+              "max_binding_array_elements_per_shader_stage",
+              "max_binding_array_sampler_elements_per_shader_stage",
+              "max_buffer_size",
+              "max_compute_workgroups_per_dimension",
+          }
+          assert set(wgpu_characterization["limits"]) == expected_wgpu_limits
+          assert all(
+              type(value) is int and value >= 0
+              for value in wgpu_characterization["limits"].values()
+          )
           expected_limit_keys = {
               "max_uniform_buffer_binding_size",
               "max_storage_buffer_binding_size",
