@@ -1,4 +1,6 @@
-use super::analysis::analyze_program;
+use super::analysis::{
+    FixedArrayRequirementScope, analyze_program, fixed_array_capabilities,
+};
 use super::contract_diagnostics::{GpuProgramContractCause, GpuProgramContractError};
 use super::entry_point::{GpuEntryPointDescriptor, GpuEntryPointName};
 use super::interface::{
@@ -63,7 +65,10 @@ impl GpuProgramDescriptor {
                 )?;
             }
             if binding.array_count().is_some() {
-                for feature in fixed_array_capabilities(binding.kind().class()) {
+                for feature in fixed_array_capabilities(
+                    binding.kind().class(),
+                    FixedArrayRequirementScope::SelectedLayout,
+                ) {
                     insert_interface_requirement(&mut requirements, &source, *feature)?;
                 }
             }
@@ -136,26 +141,6 @@ impl GpuProgramDescriptor {
 
     pub fn is_same_record(&self, other: &Self) -> bool {
         Arc::ptr_eq(&self.0, &other.0)
-    }
-}
-
-fn fixed_array_capabilities(class: GpuBindingClass) -> &'static [GpuCapabilityFeature] {
-    match class {
-        GpuBindingClass::UniformBuffer => &[
-            GpuCapabilityFeature::BufferBindingArray,
-            GpuCapabilityFeature::UniformBufferBindingArray,
-        ],
-        GpuBindingClass::StorageBuffer => &[
-            GpuCapabilityFeature::BufferBindingArray,
-            GpuCapabilityFeature::StorageResourceBindingArray,
-        ],
-        GpuBindingClass::SampledTexture | GpuBindingClass::Sampler => {
-            &[GpuCapabilityFeature::TextureBindingArray]
-        }
-        GpuBindingClass::StorageTexture => &[
-            GpuCapabilityFeature::TextureBindingArray,
-            GpuCapabilityFeature::StorageResourceBindingArray,
-        ],
     }
 }
 
