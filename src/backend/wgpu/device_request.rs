@@ -486,6 +486,10 @@ fn requested_limits(
     limits.max_texture_array_layers = budget.max_texture_array_layers();
     limits.max_vertex_attributes = budget.max_vertex_attributes();
     limits.max_vertex_buffer_array_stride = budget.max_vertex_buffer_array_stride();
+    limits.max_binding_array_elements_per_shader_stage =
+        budget.max_binding_array_elements_per_shader_stage();
+    limits.max_binding_array_sampler_elements_per_shader_stage =
+        budget.max_binding_array_sampler_elements_per_shader_stage();
     let alignments = contract.selected_alignments();
     limits.min_uniform_buffer_offset_alignment =
         requested_alignment(alignments.uniform_dynamic_offset, "uniform dynamic offset")?;
@@ -532,6 +536,10 @@ fn map_device_limits(native: &Limits) -> GpuDeviceLimits {
             native.max_texture_array_layers,
             native.max_vertex_attributes,
             native.max_vertex_buffer_array_stride,
+        )
+        .with_binding_array_limits(
+            native.max_binding_array_elements_per_shader_stage,
+            native.max_binding_array_sampler_elements_per_shader_stage,
         ),
         GpuAlignmentFacts {
             uniform_dynamic_offset: Some(u64::from(native.min_uniform_buffer_offset_alignment)),
