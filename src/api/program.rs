@@ -23,6 +23,7 @@ pub use contract_diagnostics::*;
 pub use descriptor::*;
 pub use diagnostics::*;
 pub use entry_point::*;
+pub(crate) use fixed_array::fixed_array_layout_capabilities;
 pub use interface::*;
 pub use layout::*;
 pub use pipeline::*;
