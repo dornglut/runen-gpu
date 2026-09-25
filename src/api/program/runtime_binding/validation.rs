@@ -466,9 +466,9 @@ fn sampled_texture_class_matches(
     aspect: GpuTextureAspect,
     sample_class: GpuTextureSampleClass,
 ) -> bool {
-    let Some(aspect) = texture_format::canonical_aspect(format, aspect) else {
+    if !texture_format::supports_aspect(format, aspect) {
         return false;
-    };
+    }
     match aspect {
         GpuTextureAspect::Color => texture_format::color_scalar_class(format)
             .is_some_and(|scalar_class| sampled_color_class_matches(scalar_class, sample_class)),

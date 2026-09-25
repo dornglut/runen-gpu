@@ -780,7 +780,7 @@ mod r1_r_rg8_mapping_tests {
     #[test]
     fn thirty_eight_unique_private_mappings_preserve_closed_presentation() {
         let mappings = texture_formats();
-        assert_eq!(mappings.len(), 37);
+        assert_eq!(mappings.len(), 38);
         let mut normalized = Vec::new();
         let mut native = Vec::new();
         for (format, wgpu_format) in mappings {
