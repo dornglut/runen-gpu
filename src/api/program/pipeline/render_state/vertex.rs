@@ -105,19 +105,11 @@ impl GpuVertexFormat {
     pub fn shader_io_type(self) -> GpuShaderIoValueType {
         let (class, width) = match self {
             Self::Uint8 | Self::Uint16 | Self::Uint32 => (GpuShaderIoScalarClass::Uint, 1),
-            Self::Uint8x2 | Self::Uint16x2 | Self::Uint32x2 => {
-                (GpuShaderIoScalarClass::Uint, 2)
-            }
-            Self::Uint8x4 | Self::Uint16x4 | Self::Uint32x4 => {
-                (GpuShaderIoScalarClass::Uint, 4)
-            }
+            Self::Uint8x2 | Self::Uint16x2 | Self::Uint32x2 => (GpuShaderIoScalarClass::Uint, 2),
+            Self::Uint8x4 | Self::Uint16x4 | Self::Uint32x4 => (GpuShaderIoScalarClass::Uint, 4),
             Self::Sint8 | Self::Sint16 | Self::Sint32 => (GpuShaderIoScalarClass::Sint, 1),
-            Self::Sint8x2 | Self::Sint16x2 | Self::Sint32x2 => {
-                (GpuShaderIoScalarClass::Sint, 2)
-            }
-            Self::Sint8x4 | Self::Sint16x4 | Self::Sint32x4 => {
-                (GpuShaderIoScalarClass::Sint, 4)
-            }
+            Self::Sint8x2 | Self::Sint16x2 | Self::Sint32x2 => (GpuShaderIoScalarClass::Sint, 2),
+            Self::Sint8x4 | Self::Sint16x4 | Self::Sint32x4 => (GpuShaderIoScalarClass::Sint, 4),
             Self::Unorm8
             | Self::Snorm8
             | Self::Unorm16
