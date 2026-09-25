@@ -9,6 +9,7 @@ mod contract_diagnostics;
 mod descriptor;
 mod diagnostics;
 mod entry_point;
+mod fixed_array;
 mod interface;
 mod layout;
 mod pipeline;
