@@ -633,9 +633,7 @@ pub(crate) fn raw_copy_compatible(source: GpuTextureFormat, destination: GpuText
     source == destination || paired_view_format(source).is_some_and(|paired| paired == destination)
 }
 
-pub(crate) const fn color_scalar_class(
-    format: GpuTextureFormat,
-) -> Option<GpuTextureScalarClass> {
+pub(crate) const fn color_scalar_class(format: GpuTextureFormat) -> Option<GpuTextureScalarClass> {
     semantics(format).color_scalar_class
 }
 

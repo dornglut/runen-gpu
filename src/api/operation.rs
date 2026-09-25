@@ -186,8 +186,7 @@ fn validate_depth_stencil_access_for_draw(
             "configure depth attachment state whenever the render pipeline uses the depth aspect",
         ));
     }
-    if pipeline_state.and_then(|state| state.stencil()).is_some()
-        && attachment.stencil().is_none()
+    if pipeline_state.and_then(|state| state.stencil()).is_some() && attachment.stencil().is_none()
     {
         return Err(GpuWorkOperationError::invalid(
             "validate GPU render draw stencil attachment parity",
