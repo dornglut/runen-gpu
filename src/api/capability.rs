@@ -730,25 +730,16 @@ mod tests {
                 GpuCapabilities::from_normalized_facts([], test_limits(), [(format, input)]);
             let normalized = capabilities.format(format).unwrap();
             assert_eq!(normalized.block_dimensions, Some((1, 1)), "{format:?}");
-            assert_eq!(
-                normalized.block_copy_size, expected_copy_size,
-                "{format:?}"
-            );
+            assert_eq!(normalized.block_copy_size, expected_copy_size, "{format:?}");
             assert_eq!(normalized.sampled, input.sampled, "{format:?}");
             assert_eq!(normalized.filterable, input.filterable, "{format:?}");
             assert_eq!(normalized.storage_read, input.storage_read, "{format:?}");
-            assert_eq!(
-                normalized.storage_write, input.storage_write,
-                "{format:?}"
-            );
+            assert_eq!(normalized.storage_write, input.storage_write, "{format:?}");
             assert_eq!(
                 normalized.color_attachment, input.color_attachment,
                 "{format:?}"
             );
-            assert_eq!(
-                normalized.depth_stencil, input.depth_stencil,
-                "{format:?}"
-            );
+            assert_eq!(normalized.depth_stencil, input.depth_stencil, "{format:?}");
             assert_eq!(normalized.copy_source, input.copy_source, "{format:?}");
             assert_eq!(
                 normalized.copy_destination, input.copy_destination,

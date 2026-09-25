@@ -1154,7 +1154,10 @@ mod tests {
     }
     #[test]
     fn depth_only_format_role_admission_preserves_supplied_positive_and_negative_facts() {
-        let formats = [GpuTextureFormat::Depth16Unorm, GpuTextureFormat::Depth24Plus];
+        let formats = [
+            GpuTextureFormat::Depth16Unorm,
+            GpuTextureFormat::Depth24Plus,
+        ];
         let supported = GpuTextureFormatCapabilities {
             sampled: true,
             filterable: true,
