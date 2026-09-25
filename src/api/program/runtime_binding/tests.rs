@@ -136,18 +136,11 @@ fn device_facts_with_array_limits(
     max_binding_array_elements: u32,
     max_binding_array_sampler_elements: u32,
 ) -> GpuRuntimeBindingDeviceFacts {
-    GpuRuntimeBindingDeviceFacts::new(
-        NonZeroU64::new(16),
-        NonZeroU64::new(16),
-        4,
-        8,
-        4,
-        [],
-    )
-    .with_binding_array_limits(
-        max_binding_array_elements,
-        max_binding_array_sampler_elements,
-    )
+    GpuRuntimeBindingDeviceFacts::new(NonZeroU64::new(16), NonZeroU64::new(16), 4, 8, 4, [])
+        .with_binding_array_limits(
+            max_binding_array_elements,
+            max_binding_array_sampler_elements,
+        )
 }
 
 fn runtime_value(dynamic_offset: u64) -> GpuRuntimeBindingValue {
@@ -418,12 +411,7 @@ fn fixed_array_limits_use_maximum_per_stage_instead_of_global_sum() {
 fn sampler_arrays_consume_both_general_and_sampler_array_budgets() {
     let group = GpuBindGroupLayoutDescriptor::new(
         0,
-        [sampler_array_declaration(
-            0,
-            0,
-            GpuShaderStage::Compute,
-            4,
-        )],
+        [sampler_array_declaration(0, 0, GpuShaderStage::Compute, 4)],
     )
     .unwrap();
     let layout = GpuPipelineLayoutDescriptor::new([group]).unwrap();
