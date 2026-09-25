@@ -13,50 +13,60 @@ struct BlendCase {
     expected: [u8; 4],
 }
 
-const CUSTOM_BLEND: GpuBlendState = GpuBlendState::new(
-    GpuBlendComponent::new(
-        GpuBlendFactor::Constant,
-        GpuBlendFactor::OneMinusConstant,
-        GpuBlendOperation::Subtract,
-    ),
-    GpuBlendComponent::new(
-        GpuBlendFactor::SrcAlpha,
-        GpuBlendFactor::OneMinusSrcAlpha,
-        GpuBlendOperation::Add,
-    ),
-);
+fn custom_blend() -> GpuBlendState {
+    GpuBlendState::new(
+        GpuBlendComponent::new(
+            GpuBlendFactor::Constant,
+            GpuBlendFactor::OneMinusConstant,
+            GpuBlendOperation::Subtract,
+        )
+        .unwrap(),
+        GpuBlendComponent::new(
+            GpuBlendFactor::SrcAlpha,
+            GpuBlendFactor::OneMinusSrcAlpha,
+            GpuBlendOperation::Add,
+        )
+        .unwrap(),
+    )
+}
 
-const MIN_MAX_BLEND: GpuBlendState = GpuBlendState::new(
-    GpuBlendComponent::new(
-        GpuBlendFactor::Constant,
-        GpuBlendFactor::OneMinusConstant,
-        GpuBlendOperation::Min,
-    ),
-    GpuBlendComponent::new(
-        GpuBlendFactor::OneMinusConstant,
-        GpuBlendFactor::Constant,
-        GpuBlendOperation::Max,
-    ),
-);
+fn min_max_blend() -> GpuBlendState {
+    GpuBlendState::new(
+        GpuBlendComponent::new(
+            GpuBlendFactor::One,
+            GpuBlendFactor::Zero,
+            GpuBlendOperation::Min,
+        )
+        .unwrap(),
+        GpuBlendComponent::new(
+            GpuBlendFactor::One,
+            GpuBlendFactor::Zero,
+            GpuBlendOperation::Max,
+        )
+        .unwrap(),
+    )
+}
 
-const CASES: [BlendCase; 2] = [
-    BlendCase {
-        name: "independent_subtract",
-        blend: CUSTOM_BLEND,
-        clear: [0.0, 1.0, 1.0, 0.0],
-        source: "vec4<f32>(1.0, 0.0, 0.0, 1.0)",
-        blend_constant: [1.0, 0.0, 1.0, 0.0],
-        expected: [255, 0, 0, 255],
-    },
-    BlendCase {
-        name: "min_max",
-        blend: MIN_MAX_BLEND,
-        clear: [0.0, 1.0, 0.0, 1.0],
-        source: "vec4<f32>(1.0, 0.0, 1.0, 0.0)",
-        blend_constant: [1.0, 0.0, 1.0, 0.0],
-        expected: [0, 0, 0, 255],
-    },
-];
+fn cases() -> [BlendCase; 2] {
+    [
+        BlendCase {
+            name: "independent_subtract",
+            blend: custom_blend(),
+            clear: [0.0, 1.0, 1.0, 0.0],
+            source: "vec4<f32>(1.0, 0.0, 0.0, 1.0)",
+            blend_constant: [1.0, 0.0, 1.0, 0.0],
+            expected: [255, 0, 0, 255],
+        },
+        BlendCase {
+            name: "min_max",
+            blend: min_max_blend(),
+            clear: [0.0, 1.0, 0.0, 1.0],
+            source: "vec4<f32>(1.0, 0.0, 1.0, 0.0)",
+            blend_constant: [0.25, 0.5, 0.75, 1.0],
+            expected: [0, 0, 0, 255],
+        },
+    ]
+}
 
 fn label(value: impl AsRef<str>) -> GpuResourceLabel {
     GpuResourceLabel::new(value.as_ref()).unwrap()
@@ -327,7 +337,7 @@ fn pixel_at(bytes: &GpuReadbackBytes, x: u32, y: u32) -> [u8; 4] {
 
 async fn run_suite(context: &GpuContext) -> u32 {
     let mut mask = 0_u32;
-    for (index, case) in CASES.into_iter().enumerate() {
+    for (index, case) in cases().into_iter().enumerate() {
         let (graph, readback_id) = graph(case);
         let prepared = context.prepare_submission(graph).await.unwrap();
         let submission = context.submit_prepared(prepared).unwrap();
@@ -345,7 +355,7 @@ async fn run_suite(context: &GpuContext) -> u32 {
         );
         mask |= 1 << index;
     }
-    assert_eq!(mask, (1_u32 << CASES.len()) - 1);
+    assert_eq!(mask, (1_u32 << cases().len()) - 1);
     mask
 }
 
@@ -413,18 +423,33 @@ fn blend_state_census_matches_portable_contract() {
     assert_eq!(factors.len(), 13);
     assert_eq!(operations.len(), 5);
 
-    assert_eq!(
-        CUSTOM_BLEND.color().operation(),
-        GpuBlendOperation::Subtract
-    );
-    assert_eq!(CUSTOM_BLEND.alpha().operation(), GpuBlendOperation::Add);
-    assert_eq!(MIN_MAX_BLEND.color().operation(), GpuBlendOperation::Min);
-    assert_eq!(MIN_MAX_BLEND.alpha().operation(), GpuBlendOperation::Max);
+    let custom = custom_blend();
+    let min_max = min_max_blend();
+    assert_eq!(custom.color().operation(), GpuBlendOperation::Subtract);
+    assert_eq!(custom.alpha().operation(), GpuBlendOperation::Add);
+    assert_eq!(min_max.color().operation(), GpuBlendOperation::Min);
+    assert_eq!(min_max.alpha().operation(), GpuBlendOperation::Max);
 
+    assert!(
+        GpuBlendComponent::new(
+            GpuBlendFactor::Constant,
+            GpuBlendFactor::OneMinusConstant,
+            GpuBlendOperation::Min,
+        )
+        .is_err()
+    );
+    assert!(
+        GpuBlendComponent::new(
+            GpuBlendFactor::One,
+            GpuBlendFactor::Zero,
+            GpuBlendOperation::Max,
+        )
+        .is_ok()
+    );
     assert!(
         GpuColorTargetStateDescriptor::new(
             GpuTextureFormat::R32Uint,
-            Some(CUSTOM_BLEND),
+            Some(custom),
             GpuColorWriteMask::ALL,
         )
         .is_err()
@@ -432,7 +457,7 @@ fn blend_state_census_matches_portable_contract() {
     assert!(
         GpuColorTargetStateDescriptor::new(
             GpuTextureFormat::Rgba8Unorm,
-            Some(CUSTOM_BLEND),
+            Some(custom),
             GpuColorWriteMask::ALL,
         )
         .is_ok()

@@ -87,12 +87,14 @@ fn color_target_state_rejects_depth_and_integer_alpha_blending() {
                 GpuBlendFactor::SrcAlpha,
                 GpuBlendFactor::OneMinusSrcAlpha,
                 GpuBlendOperation::Add,
-            ),
+            )
+            .unwrap(),
             GpuBlendComponent::new(
                 GpuBlendFactor::One,
                 GpuBlendFactor::OneMinusSrcAlpha,
                 GpuBlendOperation::Add,
-            ),
+            )
+            .unwrap(),
         )),
         GpuColorWriteMask::ALL,
     )

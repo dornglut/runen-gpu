@@ -86,12 +86,14 @@ fn packed32_public_semantics_and_program_typing_are_exact() {
                     GpuBlendFactor::SrcAlpha,
                     GpuBlendFactor::OneMinusSrcAlpha,
                     GpuBlendOperation::Add,
-                ),
+                )
+                .unwrap(),
                 GpuBlendComponent::new(
                     GpuBlendFactor::One,
                     GpuBlendFactor::OneMinusSrcAlpha,
                     GpuBlendOperation::Add,
-                ),
+                )
+                .unwrap(),
             )),
             GpuColorWriteMask::ALL,
         );

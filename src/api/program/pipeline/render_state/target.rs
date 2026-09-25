@@ -40,16 +40,26 @@ pub struct GpuBlendComponent {
 }
 
 impl GpuBlendComponent {
-    pub const fn new(
+    pub fn new(
         src_factor: GpuBlendFactor,
         dst_factor: GpuBlendFactor,
         operation: GpuBlendOperation,
-    ) -> Self {
-        Self {
+    ) -> Result<Self, GpuProgramContractError> {
+        if matches!(operation, GpuBlendOperation::Min | GpuBlendOperation::Max)
+            && (src_factor != GpuBlendFactor::One || dst_factor != GpuBlendFactor::Zero)
+        {
+            return Err(invalid_attachment_state(
+                format!(
+                    "blend_operation={operation:?}, src_factor={src_factor:?}, dst_factor={dst_factor:?}"
+                ),
+                "use One/Zero factors for Min and Max blend operations",
+            ));
+        }
+        Ok(Self {
             src_factor,
             dst_factor,
             operation,
-        }
+        })
     }
 
     pub const fn src_factor(self) -> GpuBlendFactor {
@@ -575,12 +585,14 @@ mod tests {
                             GpuBlendFactor::SrcAlpha,
                             GpuBlendFactor::OneMinusSrcAlpha,
                             GpuBlendOperation::Add,
-                        ),
+                        )
+                        .unwrap(),
                         GpuBlendComponent::new(
                             GpuBlendFactor::One,
                             GpuBlendFactor::OneMinusSrcAlpha,
                             GpuBlendOperation::Add,
-                        ),
+                        )
+                        .unwrap(),
                     )),
                     GpuColorWriteMask::ALL,
                 )
@@ -598,12 +610,14 @@ mod tests {
                         GpuBlendFactor::SrcAlpha,
                         GpuBlendFactor::OneMinusSrcAlpha,
                         GpuBlendOperation::Add,
-                    ),
+                    )
+                    .unwrap(),
                     GpuBlendComponent::new(
                         GpuBlendFactor::One,
                         GpuBlendFactor::OneMinusSrcAlpha,
                         GpuBlendOperation::Add,
-                    ),
+                    )
+                    .unwrap(),
                 )),
                 GpuColorWriteMask::ALL,
             )

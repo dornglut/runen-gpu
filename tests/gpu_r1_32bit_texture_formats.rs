@@ -212,12 +212,14 @@ fn fragment_output_shape_and_integer_blend_rules_follow_format_semantics() {
                         GpuBlendFactor::SrcAlpha,
                         GpuBlendFactor::OneMinusSrcAlpha,
                         GpuBlendOperation::Add,
-                    ),
+                    )
+                    .unwrap(),
                     GpuBlendComponent::new(
                         GpuBlendFactor::One,
                         GpuBlendFactor::OneMinusSrcAlpha,
                         GpuBlendOperation::Add,
-                    ),
+                    )
+                    .unwrap(),
                 )),
                 GpuColorWriteMask::ALL,
             )

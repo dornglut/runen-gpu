@@ -288,12 +288,14 @@ fn render_pipeline(source: &GpuAdmittedProgramSource) -> GpuRenderPipelineDescri
                 GpuBlendFactor::SrcAlpha,
                 GpuBlendFactor::OneMinusSrcAlpha,
                 GpuBlendOperation::Add,
-            ),
+            )
+            .unwrap(),
             GpuBlendComponent::new(
                 GpuBlendFactor::One,
                 GpuBlendFactor::OneMinusSrcAlpha,
                 GpuBlendOperation::Add,
-            ),
+            )
+            .unwrap(),
         )),
         GpuColorWriteMask::ALL,
     )

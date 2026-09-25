@@ -366,7 +366,8 @@ mod tests {
             crate::GpuBlendFactor::One,
             crate::GpuBlendFactor::Zero,
             crate::GpuBlendOperation::Add,
-        );
+        )
+        .unwrap();
         let blend = GpuBlendState::new(component, component);
         assert!(validate_color_blend_support(None, false, "test").is_ok());
         assert!(validate_color_blend_support(Some(blend), true, "test").is_ok());

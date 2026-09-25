@@ -259,12 +259,14 @@ fn assert_fragment_io_and_integer_blending_follow_scalar_class(
                             GpuBlendFactor::SrcAlpha,
                             GpuBlendFactor::OneMinusSrcAlpha,
                             GpuBlendOperation::Add,
-                        ),
+                        )
+                        .unwrap(),
                         GpuBlendComponent::new(
                             GpuBlendFactor::One,
                             GpuBlendFactor::OneMinusSrcAlpha,
                             GpuBlendOperation::Add,
-                        ),
+                        )
+                        .unwrap(),
                     )),
                     GpuColorWriteMask::ALL
                 )
