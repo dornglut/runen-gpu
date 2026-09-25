@@ -20,6 +20,9 @@ mod retained_sampler_anisotropy;
 #[path = "gpu_r3_shader_f16.rs"]
 mod retained_shader_f16;
 #[cfg(target_arch = "wasm32")]
+#[path = "gpu_transient_attachment/mod.rs"]
+mod retained_transient_attachment;
+#[cfg(target_arch = "wasm32")]
 #[path = "gpu_r1_vertex16_formats.rs"]
 mod retained_vertex16;
 #[cfg(target_arch = "wasm32")]
@@ -28,9 +31,6 @@ mod retained_vertex8;
 #[cfg(target_arch = "wasm32")]
 #[path = "gpu_r1_vertex_packed_formats.rs"]
 mod retained_vertex_packed;
-#[cfg(target_arch = "wasm32")]
-#[path = "gpu_transient_attachment/mod.rs"]
-mod retained_transient_attachment;
 
 #[cfg(target_arch = "wasm32")]
 mod browser {
@@ -2185,9 +2185,7 @@ fn cs_main() {
 
         if retained_transient_attachment::stencil_supported(&transient_context) {
             let stencil_context = GpuContext::request(
-                retained_transient_attachment::stencil_descriptor(
-                    GpuBackendFamily::BrowserWebGpu,
-                ),
+                retained_transient_attachment::stencil_descriptor(GpuBackendFamily::BrowserWebGpu),
             )
             .await
             .expect("advertised browser Stencil8 depth/stencil role must admit a context");
