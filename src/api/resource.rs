@@ -2148,31 +2148,37 @@ mod tests {
     #[test]
     fn transient_attachment_usage_and_descriptor_contract_is_normalized() {
         let transient_label = label("transient color");
-        assert!(GpuTextureUsages::new(
-            &transient_label,
-            [GpuTextureUsage::TransientAttachment]
-        )
-        .is_err());
-        assert!(GpuTextureUsages::new(
-            &transient_label,
-            [
-                GpuTextureUsage::ColorAttachment,
-                GpuTextureUsage::DepthStencilAttachment,
-                GpuTextureUsage::TransientAttachment,
-            ]
-        )
-        .is_err());
-        assert!(GpuTextureUsages::new(
-            &transient_label,
-            [
-                GpuTextureUsage::ColorAttachment,
-                GpuTextureUsage::CopySource,
-                GpuTextureUsage::TransientAttachment,
-            ]
-        )
-        .is_err());
+        assert!(
+            GpuTextureUsages::new(&transient_label, [GpuTextureUsage::TransientAttachment])
+                .is_err()
+        );
+        assert!(
+            GpuTextureUsages::new(
+                &transient_label,
+                [
+                    GpuTextureUsage::ColorAttachment,
+                    GpuTextureUsage::DepthStencilAttachment,
+                    GpuTextureUsage::TransientAttachment,
+                ]
+            )
+            .is_err()
+        );
+        assert!(
+            GpuTextureUsages::new(
+                &transient_label,
+                [
+                    GpuTextureUsage::ColorAttachment,
+                    GpuTextureUsage::CopySource,
+                    GpuTextureUsage::TransientAttachment,
+                ]
+            )
+            .is_err()
+        );
 
-        for lifetime in [GpuResourceLifetime::Transient, GpuResourceLifetime::Retained] {
+        for lifetime in [
+            GpuResourceLifetime::Transient,
+            GpuResourceLifetime::Retained,
+        ] {
             let common = GpuResourceCommon::owned(
                 transient_label.clone(),
                 lifetime,
@@ -2184,14 +2190,7 @@ mod tests {
             let descriptor = GpuTextureDescriptor::new(
                 common,
                 GpuTextureDimension::D2,
-                GpuTextureExtent::new(
-                    &transient_label,
-                    GpuTextureDimension::D2,
-                    8,
-                    8,
-                    1,
-                )
-                .unwrap(),
+                GpuTextureExtent::new(&transient_label, GpuTextureDimension::D2, 8, 8, 1).unwrap(),
                 1,
                 1,
                 GpuTextureFormat::Rgba8Unorm,
@@ -2219,14 +2218,8 @@ mod tests {
                 GpuTextureDescriptor::new(
                     common("transient view texture"),
                     GpuTextureDimension::D2,
-                    GpuTextureExtent::new(
-                        &texture_label,
-                        GpuTextureDimension::D2,
-                        8,
-                        8,
-                        1,
-                    )
-                    .unwrap(),
+                    GpuTextureExtent::new(&texture_label, GpuTextureDimension::D2, 8, 8, 1)
+                        .unwrap(),
                     1,
                     1,
                     GpuTextureFormat::Rgba8Unorm,
@@ -2243,48 +2236,42 @@ mod tests {
                 .unwrap(),
             )
             .unwrap();
-        let exact = GpuTextureSubresourceRange::new(
-            &texture_label,
-            0,
-            1,
-            0,
-            1,
-            GpuTextureAspect::Color,
-        )
-        .unwrap();
-        assert!(GpuTextureViewDescriptor::new(
-            common("transient exact view"),
-            &texture,
-            None,
-            GpuTextureViewDimension::D2,
-            exact,
-        )
-        .is_ok());
-        assert!(GpuTextureViewDescriptor::new(
-            common("transient paired view"),
-            &texture,
-            Some(GpuTextureFormat::Rgba8UnormSrgb),
-            GpuTextureViewDimension::D2,
-            exact,
-        )
-        .is_err());
-        let all_aspect = GpuTextureSubresourceRange::new(
-            &texture_label,
-            0,
-            1,
-            0,
-            1,
-            GpuTextureAspect::All,
-        )
-        .unwrap();
-        assert!(GpuTextureViewDescriptor::new(
-            common("transient canonical all aspect"),
-            &texture,
-            None,
-            GpuTextureViewDimension::D2,
-            all_aspect,
-        )
-        .is_ok());
+        let exact =
+            GpuTextureSubresourceRange::new(&texture_label, 0, 1, 0, 1, GpuTextureAspect::Color)
+                .unwrap();
+        assert!(
+            GpuTextureViewDescriptor::new(
+                common("transient exact view"),
+                &texture,
+                None,
+                GpuTextureViewDimension::D2,
+                exact,
+            )
+            .is_ok()
+        );
+        assert!(
+            GpuTextureViewDescriptor::new(
+                common("transient paired view"),
+                &texture,
+                Some(GpuTextureFormat::Rgba8UnormSrgb),
+                GpuTextureViewDimension::D2,
+                exact,
+            )
+            .is_err()
+        );
+        let all_aspect =
+            GpuTextureSubresourceRange::new(&texture_label, 0, 1, 0, 1, GpuTextureAspect::All)
+                .unwrap();
+        assert!(
+            GpuTextureViewDescriptor::new(
+                common("transient canonical all aspect"),
+                &texture,
+                None,
+                GpuTextureViewDimension::D2,
+                all_aspect,
+            )
+            .is_ok()
+        );
         assert!(GpuTextureViewDescriptor::ordinary_full_owned(
             "transient ordinary full view",
             &texture,
