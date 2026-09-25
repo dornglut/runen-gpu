@@ -153,6 +153,9 @@ pub(super) fn normalized_features(
     if features.contains(Features::STORAGE_RESOURCE_BINDING_ARRAY) {
         supported.push(GpuCapabilityFeature::StorageResourceBindingArray);
     }
+    if features.contains(Features::SHADER_F16) {
+        supported.push(GpuCapabilityFeature::ShaderF16);
+    }
     if surface_compatible {
         supported.push(GpuCapabilityFeature::Presentation);
     }

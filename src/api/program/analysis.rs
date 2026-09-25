@@ -11,7 +11,7 @@ use super::stage_io::{
     GpuFragmentOutputBuiltin, GpuObservedFragmentOutputSignature, GpuObservedVertexInputSignature,
     GpuShaderIoLocation, GpuShaderIoScalarClass, GpuShaderIoValueType, GpuVertexInputBuiltin,
 };
-use crate::GpuTextureFormat;
+use crate::{GpuCapabilityFeature, GpuTextureFormat};
 use core::num::{NonZeroU32, NonZeroU64};
 use naga::{
     AddressSpace, ArraySize, Binding, BuiltIn, ImageClass, ImageDimension, ScalarKind, ShaderStage,
@@ -23,6 +23,7 @@ pub(crate) struct ProgramAnalysis {
     pub(crate) entry_points: Vec<GpuEntryPointDescriptor>,
     pub(crate) vertex_inputs: Vec<GpuObservedVertexInputSignature>,
     pub(crate) fragment_outputs: Vec<GpuObservedFragmentOutputSignature>,
+    pub(crate) required_features: Vec<GpuCapabilityFeature>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -70,21 +71,33 @@ pub(crate) fn analyze_program(
 ) -> Result<ProgramAnalysis, GpuProgramContractError> {
     let operation = "admit canonical WGSL program";
     let source_label = source.identity().diagnostic_label();
-    let module = naga::front::wgsl::parse_str(source.canonical_wgsl()).map_err(|error| {
-        invalid(
-            operation,
-            &source_label,
-            GpuProgramContractCause::CanonicalWgslInvalid,
-            format!("canonical WGSL parse failed: {error}"),
-        )
-    })?;
-    // Permit only fixed binding-array forms that are normalized into explicit RunenGPU
-    // capability requirements; context/device admission remains responsible for backend support.
-    let analysis_capabilities = naga::valid::Capabilities::default()
-        | naga::valid::Capabilities::TEXTURE_AND_SAMPLER_BINDING_ARRAY
-        | naga::valid::Capabilities::BUFFER_BINDING_ARRAY
-        | naga::valid::Capabilities::STORAGE_TEXTURE_BINDING_ARRAY
-        | naga::valid::Capabilities::STORAGE_BUFFER_BINDING_ARRAY;
+    let baseline_capabilities = baseline_analysis_capabilities();
+    let (module, analysis_capabilities, required_features) =
+        match parse_wgsl(source.canonical_wgsl(), baseline_capabilities) {
+            Ok(module) => (module, baseline_capabilities, Vec::new()),
+            Err(baseline_error) => {
+                let f16_capabilities =
+                    baseline_capabilities | naga::valid::Capabilities::SHADER_FLOAT16;
+                match parse_wgsl(source.canonical_wgsl(), f16_capabilities) {
+                    Ok(module) => (
+                        module,
+                        f16_capabilities,
+                        vec![GpuCapabilityFeature::ShaderF16],
+                    ),
+                    Err(f16_error) => {
+                        return Err(invalid(
+                            operation,
+                            &source_label,
+                            GpuProgramContractCause::CanonicalWgslInvalid,
+                            format!(
+                                "canonical WGSL parse failed under baseline capabilities: {baseline_error}; retry with ShaderF16 also failed: {f16_error}"
+                            ),
+                        ));
+                    }
+                }
+            }
+        };
+    reject_f16_overrides(&module, &source_label)?;
     let module_info =
         naga::valid::Validator::new(naga::valid::ValidationFlags::all(), analysis_capabilities)
             .validate(&module)
@@ -262,7 +275,50 @@ pub(crate) fn analyze_program(
         entry_points,
         vertex_inputs,
         fragment_outputs,
+        required_features,
     })
+}
+
+fn baseline_analysis_capabilities() -> naga::valid::Capabilities {
+    naga::valid::Capabilities::default()
+        | naga::valid::Capabilities::TEXTURE_AND_SAMPLER_BINDING_ARRAY
+        | naga::valid::Capabilities::BUFFER_BINDING_ARRAY
+        | naga::valid::Capabilities::STORAGE_TEXTURE_BINDING_ARRAY
+        | naga::valid::Capabilities::STORAGE_BUFFER_BINDING_ARRAY
+}
+
+fn parse_wgsl(
+    source: &str,
+    capabilities: naga::valid::Capabilities,
+) -> Result<naga::Module, naga::front::wgsl::ParseError> {
+    let mut frontend =
+        naga::front::wgsl::Frontend::new_with_options(naga::front::wgsl::Options {
+            parse_doc_comments: false,
+            capabilities,
+        });
+    frontend.parse(source)
+}
+
+fn reject_f16_overrides(
+    module: &naga::Module,
+    source_label: &str,
+) -> Result<(), GpuProgramContractError> {
+    for (_, override_constant) in module.overrides.iter() {
+        let ty = &module.types[override_constant.ty].inner;
+        if ty.scalar_kind() == Some(ScalarKind::Float) && ty.scalar_width() == Some(2) {
+            return Err(GpuProgramContractError::invalid(
+                "admit canonical WGSL program",
+                override_constant
+                    .name
+                    .as_deref()
+                    .unwrap_or(source_label)
+                    .to_string(),
+                GpuProgramContractCause::SpecializationOverridesUnsupported,
+                "use Bool, U32, I32, or F32 pipeline overrides; f16 pipeline specialization is not normalized",
+            ));
+        }
+    }
+    Ok(())
 }
 
 fn effective_binding(
@@ -759,6 +815,12 @@ fn io_value_type(
         TypeInner::Vector { size, scalar } => (scalar, vector_width(size)),
         _ => return Err("entry-point IO uses an unsupported non-scalar/vector type".to_string()),
     };
+    if scalar.kind == ScalarKind::Float && scalar.width == 2 {
+        return Err(
+            "host-facing entry-point location IO uses f16, which is outside the normalized stage-IO scalar-width vocabulary"
+                .to_string(),
+        );
+    }
     let scalar_class = match scalar.kind {
         ScalarKind::Float => GpuShaderIoScalarClass::Float,
         ScalarKind::Sint => GpuShaderIoScalarClass::Sint,
