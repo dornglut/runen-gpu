@@ -101,7 +101,8 @@ const done = arguments[arguments.length - 1];
         typeof wasm.runengpu_browser_depth_copy_exercised_mask !== "function" ||
         typeof wasm.runengpu_browser_depth_linear_exercised_mask !== "function" ||
         typeof wasm.runengpu_browser_stencil8_exercised !== "function" ||
-        typeof wasm.runengpu_browser_depth24plus_stencil8_exercised !== "function") {
+        typeof wasm.runengpu_browser_depth24plus_stencil8_exercised !== "function" ||
+        typeof wasm.runengpu_browser_depth24plus_stencil8_sampled_exercised !== "function") {
       throw new Error("RunenGPU browser proof control exports are absent");
     }
     wasm.runengpu_browser_start();
@@ -122,6 +123,7 @@ const done = arguments[arguments.length - 1];
           depthLinearMask: wasm.runengpu_browser_depth_linear_exercised_mask(),
           stencil8Exercised: wasm.runengpu_browser_stencil8_exercised(),
           depth24PlusStencil8Exercised: wasm.runengpu_browser_depth24plus_stencil8_exercised(),
+          depth24PlusStencil8SampledExercised: wasm.runengpu_browser_depth24plus_stencil8_sampled_exercised(),
         });
         return;
       }
@@ -264,10 +266,20 @@ def report_stencil8_proof(value: dict[str, object]) -> None:
 
 def report_depth24plus_stencil8_proof(value: dict[str, object]) -> None:
     exercised = value.get("depth24PlusStencil8Exercised")
+    sampled = value.get("depth24PlusStencil8SampledExercised")
     if type(exercised) is not int or exercised not in (0, 1):
         raise RuntimeError(
             "actual-browser Depth24PlusStencil8 proof did not report valid "
             f"execution evidence: {exercised!r}"
+        )
+    if type(sampled) is not int or sampled not in (0, 1):
+        raise RuntimeError(
+            "actual-browser Depth24PlusStencil8 sampled proof did not report valid "
+            f"execution evidence: {sampled!r}"
+        )
+    if sampled and not exercised:
+        raise RuntimeError(
+            "actual-browser Depth24PlusStencil8 sampled evidence requires core execution"
         )
     if exercised:
         print(
@@ -279,6 +291,16 @@ def report_depth24plus_stencil8_proof(value: dict[str, object]) -> None:
         print(
             "RunenGPU actual-browser Depth24PlusStencil8: SKIPPED "
             "(DepthStencil + CopySource + CopyDestination roles not all advertised)"
+        )
+    if sampled:
+        print(
+            "RunenGPU actual-browser Depth24PlusStencil8 Sampled: EXERCISED "
+            "(DepthOnly texture_depth_2d + StencilOnly texture_2d<u32> compute bindings)"
+        )
+    else:
+        print(
+            "RunenGPU actual-browser Depth24PlusStencil8 Sampled: SKIPPED "
+            "(sampled role not advertised)"
         )
 
 
@@ -395,34 +417,52 @@ def verify_stencil8_reporter() -> None:
 
 
 def verify_depth24plus_stencil8_reporter() -> None:
-    for exercised in (0, 1):
+    cases = (
+        (0, 0, "SKIPPED", "SKIPPED"),
+        (1, 0, "EXERCISED", "SKIPPED"),
+        (1, 1, "EXERCISED", "EXERCISED"),
+    )
+    for exercised, sampled, core_expected, sampled_expected in cases:
         captured = io.StringIO()
         with contextlib.redirect_stdout(captured):
             report_depth24plus_stencil8_proof(
-                {"depth24PlusStencil8Exercised": exercised}
+                {
+                    "depth24PlusStencil8Exercised": exercised,
+                    "depth24PlusStencil8SampledExercised": sampled,
+                }
             )
         transcript = captured.getvalue()
-        expected = "EXERCISED" if exercised else "SKIPPED"
-        if expected not in transcript:
+        lines = [line for line in transcript.splitlines() if line]
+        if core_expected not in lines[0] or sampled_expected not in lines[1]:
             raise AssertionError(
                 "incorrect Depth24PlusStencil8 reporter output "
-                f"for evidence {exercised}"
+                f"for evidence {(exercised, sampled)}"
             )
-    for invalid in (
+    invalid = (
         {},
-        {"depth24PlusStencil8Exercised": -1},
-        {"depth24PlusStencil8Exercised": 2},
-        {"depth24PlusStencil8Exercised": True},
-        {"depth24PlusStencil8Exercised": "1"},
-    ):
+        {"depth24PlusStencil8Exercised": 1},
+        {
+            "depth24PlusStencil8Exercised": 0,
+            "depth24PlusStencil8SampledExercised": 1,
+        },
+        {
+            "depth24PlusStencil8Exercised": 2,
+            "depth24PlusStencil8SampledExercised": 0,
+        },
+        {
+            "depth24PlusStencil8Exercised": 1,
+            "depth24PlusStencil8SampledExercised": True,
+        },
+    )
+    for evidence in invalid:
         try:
             with contextlib.redirect_stdout(io.StringIO()):
-                report_depth24plus_stencil8_proof(invalid)
+                report_depth24plus_stencil8_proof(evidence)
         except RuntimeError:
             pass
         else:
             raise AssertionError(
-                f"invalid Depth24PlusStencil8 evidence was accepted: {invalid!r}"
+                f"invalid Depth24PlusStencil8 evidence was accepted: {evidence!r}"
             )
     print("RunenGPU actual-browser Depth24PlusStencil8 reporter regression: PASS")
 
