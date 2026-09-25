@@ -1174,9 +1174,9 @@ impl GpuSamplerFilterState {
     }
 
     pub const fn is_filtering(self) -> bool {
-        self.mag_filter == GpuFilterMode::Linear
-            || self.min_filter == GpuFilterMode::Linear
-            || self.mipmap_filter == GpuFilterMode::Linear
+        matches!(self.mag_filter, GpuFilterMode::Linear)
+            || matches!(self.min_filter, GpuFilterMode::Linear)
+            || matches!(self.mipmap_filter, GpuFilterMode::Linear)
     }
 }
 
