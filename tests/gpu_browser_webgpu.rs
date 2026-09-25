@@ -28,6 +28,7 @@ mod browser {
         static DEPTH_LINEAR_EXERCISED_MASK: RefCell<u32> = RefCell::new(0);
         static STENCIL8_EXERCISED: RefCell<u32> = RefCell::new(0);
         static DEPTH24PLUS_STENCIL8_EXERCISED: RefCell<u32> = RefCell::new(0);
+        static DEPTH24PLUS_STENCIL8_SAMPLED_EXERCISED: RefCell<u32> = RefCell::new(0);
     }
 
     struct YieldOnce(bool);
@@ -1155,6 +1156,33 @@ fn vs_main(@builtin(vertex_index) index: u32) -> @builtin(position) vec4f {
         STENCIL8_EXERCISED.with(|slot| *slot.borrow_mut() = 1);
     }
 
+    const DEPTH24PLUS_STENCIL8_SAMPLED_WGSL: &str = r#"
+@group(0) @binding(0)
+var depth_texture: texture_depth_2d;
+
+@group(0) @binding(1)
+var stencil_texture: texture_2d<u32>;
+
+var<workgroup> sampled_sink: u32;
+
+@compute @workgroup_size(1)
+fn cs_main() {
+    let depth_value = textureLoad(depth_texture, vec2<i32>(0, 0), 0);
+    let stencil_value = textureLoad(stencil_texture, vec2<i32>(0, 0), 0).x;
+    sampled_sink = select(0u, stencil_value, depth_value >= 0.0);
+}
+"#;
+
+    fn browser_combined_requirements() -> GpuCapabilityRequirements {
+        let mut requirements = depth_requirements();
+        requirements
+            .insert(GpuCapabilityRequirement::Required(
+                GpuCapabilityFeature::Compute,
+            ))
+            .unwrap();
+        requirements
+    }
+
     fn browser_combined_texture(
         allocator: &mut GpuWorkResourceIdAllocator,
         name: &str,
@@ -1200,6 +1228,100 @@ fn vs_main(@builtin(vertex_index) index: u32) -> @builtin(position) vec4f {
             )
             .unwrap();
         (texture, view)
+    }
+
+    fn browser_combined_aspect_view(
+        allocator: &mut GpuWorkResourceIdAllocator,
+        texture: &GpuTextureHandle,
+        name: &str,
+        aspect: GpuTextureAspect,
+    ) -> GpuTextureViewHandle {
+        let range = GpuTextureSubresourceRange::new(
+            texture.descriptor().common().label(),
+            0,
+            1,
+            0,
+            1,
+            aspect,
+        )
+        .unwrap();
+        allocator
+            .allocate_texture_view_handle(
+                GpuTextureViewDescriptor::new(
+                    format_texture_common(name),
+                    texture,
+                    None,
+                    GpuTextureViewDimension::D2,
+                    range,
+                )
+                .unwrap(),
+            )
+            .unwrap()
+    }
+
+    fn browser_combined_sampled_pipeline() -> GpuComputePipelineDescriptor {
+        let entry = GpuEntryPointName::new("cs_main").unwrap();
+        let identity = GpuProgramSourceIdentity::new(
+            GpuProgramSourceOwnerId::allocate().unwrap(),
+            GpuProgramSourceKey::new("proof.browser.depth24plus-stencil8.sampled").unwrap(),
+            GpuProgramSourceRevision::try_from_raw(1).unwrap(),
+        );
+        let mut sources = GpuProgramSourceRegistry::new(2, 4096).unwrap();
+        let source = sources
+            .admit_wgsl(
+                identity,
+                DEPTH24PLUS_STENCIL8_SAMPLED_WGSL,
+                GpuProgramSourceProvenance::new(
+                    "browser Depth24PlusStencil8 sampled proof",
+                    None,
+                )
+                .unwrap(),
+            )
+            .unwrap();
+        let program = GpuProgramDescriptor::new(
+            source,
+            [entry.clone()],
+            std::iter::empty::<GpuBindingLayoutRefinement>(),
+        )
+        .unwrap();
+        GpuComputePipelineDescriptor::new(
+            program,
+            entry,
+            GpuPipelineConfiguration::default(),
+        )
+        .unwrap()
+    }
+
+    fn browser_combined_sampled_binding(
+        binding: u32,
+        view: &GpuTextureViewHandle,
+    ) -> GpuRuntimeBindingValue {
+        GpuRuntimeBindingValue::new(
+            GpuBindingKey::try_new(0, u64::from(binding)).unwrap(),
+            [GpuRuntimeBindingResource::TextureView(
+                GpuRuntimeTextureViewBinding::new(view.clone()),
+            )],
+        )
+        .unwrap()
+    }
+
+    fn browser_combined_sampled_operation(
+        depth_view: &GpuTextureViewHandle,
+        stencil_view: &GpuTextureViewHandle,
+    ) -> GpuComputeOperation {
+        let pipeline = browser_combined_sampled_pipeline();
+        let bindings = pipeline
+            .runtime_bindings([
+                browser_combined_sampled_binding(0, depth_view),
+                browser_combined_sampled_binding(1, stencil_view),
+            ])
+            .unwrap();
+        GpuComputeOperation::new(
+            pipeline,
+            bindings,
+            GpuDispatchIntent::direct(GpuDispatchSize::new(1, 1, 1)),
+        )
+        .unwrap()
     }
 
     fn browser_combined_pipeline(
@@ -1302,7 +1424,7 @@ fn vs_main(@builtin(vertex_index) index: u32) -> @builtin(position) vec4f {
         .unwrap()
     }
 
-    async fn run_browser_combined_width(context: &GpuContext, width: u32) {
+    async fn run_browser_combined_width(context: &GpuContext, width: u32, sampled: bool) {
         const FIRST_REFERENCE: u32 = 91;
         const MIXED_REFERENCE: u32 = 123;
         const COPIED_DEPTH_REFERENCE: u32 = 177;
@@ -1317,16 +1439,39 @@ fn vs_main(@builtin(vertex_index) index: u32) -> @builtin(position) vec4f {
                 GpuTextureUsage::CopySource,
             ],
         );
+        let mut destination_usages = vec![
+            GpuTextureUsage::DepthStencilAttachment,
+            GpuTextureUsage::CopySource,
+            GpuTextureUsage::CopyDestination,
+        ];
+        if sampled {
+            destination_usages.push(GpuTextureUsage::Sampled);
+        }
         let (destination, destination_view) = browser_combined_texture(
             &mut allocator,
             "browser Depth24PlusStencil8 destination",
             width,
-            [
-                GpuTextureUsage::DepthStencilAttachment,
-                GpuTextureUsage::CopySource,
-                GpuTextureUsage::CopyDestination,
-            ],
+            destination_usages,
         );
+        let sampled_views = sampled.then(|| {
+            (
+                browser_combined_aspect_view(
+                    &mut allocator,
+                    &destination,
+                    "browser Depth24PlusStencil8 sampled depth view",
+                    GpuTextureAspect::DepthOnly,
+                ),
+                browser_combined_aspect_view(
+                    &mut allocator,
+                    &destination,
+                    "browser Depth24PlusStencil8 sampled stencil view",
+                    GpuTextureAspect::StencilOnly,
+                ),
+            )
+        });
+        let sampled_compute = sampled_views
+            .as_ref()
+            .map(|(depth, stencil)| browser_combined_sampled_operation(depth, stencil));
 
         let seed = GpuRenderOperation::new(
             [],
@@ -1419,6 +1564,10 @@ fn vs_main(@builtin(vertex_index) index: u32) -> @builtin(position) vec4f {
         ] {
             builder.declare_resource(resource).unwrap();
         }
+        if let Some((depth_view, stencil_view)) = &sampled_views {
+            builder.declare_resource(depth_view.clone().into()).unwrap();
+            builder.declare_resource(stencil_view.clone().into()).unwrap();
+        }
         for (node, operation) in [
             (
                 "browser combined seed depth + stencil",
@@ -1440,10 +1589,6 @@ fn vs_main(@builtin(vertex_index) index: u32) -> @builtin(position) vec4f {
                 "browser combined copied depth gate",
                 GpuWorkOperation::Render(copied_depth_gate),
             ),
-            (
-                "browser combined final stencil readback",
-                GpuWorkOperation::Readback(final_readback),
-            ),
         ] {
             builder
                 .add_node(
@@ -1456,6 +1601,28 @@ fn vs_main(@builtin(vertex_index) index: u32) -> @builtin(position) vec4f {
                 )
                 .unwrap();
         }
+        if let Some(compute) = sampled_compute {
+            builder
+                .add_node(
+                    format_label("browser combined aspect-specific sampled dispatch"),
+                    GpuWorkOperation::Compute(compute),
+                    [],
+                    GpuCapabilityRequirements::new(),
+                    GpuExecutionPreference::Automatic,
+                    format_provenance("browser combined aspect-specific sampled dispatch"),
+                )
+                .unwrap();
+        }
+        builder
+            .add_node(
+                format_label("browser combined final stencil readback"),
+                GpuWorkOperation::Readback(final_readback),
+                [],
+                GpuCapabilityRequirements::new(),
+                GpuExecutionPreference::Automatic,
+                format_provenance("browser combined final stencil readback"),
+            )
+            .unwrap();
 
         let graph = GpuPreparedWorkGraph::prepare(format_label(&name), [builder.finish().unwrap()])
             .unwrap();
@@ -1491,7 +1658,7 @@ fn vs_main(@builtin(vertex_index) index: u32) -> @builtin(position) vec4f {
 
     async fn run_browser_depth24plus_stencil8() {
         let census = GpuContext::request(
-            GpuContextDescriptor::new(depth_requirements())
+            GpuContextDescriptor::new(browser_combined_requirements())
                 .with_allowed_backends([GpuBackendFamily::BrowserWebGpu])
                 .with_label("browser Depth24PlusStencil8 census"),
         )
@@ -1505,33 +1672,43 @@ fn vs_main(@builtin(vertex_index) index: u32) -> @builtin(position) vec4f {
 
         if !(facts.depth_stencil && facts.copy_source && facts.copy_destination) {
             DEPTH24PLUS_STENCIL8_EXERCISED.with(|slot| *slot.borrow_mut() = 0);
+            DEPTH24PLUS_STENCIL8_SAMPLED_EXERCISED.with(|slot| *slot.borrow_mut() = 0);
             return;
         }
 
+        let mut descriptor = GpuContextDescriptor::new(browser_combined_requirements())
+            .require_format_role(
+                GpuTextureFormat::Depth24PlusStencil8,
+                GpuFormatRole::DepthStencil,
+            )
+            .require_format_role(
+                GpuTextureFormat::Depth24PlusStencil8,
+                GpuFormatRole::CopySource,
+            )
+            .require_format_role(
+                GpuTextureFormat::Depth24PlusStencil8,
+                GpuFormatRole::CopyDestination,
+            );
+        if facts.sampled {
+            descriptor = descriptor.require_format_role(
+                GpuTextureFormat::Depth24PlusStencil8,
+                GpuFormatRole::Sampled,
+            );
+        }
         let context = GpuContext::request(
-            GpuContextDescriptor::new(depth_requirements())
-                .require_format_role(
-                    GpuTextureFormat::Depth24PlusStencil8,
-                    GpuFormatRole::DepthStencil,
-                )
-                .require_format_role(
-                    GpuTextureFormat::Depth24PlusStencil8,
-                    GpuFormatRole::CopySource,
-                )
-                .require_format_role(
-                    GpuTextureFormat::Depth24PlusStencil8,
-                    GpuFormatRole::CopyDestination,
-                )
+            descriptor
                 .with_allowed_backends([GpuBackendFamily::BrowserWebGpu])
                 .with_label("browser Depth24PlusStencil8 execution proof"),
         )
         .await
-        .expect("advertised browser combined attachment/copy roles must admit a context");
+        .expect("advertised browser combined roles must admit a context");
 
         for width in [255, 256] {
-            run_browser_combined_width(&context, width).await;
+            run_browser_combined_width(&context, width, facts.sampled).await;
         }
         DEPTH24PLUS_STENCIL8_EXERCISED.with(|slot| *slot.borrow_mut() = 1);
+        DEPTH24PLUS_STENCIL8_SAMPLED_EXERCISED
+            .with(|slot| *slot.borrow_mut() = u32::from(facts.sampled));
     }
 
     async fn run_browser_depth_formats() {
@@ -1693,6 +1870,11 @@ fn vs_main(@builtin(vertex_index) index: u32) -> @builtin(position) vec4f {
     #[unsafe(no_mangle)]
     pub extern "C" fn runengpu_browser_depth24plus_stencil8_exercised() -> u32 {
         DEPTH24PLUS_STENCIL8_EXERCISED.with(|value| *value.borrow())
+    }
+
+    #[unsafe(no_mangle)]
+    pub extern "C" fn runengpu_browser_depth24plus_stencil8_sampled_exercised() -> u32 {
+        DEPTH24PLUS_STENCIL8_SAMPLED_EXERCISED.with(|value| *value.borrow())
     }
 }
 
