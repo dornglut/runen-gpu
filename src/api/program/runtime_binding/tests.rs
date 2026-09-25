@@ -78,6 +78,8 @@ fn device_facts_with_limits(
         max_bind_groups,
         max_dynamic_uniform_buffers,
         max_dynamic_storage_buffers,
+        u32::MAX,
+        u32::MAX,
         [],
     )
 }
