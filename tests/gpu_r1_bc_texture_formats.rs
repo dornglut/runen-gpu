@@ -129,7 +129,6 @@ fn descriptor(
     width: u32,
     height: u32,
     depth_or_layers: u32,
-    mip_level_count: u32,
     sample_count: u32,
     format: GpuTextureFormat,
     usages: impl IntoIterator<Item = GpuTextureUsage>,
@@ -139,7 +138,7 @@ fn descriptor(
         common("BC descriptor"),
         dimension,
         GpuTextureExtent::new(&resource_label, dimension, width, height, depth_or_layers).unwrap(),
-        mip_level_count,
+        1,
         sample_count,
         format,
         GpuTextureUsages::new(&resource_label, usages).unwrap(),
@@ -206,7 +205,6 @@ fn bc_resource_contract_is_d2_single_sample_block_aligned_and_non_render_storage
                 12,
                 1,
                 1,
-                1,
                 case.format,
                 [GpuTextureUsage::Sampled, GpuTextureUsage::CopySource],
             )
@@ -220,7 +218,6 @@ fn bc_resource_contract_is_d2_single_sample_block_aligned_and_non_render_storage
                     GpuTextureDimension::D2,
                     width,
                     height,
-                    1,
                     1,
                     1,
                     case.format,
@@ -238,7 +235,6 @@ fn bc_resource_contract_is_d2_single_sample_block_aligned_and_non_render_storage
                 1,
                 1,
                 1,
-                1,
                 case.format,
                 [GpuTextureUsage::CopySource],
             )
@@ -253,7 +249,6 @@ fn bc_resource_contract_is_d2_single_sample_block_aligned_and_non_render_storage
                 8,
                 4,
                 1,
-                1,
                 case.format,
                 [GpuTextureUsage::CopySource],
             )
@@ -266,7 +261,6 @@ fn bc_resource_contract_is_d2_single_sample_block_aligned_and_non_render_storage
                 GpuTextureDimension::D2,
                 8,
                 8,
-                1,
                 1,
                 4,
                 case.format,
@@ -283,7 +277,7 @@ fn bc_resource_contract_is_d2_single_sample_block_aligned_and_non_render_storage
             GpuTextureUsage::DepthStencilAttachment,
         ] {
             assert!(
-                descriptor(GpuTextureDimension::D2, 8, 8, 1, 1, 1, case.format, [usage],).is_err(),
+                descriptor(GpuTextureDimension::D2, 8, 8, 1, 1, case.format, [usage]).is_err(),
                 "{:?} {usage:?}",
                 case.format
             );
