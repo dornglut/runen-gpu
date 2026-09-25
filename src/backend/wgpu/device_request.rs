@@ -585,6 +585,7 @@ mod tests {
             2048,
         )
         .unwrap()
+        .with_binding_array_limits(1_000_000, 1_024)
     }
 
     fn candidate_with_enabled_features(
@@ -660,6 +661,11 @@ mod tests {
         assert_eq!(requested.max_color_attachments, 1);
         assert_eq!(requested.max_vertex_buffers, 8);
         assert_eq!(requested.max_bindings_per_bind_group, 16);
+        assert_eq!(requested.max_binding_array_elements_per_shader_stage, 0);
+        assert_eq!(
+            requested.max_binding_array_sampler_elements_per_shader_stage,
+            0
+        );
         assert_eq!(
             requested.max_texture_dimension_2d,
             budget.max_texture_dimension_2d()
@@ -707,9 +713,49 @@ mod tests {
     }
 
     #[test]
+    fn binding_array_features_request_only_the_normalized_feature_scoped_budget() {
+        let texture = candidate_with_enabled_features([
+            GpuCapabilityFeature::TextureBindingArray,
+        ]);
+        let texture_budget = texture.contract().workload_budget().limits();
+        assert_eq!(
+            texture_budget.max_binding_array_elements_per_shader_stage(),
+            500_000
+        );
+        assert_eq!(
+            texture_budget.max_binding_array_sampler_elements_per_shader_stage(),
+            1_000
+        );
+        let texture_requested = requested_limits(&texture).unwrap();
+        assert_eq!(
+            texture_requested.max_binding_array_elements_per_shader_stage,
+            500_000
+        );
+        assert_eq!(
+            texture_requested.max_binding_array_sampler_elements_per_shader_stage,
+            1_000
+        );
+
+        let buffer = candidate_with_enabled_features([
+            GpuCapabilityFeature::BufferBindingArray,
+        ]);
+        let buffer_requested = requested_limits(&buffer).unwrap();
+        assert_eq!(
+            buffer_requested.max_binding_array_elements_per_shader_stage,
+            500_000
+        );
+        assert_eq!(
+            buffer_requested.max_binding_array_sampler_elements_per_shader_stage,
+            0
+        );
+    }
+
+    #[test]
     fn actual_device_mapping_records_only_actual_native_facts() {
         let mut native = Limits::defaults();
         native.max_vertex_buffers = 12;
+        native.max_binding_array_elements_per_shader_stage = 765_432;
+        native.max_binding_array_sampler_elements_per_shader_stage = 876;
         native.max_compute_workgroups_per_dimension = 1234;
         native.max_buffer_size = 123_456_789;
         native.max_texture_dimension_1d = 4096;
@@ -720,6 +766,16 @@ mod tests {
         native.min_uniform_buffer_offset_alignment = 512;
         let facts = map_device_limits(&native);
         assert_eq!(facts.values().max_vertex_buffers(), 12);
+        assert_eq!(
+            facts.values().max_binding_array_elements_per_shader_stage(),
+            765_432
+        );
+        assert_eq!(
+            facts
+                .values()
+                .max_binding_array_sampler_elements_per_shader_stage(),
+            876
+        );
         assert_eq!(facts.values().max_compute_workgroups_per_dimension(), 1234);
         assert_eq!(facts.values().max_buffer_size(), 123_456_789);
         assert_eq!(facts.values().max_texture_dimension_1d(), 4096);
