@@ -5,7 +5,7 @@ use super::{
 use crate::{
     GpuBindingClass, GpuBindingDeclaration, GpuBufferAccess, GpuBufferAccessKind, GpuBufferRange,
     GpuPipelineLayoutDescriptor, GpuProgramContractCause, GpuProgramContractError,
-    GpuResourceAccess, GpuSamplerUse, GpuStorageBufferAccess, GpuStorageTextureAccess,
+    GpuResourceAccess, GpuSamplerUse, GpuShaderStage, GpuStorageBufferAccess, GpuStorageTextureAccess,
     GpuTextureAccess, GpuTextureAccessKind, GpuTextureAccessResource,
 };
 use core::hash::{Hash, Hasher};
@@ -291,9 +291,23 @@ fn validate_pipeline_binding_limits(
 
     let mut dynamic_uniform_buffers = 0_u64;
     let mut dynamic_storage_buffers = 0_u64;
+    let mut binding_array_elements = [0_u32; 3];
+    let mut binding_array_sampler_elements = [0_u32; 3];
 
     for group in layout.groups() {
         for declaration in group.bindings() {
+            if let Some(count) = declaration.array_count() {
+                for stage in declaration.visibility().iter() {
+                    let index = shader_stage_index(stage);
+                    binding_array_elements[index] =
+                        binding_array_elements[index].saturating_add(count.get());
+                    if declaration.kind().class() == GpuBindingClass::Sampler {
+                        binding_array_sampler_elements[index] =
+                            binding_array_sampler_elements[index].saturating_add(count.get());
+                    }
+                }
+            }
+
             if !declaration.kind().uses_dynamic_offset() {
                 continue;
             }
@@ -328,7 +342,39 @@ fn validate_pipeline_binding_limits(
             "reduce dynamic storage-buffer declarations to the admitted pipeline-layout limit",
         ));
     }
+
+    let required_binding_array_elements =
+        binding_array_elements.into_iter().max().unwrap_or(0);
+    if required_binding_array_elements > device_facts.max_binding_array_elements_per_shader_stage()
+    {
+        return Err(device_incompatible(
+            "binding-array elements",
+            "reduce fixed binding-array cardinality or request a larger admitted array-element limit",
+        ));
+    }
+
+    let required_sampler_array_elements = binding_array_sampler_elements
+        .into_iter()
+        .max()
+        .unwrap_or(0);
+    if required_sampler_array_elements
+        > device_facts.max_binding_array_sampler_elements_per_shader_stage()
+    {
+        return Err(device_incompatible(
+            "binding-array sampler elements",
+            "reduce fixed sampler-array cardinality or request a larger admitted sampler-array limit",
+        ));
+    }
+
     Ok(())
+}
+
+const fn shader_stage_index(stage: GpuShaderStage) -> usize {
+    match stage {
+        GpuShaderStage::Vertex => 0,
+        GpuShaderStage::Fragment => 1,
+        GpuShaderStage::Compute => 2,
+    }
 }
 
 fn required_bind_group_slots(layout: &GpuPipelineLayoutDescriptor) -> u64 {
