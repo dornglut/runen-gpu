@@ -1231,14 +1231,8 @@ mod tests {
                 GpuTextureDescriptor::new(
                     common("transient attachment access"),
                     GpuTextureDimension::D2,
-                    GpuTextureExtent::new(
-                        &texture_label,
-                        GpuTextureDimension::D2,
-                        8,
-                        8,
-                        1,
-                    )
-                    .unwrap(),
+                    GpuTextureExtent::new(&texture_label, GpuTextureDimension::D2, 8, 8, 1)
+                        .unwrap(),
                     1,
                     1,
                     GpuTextureFormat::Rgba8Unorm,
@@ -1257,15 +1251,17 @@ mod tests {
             .unwrap();
         let range = GpuTextureSubresourceRange::whole(&texture).unwrap();
 
-        assert!(GpuTextureAccess::new(
-            GpuTextureAccessResource::Texture(texture.clone()),
-            range,
-            GpuTextureAccessKind::ColorAttachment {
-                load_kind: GpuAttachmentLoadKind::Clear,
-                store: GpuAttachmentStore::Discard,
-            },
-        )
-        .is_ok());
+        assert!(
+            GpuTextureAccess::new(
+                GpuTextureAccessResource::Texture(texture.clone()),
+                range,
+                GpuTextureAccessKind::ColorAttachment {
+                    load_kind: GpuAttachmentLoadKind::Clear,
+                    store: GpuAttachmentStore::Discard,
+                },
+            )
+            .is_ok()
+        );
 
         for kind in [
             GpuTextureAccessKind::ColorAttachment {
