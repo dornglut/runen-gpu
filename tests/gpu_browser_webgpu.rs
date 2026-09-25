@@ -2164,7 +2164,51 @@ fn cs_main() {
         )
         .await;
         retained_transient_attachment::assert_resolved(&transient_bytes.remove(0));
+
+        let (transient_depth_graph, transient_depth_readback_id) =
+            retained_transient_attachment::depth_graph();
+        let transient_depth_prepared = transient_context
+            .prepare_submission(transient_depth_graph)
+            .await
+            .unwrap();
+        let transient_depth_submission = transient_context
+            .submit_prepared(transient_depth_prepared)
+            .unwrap();
+        let mut transient_depth_bytes = wait_for_terminal_readbacks(
+            &transient_context,
+            &transient_depth_submission,
+            &[transient_depth_readback_id],
+        )
+        .await;
+        retained_transient_attachment::assert_depth_color(&transient_depth_bytes.remove(0));
         assert_execution_drained(&transient_context);
+
+        if retained_transient_attachment::stencil_supported(&transient_context) {
+            let stencil_context = GpuContext::request(
+                retained_transient_attachment::stencil_descriptor(
+                    GpuBackendFamily::BrowserWebGpu,
+                ),
+            )
+            .await
+            .expect("advertised browser Stencil8 depth/stencil role must admit a context");
+            let (stencil_graph, stencil_readback_id) =
+                retained_transient_attachment::stencil_graph();
+            let stencil_prepared = stencil_context
+                .prepare_submission(stencil_graph)
+                .await
+                .unwrap();
+            let stencil_submission = stencil_context.submit_prepared(stencil_prepared).unwrap();
+            let mut stencil_bytes = wait_for_terminal_readbacks(
+                &stencil_context,
+                &stencil_submission,
+                &[stencil_readback_id],
+            )
+            .await;
+            retained_transient_attachment::assert_stencil_terminal(&stencil_bytes.remove(0));
+            assert_execution_drained(&stencil_context);
+        } else {
+            println!("transient Stencil8: UNSUPPORTED (normalized depth/stencil role absent)");
+        }
 
         run_browser_prefix_scan().await;
         run_browser_offscreen_indexed().await;
