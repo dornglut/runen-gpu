@@ -274,7 +274,8 @@ fn ordinary_color_target(
         .unwrap();
     let view = scope
         .texture_view(
-            GpuTextureViewDescriptor::ordinary_full_owned(format!("{name} view"), &texture).unwrap(),
+            GpuTextureViewDescriptor::ordinary_full_owned(format!("{name} view"), &texture)
+                .unwrap(),
         )
         .unwrap();
     (texture, view)
@@ -308,8 +309,11 @@ fn transient_depth_target(scope: &mut GpuResourceScope) -> GpuTextureViewHandle 
         .unwrap();
     scope
         .texture_view(
-            GpuTextureViewDescriptor::ordinary_full_owned("transient depth attachment view", &texture)
-                .unwrap(),
+            GpuTextureViewDescriptor::ordinary_full_owned(
+                "transient depth attachment view",
+                &texture,
+            )
+            .unwrap(),
         )
         .unwrap()
 }
@@ -344,10 +348,7 @@ fn depth_pipeline() -> GpuRenderPipelineDescriptor {
     .unwrap();
     let depth_stencil = GpuDepthStencilStateDescriptor::new(
         GpuTextureFormat::Depth16Unorm,
-        Some(GpuDepthStateDescriptor::new(
-            true,
-            GpuCompareFunction::Less,
-        )),
+        Some(GpuDepthStateDescriptor::new(true, GpuCompareFunction::Less)),
         None,
         GpuDepthBiasState::default(),
     )
@@ -498,18 +499,14 @@ pub(crate) fn stencil_graph() -> (GpuPreparedWorkGraph, GpuReadbackId) {
         ),
     )
     .unwrap();
-    let stencil_render =
-        GpuRenderOperation::new([], Some(stencil_attachment), [], None).unwrap();
+    let stencil_render = GpuRenderOperation::new([], Some(stencil_attachment), [], None).unwrap();
 
     let (color, color_view) = ordinary_color_target(&mut scope, "transient stencil terminal color");
     let terminal_render = GpuRenderOperation::new(
-        [GpuRenderColorAttachment::new(
-            color_view,
-            clear(),
-            GpuAttachmentStore::Store,
-            None,
-        )
-        .unwrap()],
+        [
+            GpuRenderColorAttachment::new(color_view, clear(), GpuAttachmentStore::Store, None)
+                .unwrap(),
+        ],
         None,
         [],
         None,
