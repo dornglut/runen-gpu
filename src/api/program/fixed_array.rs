@@ -26,7 +26,7 @@ pub(super) fn fixed_array_compilation_capabilities(
 }
 
 /// Features required when a fixed binding array participates in the selected public layout.
-pub(super) fn fixed_array_layout_capabilities(
+pub(crate) fn fixed_array_layout_capabilities(
     class: GpuBindingClass,
 ) -> &'static [GpuCapabilityFeature] {
     match class {
