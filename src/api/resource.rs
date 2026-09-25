@@ -828,6 +828,20 @@ impl GpuTextureDescriptor {
                 "use an extent constructed for the descriptor's texture dimension",
             ));
         }
+        if texture_format::is_block_compressed(format) {
+            let (block_width, block_height) = texture_format::block_dimensions(format);
+            if dimension != GpuTextureDimension::D2
+                || !extent.width().is_multiple_of(block_width)
+                || !extent.height().is_multiple_of(block_height)
+            {
+                return Err(GpuResourceDescriptorError::invalid(
+                    "construct GPU texture descriptor",
+                    label,
+                    GpuResourceDescriptorCause::InvalidExtent,
+                    "use two-dimensional compressed textures with base width and height aligned to whole format blocks",
+                ));
+            }
+        }
         if common.ownership() != GpuResourceOwnership::Owned
             && !matches!(initialization, GpuTextureInitialization::Uninitialized)
         {
@@ -852,6 +866,7 @@ impl GpuTextureDescriptor {
             ));
         }
         if !is_normalized_sample_count_representable(sample_count)
+            || (texture_format::is_block_compressed(format) && sample_count != 1)
             || (sample_count > 1
                 && (mip_level_count != 1
                     || usages.contains(GpuTextureUsage::StorageRead)
@@ -942,8 +957,10 @@ fn validate_texture_format_usages(
     let color_usage = usages.contains(GpuTextureUsage::ColorAttachment);
     let storage_usage = usages.contains(GpuTextureUsage::StorageRead)
         || usages.contains(GpuTextureUsage::StorageWrite);
+    let compressed_format = texture_format::is_block_compressed(format);
     if (depth_stencil_format && (color_usage || storage_usage))
         || (!depth_stencil_format && depth_usage)
+        || (compressed_format && (color_usage || storage_usage))
         || (format.is_srgb() && storage_usage)
     {
         return Err(GpuResourceDescriptorError::invalid(

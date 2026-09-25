@@ -1,8 +1,7 @@
 use super::{
     GpuBufferAccess, GpuBufferAccessKind, GpuBufferRegion, GpuReadbackId, GpuResourceAccess,
     GpuTextureAccess, GpuTextureAccessKind, GpuTextureAccessResource, GpuTextureCopyRegion,
-    GpuTextureDimension, GpuWorkOperationCause, GpuWorkOperationError, PreparedGpuData,
-    TransferData,
+    GpuWorkOperationCause, GpuWorkOperationError, PreparedGpuData, TransferData,
 };
 
 /// Exact logical source/destination region for CPU/GPU transfer work.
@@ -73,7 +72,7 @@ impl GpuTransferRegion {
         let Self::Texture(region) = self else {
             return true;
         };
-        texture_region_completely_covers_selected_subresources(region)
+        region.completely_covers_selected_subresources()
     }
 }
 
@@ -194,26 +193,6 @@ fn destination_identity(region: &GpuTransferRegion) -> super::GpuWorkResourceId 
     }
 }
 
-fn texture_region_completely_covers_selected_subresources(region: &GpuTextureCopyRegion) -> bool {
-    let descriptor = region.texture().descriptor();
-    let mip = region.mip_level();
-    let width = (descriptor.extent().width() >> mip).max(1);
-    let height = (descriptor.extent().height() >> mip).max(1);
-    let origin = region.origin();
-    let extent = region.extent();
-    if origin.x() != 0 || origin.y() != 0 || extent.width() != width || extent.height() != height {
-        return false;
-    }
-    match descriptor.dimension() {
-        GpuTextureDimension::D1 => origin.z() == 0 && extent.depth_or_layers() == 1,
-        GpuTextureDimension::D2 => true,
-        GpuTextureDimension::D3 => {
-            origin.z() == 0
-                && extent.depth_or_layers() == (descriptor.extent().depth_or_layers() >> mip).max(1)
-        }
-    }
-}
-
 fn transfer_error(
     operation: &'static str,
     resource: super::GpuWorkResourceId,
@@ -235,8 +214,9 @@ mod tests {
         GpuBufferDescriptor, GpuBufferInitialization, GpuBufferRange, GpuBufferUsage,
         GpuBufferUsages, GpuCopyExtent, GpuMemoryIntent, GpuReconstruction, GpuResourceCommon,
         GpuResourceLabel, GpuResourceLifetime, GpuResourceProvenance, GpuTextureAspect,
-        GpuTextureDescriptor, GpuTextureExtent, GpuTextureFormat, GpuTextureInitialization,
-        GpuTextureOrigin, GpuTextureUsage, GpuTextureUsages, GpuWorkResourceIdAllocator,
+        GpuTextureDescriptor, GpuTextureDimension, GpuTextureExtent, GpuTextureFormat,
+        GpuTextureInitialization, GpuTextureOrigin, GpuTextureUsage, GpuTextureUsages,
+        GpuWorkResourceIdAllocator,
     };
     use std::num::NonZeroU64;
 

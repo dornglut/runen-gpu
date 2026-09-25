@@ -1,4 +1,5 @@
 use super::device_request::profile_limits;
+use super::texture_format_mapping::TEXTURE_FORMATS;
 use crate::api::texture_format;
 use crate::{
     GpuAdapterClass, GpuAdapterFacts, GpuAdapterLimits, GpuAlignmentFacts, GpuBackendFamily,
@@ -19,7 +20,7 @@ pub(super) fn adapter_facts(
     let downlevel = adapter.get_downlevel_capabilities();
     let native_limits = adapter.limits();
     let adapter_features = adapter.features();
-    let formats = texture_formats().into_iter().map(|(normalized, native)| {
+    let formats = TEXTURE_FORMATS.iter().copied().map(|(normalized, native)| {
         let capabilities = apply_format_prerequisites(
             normalized,
             adapter_features,
@@ -35,12 +36,13 @@ pub(super) fn adapter_facts(
         downlevel.is_webgpu_compliant(),
         surface_compatible,
     );
-    let supports_storage_texture = texture_formats().iter().any(|(normalized, format)| {
-        format_prerequisites_available(*normalized, adapter_features)
-            && adapter
-                .get_texture_format_features(*format)
-                .allowed_usages
-                .contains(TextureUsages::STORAGE_BINDING)
+    let supports_storage_texture = TEXTURE_FORMATS.iter().any(|(normalized, format)| {
+        let facts = apply_format_prerequisites(
+            *normalized,
+            adapter_features,
+            format_capabilities(*normalized, adapter.get_texture_format_features(*format)),
+        );
+        facts.storage_read || facts.storage_write
     });
     let supports_depth_attachment = adapter
         .get_texture_format_features(TextureFormat::Depth32Float)
@@ -170,10 +172,11 @@ pub(super) fn select_device_request_profile(
 }
 
 /// Closed G7A presentation vocabulary retained for the surface owner.
-/// Ordinary texture-format growth is enumerated by `texture_formats()` and cannot expand this set.
+/// Ordinary texture-format growth is enumerated by `TEXTURE_FORMATS` and cannot expand this set.
 pub(super) fn known_formats() -> Vec<(GpuTextureFormat, TextureFormat)> {
-    texture_formats()
-        .into_iter()
+    TEXTURE_FORMATS
+        .iter()
+        .copied()
         .filter(|(format, _)| is_g7a_presentation_format(*format))
         .collect()
 }
@@ -199,70 +202,14 @@ const fn is_g7a_presentation_format(format: GpuTextureFormat) -> bool {
     )
 }
 
-fn texture_formats() -> [(GpuTextureFormat, TextureFormat); 43] {
-    [
-        (GpuTextureFormat::R8Unorm, TextureFormat::R8Unorm),
-        (GpuTextureFormat::R8Snorm, TextureFormat::R8Snorm),
-        (GpuTextureFormat::R8Uint, TextureFormat::R8Uint),
-        (GpuTextureFormat::R8Sint, TextureFormat::R8Sint),
-        (GpuTextureFormat::Rg8Unorm, TextureFormat::Rg8Unorm),
-        (GpuTextureFormat::Rg8Snorm, TextureFormat::Rg8Snorm),
-        (GpuTextureFormat::Rg8Uint, TextureFormat::Rg8Uint),
-        (GpuTextureFormat::Rg8Sint, TextureFormat::Rg8Sint),
-        (GpuTextureFormat::R16Uint, TextureFormat::R16Uint),
-        (GpuTextureFormat::R16Sint, TextureFormat::R16Sint),
-        (GpuTextureFormat::R16Float, TextureFormat::R16Float),
-        (GpuTextureFormat::Rg16Uint, TextureFormat::Rg16Uint),
-        (GpuTextureFormat::Rg16Sint, TextureFormat::Rg16Sint),
-        (GpuTextureFormat::Rg16Float, TextureFormat::Rg16Float),
-        (GpuTextureFormat::Rgba8Unorm, TextureFormat::Rgba8Unorm),
-        (
-            GpuTextureFormat::Rgba8UnormSrgb,
-            TextureFormat::Rgba8UnormSrgb,
-        ),
-        (GpuTextureFormat::Rgba8Snorm, TextureFormat::Rgba8Snorm),
-        (GpuTextureFormat::Rgba8Uint, TextureFormat::Rgba8Uint),
-        (GpuTextureFormat::Rgba8Sint, TextureFormat::Rgba8Sint),
-        (GpuTextureFormat::Bgra8Unorm, TextureFormat::Bgra8Unorm),
-        (
-            GpuTextureFormat::Bgra8UnormSrgb,
-            TextureFormat::Bgra8UnormSrgb,
-        ),
-        (GpuTextureFormat::Rgb9e5Ufloat, TextureFormat::Rgb9e5Ufloat),
-        (GpuTextureFormat::Rgb10a2Uint, TextureFormat::Rgb10a2Uint),
-        (GpuTextureFormat::Rgb10a2Unorm, TextureFormat::Rgb10a2Unorm),
-        (
-            GpuTextureFormat::Rg11b10Ufloat,
-            TextureFormat::Rg11b10Ufloat,
-        ),
-        (GpuTextureFormat::R32Uint, TextureFormat::R32Uint),
-        (GpuTextureFormat::R32Sint, TextureFormat::R32Sint),
-        (GpuTextureFormat::R32Float, TextureFormat::R32Float),
-        (GpuTextureFormat::Rg32Uint, TextureFormat::Rg32Uint),
-        (GpuTextureFormat::Rg32Sint, TextureFormat::Rg32Sint),
-        (GpuTextureFormat::Rg32Float, TextureFormat::Rg32Float),
-        (GpuTextureFormat::Rgba32Uint, TextureFormat::Rgba32Uint),
-        (GpuTextureFormat::Rgba32Sint, TextureFormat::Rgba32Sint),
-        (GpuTextureFormat::Rgba32Float, TextureFormat::Rgba32Float),
-        (GpuTextureFormat::Rgba16Uint, TextureFormat::Rgba16Uint),
-        (GpuTextureFormat::Rgba16Sint, TextureFormat::Rgba16Sint),
-        (GpuTextureFormat::Rgba16Float, TextureFormat::Rgba16Float),
-        (GpuTextureFormat::Stencil8, TextureFormat::Stencil8),
-        (GpuTextureFormat::Depth16Unorm, TextureFormat::Depth16Unorm),
-        (GpuTextureFormat::Depth24Plus, TextureFormat::Depth24Plus),
-        (
-            GpuTextureFormat::Depth24PlusStencil8,
-            TextureFormat::Depth24PlusStencil8,
-        ),
-        (GpuTextureFormat::Depth32Float, TextureFormat::Depth32Float),
-        (
-            GpuTextureFormat::Depth32FloatStencil8,
-            TextureFormat::Depth32FloatStencil8,
-        ),
-    ]
-}
-
 fn format_prerequisites_available(format: GpuTextureFormat, features: Features) -> bool {
+    if matches!(
+        texture_format::compression_family(format),
+        Some(texture_format::GpuTextureCompressionFamily::Bc)
+    ) && !features.contains(Features::TEXTURE_COMPRESSION_BC)
+    {
+        return false;
+    }
     match format {
         GpuTextureFormat::Depth32FloatStencil8 => {
             features.contains(Features::DEPTH32FLOAT_STENCIL8)
@@ -283,6 +230,12 @@ fn apply_format_prerequisites(
         && !features.contains(Features::RG11B10UFLOAT_RENDERABLE)
     {
         capabilities.color_attachment = false;
+    }
+    if texture_format::compression_family(format).is_some() {
+        capabilities.storage_read = false;
+        capabilities.storage_write = false;
+        capabilities.color_attachment = false;
+        capabilities.depth_stencil = false;
     }
     capabilities
 }
@@ -521,6 +474,73 @@ mod tests {
     }
 
     #[test]
+    fn bc_family_is_complete_feature_gated_and_portable_role_clamped() {
+        let bc = [
+            (GpuTextureFormat::Bc1RgbaUnorm, TextureFormat::Bc1RgbaUnorm),
+            (
+                GpuTextureFormat::Bc1RgbaUnormSrgb,
+                TextureFormat::Bc1RgbaUnormSrgb,
+            ),
+            (GpuTextureFormat::Bc2RgbaUnorm, TextureFormat::Bc2RgbaUnorm),
+            (
+                GpuTextureFormat::Bc2RgbaUnormSrgb,
+                TextureFormat::Bc2RgbaUnormSrgb,
+            ),
+            (GpuTextureFormat::Bc3RgbaUnorm, TextureFormat::Bc3RgbaUnorm),
+            (
+                GpuTextureFormat::Bc3RgbaUnormSrgb,
+                TextureFormat::Bc3RgbaUnormSrgb,
+            ),
+            (GpuTextureFormat::Bc4RUnorm, TextureFormat::Bc4RUnorm),
+            (GpuTextureFormat::Bc4RSnorm, TextureFormat::Bc4RSnorm),
+            (GpuTextureFormat::Bc5RgUnorm, TextureFormat::Bc5RgUnorm),
+            (GpuTextureFormat::Bc5RgSnorm, TextureFormat::Bc5RgSnorm),
+            (
+                GpuTextureFormat::Bc6hRgbUfloat,
+                TextureFormat::Bc6hRgbUfloat,
+            ),
+            (GpuTextureFormat::Bc6hRgbFloat, TextureFormat::Bc6hRgbFloat),
+            (GpuTextureFormat::Bc7RgbaUnorm, TextureFormat::Bc7RgbaUnorm),
+            (
+                GpuTextureFormat::Bc7RgbaUnormSrgb,
+                TextureFormat::Bc7RgbaUnormSrgb,
+            ),
+        ];
+        assert_eq!(bc.len(), 14);
+        for (format, native) in bc {
+            assert!(TEXTURE_FORMATS.contains(&(format, native)));
+            let backend = wgpu::TextureFormatFeatures {
+                allowed_usages: TextureUsages::TEXTURE_BINDING
+                    | TextureUsages::STORAGE_BINDING
+                    | TextureUsages::RENDER_ATTACHMENT
+                    | TextureUsages::COPY_SRC
+                    | TextureUsages::COPY_DST,
+                flags: TextureFormatFeatureFlags::FILTERABLE
+                    | TextureFormatFeatureFlags::STORAGE_READ_WRITE,
+            };
+            let absent = apply_format_prerequisites(
+                format,
+                Features::empty(),
+                format_capabilities(format, backend),
+            );
+            assert_eq!(absent, GpuTextureFormatCapabilities::none(), "{format:?}");
+            let present = apply_format_prerequisites(
+                format,
+                Features::TEXTURE_COMPRESSION_BC,
+                format_capabilities(format, backend),
+            );
+            assert!(present.sampled, "{format:?}");
+            assert!(present.copy_source, "{format:?}");
+            assert!(present.copy_destination, "{format:?}");
+            assert!(present.filterable, "{format:?}");
+            assert!(!present.storage_read, "{format:?}");
+            assert!(!present.storage_write, "{format:?}");
+            assert!(!present.color_attachment, "{format:?}");
+            assert!(!present.depth_stencil, "{format:?}");
+        }
+    }
+
+    #[test]
     fn pinned_backend_and_adapter_mappings_remain_exhaustive() {
         assert_eq!(map_backend(Backend::Vulkan), GpuBackendFamily::Vulkan);
         assert_eq!(map_backend(Backend::Metal), GpuBackendFamily::Metal);
@@ -550,7 +570,7 @@ mod tests {
             (GpuTextureFormat::Rgba16Float, TextureFormat::Rgba16Float),
         ] {
             assert!(!known_formats().contains(&pair));
-            assert!(texture_formats().contains(&pair));
+            assert!(TEXTURE_FORMATS.contains(&pair));
         }
     }
 
@@ -567,19 +587,19 @@ mod tests {
             (GpuTextureFormat::Rgba32Sint, TextureFormat::Rgba32Sint),
             (GpuTextureFormat::Rgba32Float, TextureFormat::Rgba32Float),
         ] {
-            assert!(texture_formats().contains(&pair));
+            assert!(TEXTURE_FORMATS.contains(&pair));
         }
     }
 
     #[test]
     fn rgba8_core_format_census_and_optional_roles_follow_backend_facts() {
-        assert_eq!(texture_formats().len(), 43);
+        assert_eq!(TEXTURE_FORMATS.len(), 57);
         for (format, native) in [
             (GpuTextureFormat::Rgba8Snorm, TextureFormat::Rgba8Snorm),
             (GpuTextureFormat::Rgba8Uint, TextureFormat::Rgba8Uint),
             (GpuTextureFormat::Rgba8Sint, TextureFormat::Rgba8Sint),
         ] {
-            assert!(texture_formats().contains(&(format, native)));
+            assert!(TEXTURE_FORMATS.contains(&(format, native)));
             let absent = format_capabilities(
                 format,
                 wgpu::TextureFormatFeatures {
@@ -618,13 +638,13 @@ mod tests {
 
     #[test]
     fn rgba16_format_census_and_optional_roles_follow_backend_facts() {
-        assert_eq!(texture_formats().len(), 43);
+        assert_eq!(TEXTURE_FORMATS.len(), 57);
         for (format, native) in [
             (GpuTextureFormat::Rgba16Uint, TextureFormat::Rgba16Uint),
             (GpuTextureFormat::Rgba16Sint, TextureFormat::Rgba16Sint),
             (GpuTextureFormat::Rgba16Float, TextureFormat::Rgba16Float),
         ] {
-            assert!(texture_formats().contains(&(format, native)));
+            assert!(TEXTURE_FORMATS.contains(&(format, native)));
             let absent = format_capabilities(
                 format,
                 wgpu::TextureFormatFeatures {
@@ -663,7 +683,7 @@ mod tests {
 
     #[test]
     fn r32float_mapping_preserves_backend_reported_roles() {
-        assert!(texture_formats().contains(&(GpuTextureFormat::R32Float, TextureFormat::R32Float)));
+        assert!(TEXTURE_FORMATS.contains(&(GpuTextureFormat::R32Float, TextureFormat::R32Float)));
 
         let sampled_copy_source = format_capabilities(
             GpuTextureFormat::R32Float,
@@ -746,7 +766,7 @@ mod tests {
     #[test]
     fn stencil8_maps_exactly_and_preserves_observed_roles() {
         let format = GpuTextureFormat::Stencil8;
-        assert!(texture_formats().contains(&(format, TextureFormat::Stencil8)));
+        assert!(TEXTURE_FORMATS.contains(&(format, TextureFormat::Stencil8)));
         assert!(!is_g7a_presentation_format(format));
         assert_eq!(format.copy_block_size(GpuTextureAspect::All), Some(1));
         let facts = format_capabilities(
@@ -779,7 +799,7 @@ mod tests {
                 TextureFormat::Rg11b10Ufloat,
             ),
         ] {
-            assert!(texture_formats().contains(&(format, native)));
+            assert!(TEXTURE_FORMATS.contains(&(format, native)));
             assert!(!is_g7a_presentation_format(format));
         }
 
@@ -827,7 +847,7 @@ mod tests {
     #[test]
     fn depth32float_stencil8_roles_fail_closed_without_private_prerequisite() {
         let format = GpuTextureFormat::Depth32FloatStencil8;
-        assert!(texture_formats().contains(&(format, TextureFormat::Depth32FloatStencil8)));
+        assert!(TEXTURE_FORMATS.contains(&(format, TextureFormat::Depth32FloatStencil8)));
         assert!(!is_g7a_presentation_format(format));
 
         let native = wgpu::TextureFormatFeatures {
@@ -886,7 +906,7 @@ mod tests {
                 None,
             ),
         ] {
-            assert!(texture_formats().contains(&(format, native)));
+            assert!(TEXTURE_FORMATS.contains(&(format, native)));
             assert!(!is_g7a_presentation_format(format));
             assert_eq!(
                 format.copy_block_size(GpuTextureAspect::All),
@@ -922,12 +942,12 @@ mod r1_r_rg8_mapping_tests {
     use super::*;
 
     #[test]
-    fn forty_three_unique_private_mappings_preserve_closed_presentation() {
-        let mappings = texture_formats();
-        assert_eq!(mappings.len(), 43);
+    fn shared_texture_mapping_is_unique_and_preserves_closed_presentation() {
+        let mappings = TEXTURE_FORMATS;
+        assert_eq!(mappings.len(), 57);
         let mut normalized = Vec::new();
         let mut native = Vec::new();
-        for (format, wgpu_format) in mappings {
+        for &(format, wgpu_format) in mappings {
             assert!(!normalized.contains(&format));
             assert!(!native.contains(&wgpu_format));
             normalized.push(format);
@@ -951,8 +971,9 @@ mod r1_r_rg8_mapping_tests {
         ] {
             assert!(!is_g7a_presentation_format(format));
             assert_eq!(
-                texture_formats()
-                    .into_iter()
+                TEXTURE_FORMATS
+                    .iter()
+                    .copied()
                     .find(|(value, _)| *value == format),
                 Some((format, wgpu_format))
             );

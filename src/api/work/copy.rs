@@ -142,9 +142,20 @@ impl GpuTextureCopyRegion {
             ));
         };
         let (mip_width, mip_height, mip_depth_or_layers) = mip_extent(texture, mip_level);
+        let (block_width, block_height) = texture_format::block_dimensions(descriptor.format());
+        let physical_mip_width = mip_width.div_ceil(block_width).checked_mul(block_width);
+        let physical_mip_height = mip_height.div_ceil(block_height).checked_mul(block_height);
+        let block_geometry_valid = origin.x().is_multiple_of(block_width)
+            && origin.y().is_multiple_of(block_height)
+            && extent.width().is_multiple_of(block_width)
+            && extent.height().is_multiple_of(block_height);
         let x_end = origin.x().checked_add(extent.width());
         let y_end = origin.y().checked_add(extent.height());
         let z_end = origin.z().checked_add(extent.depth_or_layers());
+        let x_bounds_valid =
+            physical_mip_width.is_some_and(|width| x_end.is_some_and(|end| end <= width));
+        let y_bounds_valid =
+            physical_mip_height.is_some_and(|height| y_end.is_some_and(|end| end <= height));
         let dimension_valid = match descriptor.dimension() {
             GpuTextureDimension::D1 => {
                 origin.y() == 0
@@ -156,8 +167,9 @@ impl GpuTextureCopyRegion {
             GpuTextureDimension::D3 => true,
         };
         if !dimension_valid
-            || x_end.is_none_or(|end| end > mip_width)
-            || y_end.is_none_or(|end| end > mip_height)
+            || !block_geometry_valid
+            || !x_bounds_valid
+            || !y_bounds_valid
             || z_end.is_none_or(|end| end > mip_depth_or_layers)
         {
             return Err(GpuWorkOperationError::invalid(
@@ -249,6 +261,29 @@ impl GpuTextureCopyRegion {
             self.extent.height(),
             self.extent.depth_or_layers(),
         )
+    }
+
+    pub(crate) fn completely_covers_selected_subresources(&self) -> bool {
+        let descriptor = self.texture.descriptor();
+        let (mip_width, mip_height, mip_depth_or_layers) =
+            mip_extent(&self.texture, self.mip_level);
+        let (block_width, block_height) = texture_format::block_dimensions(descriptor.format());
+        let physical_mip_width = mip_width.div_ceil(block_width).checked_mul(block_width);
+        let physical_mip_height = mip_height.div_ceil(block_height).checked_mul(block_height);
+        if self.origin.x() != 0
+            || self.origin.y() != 0
+            || physical_mip_width != Some(self.extent.width())
+            || physical_mip_height != Some(self.extent.height())
+        {
+            return false;
+        }
+        match descriptor.dimension() {
+            GpuTextureDimension::D1 => self.origin.z() == 0 && self.extent.depth_or_layers() == 1,
+            GpuTextureDimension::D2 => true,
+            GpuTextureDimension::D3 => {
+                self.origin.z() == 0 && self.extent.depth_or_layers() == mip_depth_or_layers
+            }
+        }
     }
 }
 
@@ -482,6 +517,26 @@ fn buffer_layout_access(
     kind: GpuBufferAccessKind,
 ) -> Result<GpuBufferAccess, GpuWorkOperationError> {
     let extent = texture.extent();
+    let copy_block_size = texture
+        .texture()
+        .descriptor()
+        .format()
+        .copy_block_size(texture.aspect())
+        .ok_or_else(|| {
+            copy_layout_error(
+                layout,
+                "choose a texture aspect with a normalized copy-block footprint",
+            )
+        })?;
+    if !layout
+        .byte_offset()
+        .is_multiple_of(u64::from(copy_block_size))
+    {
+        return Err(copy_layout_error(
+            layout,
+            "align the buffer byte offset to the selected texture copy-block byte size",
+        ));
+    }
     let (logical_row, logical_rows) = texture.logical_copy_footprint().ok_or_else(|| {
         copy_layout_error(
             layout,

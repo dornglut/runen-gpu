@@ -20,6 +20,7 @@ mod reconstruction_tests;
 mod resource_realization;
 mod state;
 mod surface;
+mod texture_format_mapping;
 mod timestamp;
 
 pub(crate) use device_request::request_headless;
