@@ -184,7 +184,6 @@ fn render_pipeline_inherits_program_interface_requirements() {
     assert_fixed_array_requirements(pipeline.requirements());
 }
 
-
 #[test]
 fn unused_module_global_fixed_array_contributes_shader_compilation_requirement_only() {
     const WGSL: &str = r#"
