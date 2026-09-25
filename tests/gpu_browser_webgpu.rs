@@ -1218,11 +1218,7 @@ fn vs_main(@builtin(vertex_index) index: u32) -> @builtin(position) vec4f {
             .admit_wgsl(
                 identity,
                 STENCIL8_WGSL,
-                GpuProgramSourceProvenance::new(
-                    "browser Depth24PlusStencil8 proof",
-                    None,
-                )
-                .unwrap(),
+                GpuProgramSourceProvenance::new("browser Depth24PlusStencil8 proof", None).unwrap(),
             )
             .unwrap();
         let program = GpuProgramDescriptor::new(
@@ -1231,8 +1227,7 @@ fn vs_main(@builtin(vertex_index) index: u32) -> @builtin(position) vec4f {
             std::iter::empty::<GpuBindingLayoutRefinement>(),
         )
         .unwrap();
-        let face =
-            browser_stencil_face(GpuCompareFunction::Always, GpuStencilOperation::Replace);
+        let face = browser_stencil_face(GpuCompareFunction::Always, GpuStencilOperation::Replace);
         let stencil = GpuStencilStateDescriptor::new(face, face, u32::MAX, 0xff);
         let depth_stencil = GpuDepthStencilStateDescriptor::new(
             GpuTextureFormat::Depth24PlusStencil8,
