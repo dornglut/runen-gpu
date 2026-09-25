@@ -1,0 +1,169 @@
+name: RunenGPU Metal Qualification
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'src/**'
+      - 'tests/gpu_*.rs'
+      - 'tests/gpu_*/**'
+      - 'scripts/qualify-m3.sh'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'TESTING.md'
+      - '.github/workflows/runengpu-metal-qualification.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'src/**'
+      - 'tests/gpu_*.rs'
+      - 'tests/gpu_*/**'
+      - 'scripts/qualify-m3.sh'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'TESTING.md'
+      - '.github/workflows/runengpu-metal-qualification.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: runengpu-metal-qualification-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  generic-metal:
+    name: Generic Metal public-API qualification
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - name: Resolve expected revision
+        id: revision
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_SHA: ${{ github.sha }}
+          PULL_REQUEST_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PULL_REQUEST_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          case "$EVENT_NAME" in
+            pull_request) expected_revision="$PULL_REQUEST_HEAD_SHA" ;;
+            push|workflow_dispatch) expected_revision="$EVENT_SHA" ;;
+            *) echo "Unsupported event: $EVENT_NAME" >&2; exit 1 ;;
+          esac
+          test -n "$expected_revision"
+          echo "expected_revision=$expected_revision" >> "$GITHUB_OUTPUT"
+          echo "pull_request_base_revision=$PULL_REQUEST_BASE_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout exact revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
+        with:
+          ref: ${{ steps.revision.outputs.expected_revision }}
+          clean: true
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Prove checked-out revision and host
+        env:
+          EXPECTED_REVISION: ${{ steps.revision.outputs.expected_revision }}
+          PULL_REQUEST_BASE_REVISION: ${{ steps.revision.outputs.pull_request_base_revision }}
+        run: |
+          set -euo pipefail
+          actual_revision="$(git rev-parse HEAD)"
+          echo "Repository: $GITHUB_REPOSITORY"
+          echo "Event: $GITHUB_EVENT_NAME"
+          echo "Expected revision: $EXPECTED_REVISION"
+          echo "Actual checked-out revision: $actual_revision"
+          if [[ -n "$PULL_REQUEST_BASE_REVISION" ]]; then
+            echo "Pull-request base revision: $PULL_REQUEST_BASE_REVISION"
+          fi
+          test "$actual_revision" = "$EXPECTED_REVISION"
+          sw_vers
+          test "$(uname -m)" = "arm64"
+          echo "Architecture: $(uname -m)"
+          echo "Conclusion: PASS"
+
+      - name: Install stable Rust
+        run: rustup toolchain install stable --profile minimal
+
+      - name: Cache Cargo data
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+
+      - name: Run generic Metal qualification
+        env:
+          RUST_BACKTRACE: '1'
+          WGPU_BACKEND: metal
+          RUNEN_GPU_PROOF_REVISION: ${{ steps.revision.outputs.expected_revision }}
+          RUNEN_GPU_QUALIFICATION_MODE: generic
+          RUNEN_GPU_QUALIFICATION_REPORT: ${{ runner.temp }}/runengpu-metal-qualification/report.json
+        run: |
+          set -euo pipefail
+          cargo +stable test --test gpu_q_metal_qualification \
+            metal_qualification_records_exact_public_api_evidence \
+            --locked -- --ignored --nocapture --test-threads=1
+          test -s "$RUNEN_GPU_QUALIFICATION_REPORT"
+
+      - name: Prove Metal timestamp suppression remains conservative
+        env:
+          RUST_BACKTRACE: '1'
+          WGPU_BACKEND: metal
+        run: |
+          set -euo pipefail
+          cargo +stable test --test gpu_metal_timestamp_capability_native \
+            apple_metal_preferred_timestamp_request_disables_instrumentation_without_losing_context \
+            --locked -- --ignored --nocapture --test-threads=1
+
+      - name: Validate qualification report
+        env:
+          REPORT: ${{ runner.temp }}/runengpu-metal-qualification/report.json
+          EXPECTED_REVISION: ${{ steps.revision.outputs.expected_revision }}
+        run: |
+          set -euo pipefail
+          python3 - "$REPORT" "$EXPECTED_REVISION" <<'PY'
+          import json
+          import sys
+
+          report_path, expected_revision = sys.argv[1:3]
+          with open(report_path, encoding="utf-8") as handle:
+              report = json.load(handle)
+          assert report["schema_version"] == 1
+          assert report["qualification_level"] == "generic_metal"
+          assert report["revision"] == expected_revision
+          assert report["environment"]["architecture"] == "arm64"
+          assert report["environment"]["machine_model"]
+          assert report["environment"]["chip_type"]
+          assert report["adapter"]["backend"] == "Metal"
+          assert report["adapter"]["name"]
+          assert report["proofs"]["prefix_scan_exclusive"] == "EXERCISED"
+          assert report["proofs"]["prefix_scan_inclusive"] == "EXERCISED"
+          assert report["proofs"]["indexed_offscreen_render"] == "EXERCISED"
+          assert report["proofs"]["timestamp_query"] == "UNSUPPORTED_SUPPRESSED"
+          print(
+              "Generic Metal qualification:",
+              report["environment"]["chip_type"],
+              "/",
+              report["adapter"]["name"],
+          )
+          PY
+
+      - name: Retain generic Metal qualification report
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: runengpu-generic-metal-${{ steps.revision.outputs.expected_revision }}
+          path: ${{ runner.temp }}/runengpu-metal-qualification/report.json
+          if-no-files-found: error
+
+      - name: Check diff hygiene
+        run: git diff --check
+
+      - name: Prove qualification leaves repository state clean
+        run: |
+          set -euo pipefail
+          status="$(git status --short)"
+          if [[ -n "$status" ]]; then
+            printf 'Metal qualification changed repository state:\n%s\n' "$status" >&2
+            exit 1
+          fi

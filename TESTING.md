@@ -59,5 +59,40 @@ checked-out repository. The successor-owned
 `.github/workflows/runengpu-conformance.yml` adds the native Lavapipe,
 Wasm/browser, artifact, and independent-downstream proof jobs.
 
-Local validation is preparation. Pull-request acceptance requires both
-repository-owned workflows against the exact reviewed feature head.
+## Metal and Apple M3 qualification
+
+`.github/workflows/runengpu-metal-qualification.yml` adds a separate generic
+Metal qualification lane on GitHub-hosted Apple-Silicon macOS. The workflow
+does not treat the runner label as support evidence: the retained test requires
+an actual normalized `GpuBackendFamily::Metal` context, records the exact Git
+revision plus macOS/architecture/hardware and sanitized adapter facts, executes
+the exact 4097-element prefix-scan oracle in both modes, executes the indexed
+offscreen exact-readback oracle, and retains a JSON report. It also preserves
+the current conservative Metal `TimestampQuery` suppression.
+
+Generic hosted Metal evidence is not Apple M3 evidence. The trusted owner-run
+actual-M3 path is:
+
+```text
+scripts/qualify-m3.sh
+```
+
+That harness requires a clean exact checkout on macOS arm64, reuses the same
+public-API qualification test, requires the runtime chip identity to be Apple
+M3/M3 Pro/M3 Max, writes its report under ignored `target/` state by default,
+and verifies that the repository remains clean. The report intentionally
+records model/chip and sanitized GPU adapter facts without retaining serial
+numbers or platform UUIDs.
+
+The proof levels are therefore distinct:
+
+- retained portable oracle: Linux Lavapipe/Vulkan plus actual-browser WebGPU;
+- generic Metal qualification: hosted Apple-Silicon execution with a proven
+  Metal adapter;
+- actual M3 qualification: trusted owner-run evidence on an identified M3-class
+  machine;
+- performance characterization: non-gating measurement, separate from semantic
+  support authority.
+
+Local validation is preparation. Pull-request acceptance requires the
+repository-owned exact-head workflows applicable to the change.
