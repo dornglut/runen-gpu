@@ -26,6 +26,7 @@ pub(super) fn adapter_facts(
     });
     let profile = select_device_request_profile(info.backend, &downlevel);
     let supported = normalized_features(
+        info.backend,
         adapter.features(),
         downlevel.flags,
         downlevel.is_webgpu_compliant(),
@@ -106,6 +107,7 @@ fn normalized_limits(native: &wgpu::Limits) -> GpuLimits {
 /// Maps only downlevel capabilities WGPU explicitly proves. Unknown flag bits suppress
 /// broad capability claims rather than being guessed into the portable baseline.
 pub(super) fn normalized_features(
+    backend: Backend,
     features: Features,
     flags: DownlevelFlags,
     webgpu_compliant: bool,
@@ -127,7 +129,10 @@ pub(super) fn normalized_features(
     {
         supported.push(GpuCapabilityFeature::IndirectExecution);
     }
-    if features.contains(Features::TIMESTAMP_QUERY) {
+    // The current WGPU Metal timestamp surface is not sufficient proof of RunenGPU's ordered
+    // marker semantics. Keep the normalized capability conservative until Apple-native
+    // marker + resolve/readback evidence proves the backend path truthful.
+    if backend != Backend::Metal && features.contains(Features::TIMESTAMP_QUERY) {
         supported.push(GpuCapabilityFeature::TimestampQuery);
     }
     if features.contains(Features::TEXTURE_BINDING_ARRAY) {
@@ -353,6 +358,7 @@ mod tests {
     #[test]
     fn downlevel_mapping_claims_only_explicitly_proven_operations() {
         let full = normalized_features(
+            Backend::Vulkan,
             Features::TIMESTAMP_QUERY,
             DownlevelFlags::all(),
             true,
@@ -364,14 +370,20 @@ mod tests {
         assert!(full.contains(&GpuCapabilityFeature::Copy));
         assert!(!full.contains(&GpuCapabilityFeature::Presentation));
 
-        let missing_compute =
-            normalized_features(Features::empty(), DownlevelFlags::empty(), false, false);
+        let missing_compute = normalized_features(
+            Backend::Vulkan,
+            Features::empty(),
+            DownlevelFlags::empty(),
+            false,
+            false,
+        );
         assert!(!missing_compute.contains(&GpuCapabilityFeature::Compute));
         assert!(!missing_compute.contains(&GpuCapabilityFeature::IndirectExecution));
         assert!(!missing_compute.contains(&GpuCapabilityFeature::RenderPipeline));
         assert!(!missing_compute.contains(&GpuCapabilityFeature::Copy));
 
         let unknown = normalized_features(
+            Backend::Vulkan,
             Features::empty(),
             DownlevelFlags::from_bits_retain(DownlevelFlags::all().bits() | (1 << 31)),
             true,
@@ -385,8 +397,30 @@ mod tests {
     }
 
     #[test]
+    fn metal_does_not_claim_timestamp_query_from_the_advertised_backend_bit() {
+        let metal = normalized_features(
+            Backend::Metal,
+            Features::TIMESTAMP_QUERY,
+            DownlevelFlags::all(),
+            true,
+            false,
+        );
+        assert!(!metal.contains(&GpuCapabilityFeature::TimestampQuery));
+
+        let vulkan = normalized_features(
+            Backend::Vulkan,
+            Features::TIMESTAMP_QUERY,
+            DownlevelFlags::all(),
+            true,
+            false,
+        );
+        assert!(vulkan.contains(&GpuCapabilityFeature::TimestampQuery));
+    }
+
+    #[test]
     fn native_binding_array_features_preserve_the_accepted_normalized_profile() {
         let normalized = normalized_features(
+            Backend::Vulkan,
             Features::TEXTURE_BINDING_ARRAY
                 | Features::BUFFER_BINDING_ARRAY
                 | Features::STORAGE_RESOURCE_BINDING_ARRAY
@@ -409,6 +443,7 @@ mod tests {
     fn refreshed_backend_rejects_unadmitted_uniform_buffer_array_capability() {
         let capabilities = GpuCapabilities::from_normalized_facts(
             normalized_features(
+                Backend::Vulkan,
                 Features::UNIFORM_BUFFER_BINDING_ARRAYS,
                 DownlevelFlags::empty(),
                 false,
