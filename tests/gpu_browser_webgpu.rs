@@ -632,22 +632,26 @@ mod browser {
                 .unwrap();
                 let prepared = context.prepare_submission(graph).await.unwrap();
                 let submission = context.submit_prepared(prepared).unwrap();
-                let deadline = crate::Instant::now() + crate::Duration::from_secs(15);
-                loop {
+                const MAX_PROGRESS_TICKS: usize = 2_000;
+                let mut completed = false;
+                for _ in 0..MAX_PROGRESS_TICKS {
                     context.progress();
                     match submission.status() {
-                        GpuSubmissionStatus::Completed => break,
+                        GpuSubmissionStatus::Completed => {
+                            completed = true;
+                            break;
+                        }
                         GpuSubmissionStatus::Failed(error) => {
                             panic!("{name} browser render-target qualification failed: {error:?}")
                         }
                         GpuSubmissionStatus::Accepted => {}
                     }
-                    assert!(
-                        crate::Instant::now() < deadline,
-                        "{name} browser render-target qualification timed out"
-                    );
-                    YieldOnce::new().await;
+                    browser_yield().await;
                 }
+                assert!(
+                    completed,
+                    "{name} browser render-target qualification exceeded its bounded progress budget"
+                );
             }
             other => panic!("unsupported browser packed qualification role: {other:?}"),
         }
