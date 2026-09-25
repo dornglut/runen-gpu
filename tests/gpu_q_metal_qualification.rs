@@ -254,6 +254,30 @@ async fn execute_indirect(
     retained_indirect::assert_rendered_pixels(&bytes);
 }
 
+fn limits_report(limits: GpuLimits) -> Value {
+    json!({
+        "max_uniform_buffer_binding_size": limits.max_uniform_buffer_binding_size(),
+        "max_storage_buffer_binding_size": limits.max_storage_buffer_binding_size(),
+        "max_color_attachments": limits.max_color_attachments(),
+        "max_vertex_buffers": limits.max_vertex_buffers(),
+        "max_bindings_per_group": limits.max_bindings_per_group(),
+        "max_texture_dimension_2d": limits.max_texture_dimension_2d(),
+        "max_bind_groups": limits.max_bind_groups(),
+        "max_bind_groups_plus_vertex_buffers": limits.max_bind_groups_plus_vertex_buffers(),
+        "max_dynamic_uniform_buffers_per_pipeline_layout":
+            limits.max_dynamic_uniform_buffers_per_pipeline_layout(),
+        "max_dynamic_storage_buffers_per_pipeline_layout":
+            limits.max_dynamic_storage_buffers_per_pipeline_layout(),
+        "max_compute_workgroups_per_dimension": limits.max_compute_workgroups_per_dimension(),
+        "max_buffer_size": limits.max_buffer_size(),
+        "max_texture_dimension_1d": limits.max_texture_dimension_1d(),
+        "max_texture_dimension_3d": limits.max_texture_dimension_3d(),
+        "max_texture_array_layers": limits.max_texture_array_layers(),
+        "max_vertex_attributes": limits.max_vertex_attributes(),
+        "max_vertex_buffer_array_stride": limits.max_vertex_buffer_array_stride(),
+    })
+}
+
 fn capability_report(context: &GpuContext) -> Value {
     let adapter = context.adapter_facts();
     let device = context.device_facts();
@@ -398,6 +422,10 @@ fn metal_qualification_records_exact_public_api_evidence() {
             "device": adapter.device(),
         },
         "capabilities": capability_report(&context),
+        "limits": {
+            "adapter": limits_report(adapter.adapter_limits().values()),
+            "device": limits_report(context.device_facts().device_limits().values()),
+        },
         "proofs": {
             "prefix_scan_exclusive": "EXERCISED",
             "prefix_scan_inclusive": "EXERCISED",
