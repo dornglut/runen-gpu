@@ -520,6 +520,11 @@ fn metal_qualification_records_exact_public_api_evidence() {
             retained_transient_attachment::stencil_descriptor(GpuBackendFamily::Metal),
         ))
         .expect("advertised Metal Stencil8 depth/stencil role must admit a context");
+        assert_eq!(
+            stencil_context.adapter_facts(),
+            context.adapter_facts(),
+            "conditional transient Stencil8 proof must stay on the qualified Metal adapter"
+        );
         let (stencil_graph, stencil_readback_id) = retained_transient_attachment::stencil_graph();
         let stencil_prepared =
             pollster::block_on(stencil_context.prepare_submission(stencil_graph)).unwrap();
