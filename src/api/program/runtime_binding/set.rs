@@ -449,7 +449,8 @@ mod binding_array_limit_tests {
     }
 
     fn facts(general: u32, samplers: u32) -> GpuRuntimeBindingDeviceFacts {
-        GpuRuntimeBindingDeviceFacts::new(None, None, 8, 8, 4, general, samplers, [])
+        GpuRuntimeBindingDeviceFacts::new(None, None, 8, 8, 4, [])
+            .with_binding_array_limits(general, samplers)
     }
 
     #[test]
