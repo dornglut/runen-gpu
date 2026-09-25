@@ -2,8 +2,8 @@ use super::super::{
     GpuBufferRange, GpuQueryRange, GpuResourceAccess, GpuTextureSubresourceRange, GpuWorkResourceId,
 };
 use super::coverage::texture_aspect;
-use crate::api::access::intersect_aspects;
 use super::identity::GpuPreparedWorkNodeId;
+use crate::api::access::intersect_aspects;
 use core::fmt;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]

@@ -11,8 +11,8 @@ use super::{
     authoring::{GpuWorkFragment, GpuWorkNode},
     composition::ImportBindings,
     coverage::{
-        GpuInitialCoverage, GpuInitialCoverageData, buffer_coverage_contains,
-        atomic_texture_aspects, canonical_storage_resource, coverage_source_error,
+        GpuInitialCoverage, GpuInitialCoverageData, atomic_texture_aspects,
+        buffer_coverage_contains, canonical_storage_resource, coverage_source_error,
         intersect_buffer_coverage, normalize_buffer_coverage, normalize_u32_intervals,
         storage_identity, texture_aspect,
     },
@@ -183,12 +183,10 @@ fn coverage_for_access(access: &GpuResourceAccess) -> InitializedCoverage {
         GpuResourceAccess::Texture(access) => {
             let range = access.normalized_subresources();
             let mut subresources = BTreeMap::new();
-            for aspect in atomic_texture_aspects(
-                range.aspect(),
-                texture_aspect(access.normalized_texture()),
-            )
-            .into_iter()
-            .flatten()
+            for aspect in
+                atomic_texture_aspects(range.aspect(), texture_aspect(access.normalized_texture()))
+                    .into_iter()
+                    .flatten()
             {
                 for mip in range.base_mip_level()..range.mip_end() {
                     subresources.insert(

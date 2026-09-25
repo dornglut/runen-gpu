@@ -1271,11 +1271,8 @@ fn cs_main() {
             .admit_wgsl(
                 identity,
                 DEPTH24PLUS_STENCIL8_SAMPLED_WGSL,
-                GpuProgramSourceProvenance::new(
-                    "browser Depth24PlusStencil8 sampled proof",
-                    None,
-                )
-                .unwrap(),
+                GpuProgramSourceProvenance::new("browser Depth24PlusStencil8 sampled proof", None)
+                    .unwrap(),
             )
             .unwrap();
         let program = GpuProgramDescriptor::new(
@@ -1284,12 +1281,8 @@ fn cs_main() {
             std::iter::empty::<GpuBindingLayoutRefinement>(),
         )
         .unwrap();
-        GpuComputePipelineDescriptor::new(
-            program,
-            entry,
-            GpuPipelineConfiguration::default(),
-        )
-        .unwrap()
+        GpuComputePipelineDescriptor::new(program, entry, GpuPipelineConfiguration::default())
+            .unwrap()
     }
 
     fn browser_combined_sampled_binding(
@@ -1566,7 +1559,9 @@ fn cs_main() {
         }
         if let Some((depth_view, stencil_view)) = &sampled_views {
             builder.declare_resource(depth_view.clone().into()).unwrap();
-            builder.declare_resource(stencil_view.clone().into()).unwrap();
+            builder
+                .declare_resource(stencil_view.clone().into())
+                .unwrap();
         }
         for (node, operation) in [
             (
