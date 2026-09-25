@@ -724,14 +724,9 @@ fn combined_depth_stencil_attachment_and_copy_aspects_are_independent() {
     assert!(GpuCopyOperation::texture_to_texture(source_all, destination_all).is_ok());
 
     for aspect in [GpuTextureAspect::DepthOnly, GpuTextureAspect::StencilOnly] {
-        let source = GpuTextureCopyRegion::new(
-            &combined,
-            0,
-            GpuTextureOrigin::new(0, 0, 0),
-            aspect,
-            extent,
-        )
-        .unwrap();
+        let source =
+            GpuTextureCopyRegion::new(&combined, 0, GpuTextureOrigin::new(0, 0, 0), aspect, extent)
+                .unwrap();
         let destination_region = GpuTextureCopyRegion::new(
             &destination,
             0,
