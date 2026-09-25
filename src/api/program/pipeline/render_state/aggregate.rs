@@ -33,6 +33,24 @@ impl GpuRenderPipelineStateDescriptor {
             ));
         }
 
+        if depth_stencil
+            .is_some_and(|state| !state.bias().is_zero())
+            && !matches!(
+                primitive.topology(),
+                super::primitive::GpuPrimitiveTopology::TriangleList
+                    | super::primitive::GpuPrimitiveTopology::TriangleStrip
+            )
+        {
+            return Err(invalid_render_pipeline_state(
+                format!(
+                    "topology={:?}, depth_bias={:?}",
+                    primitive.topology(),
+                    depth_stencil.map(|state| state.bias())
+                ),
+                "use nonzero depth bias only with triangle-list or triangle-strip topology",
+            ));
+        }
+
         if multisample.alpha_to_coverage_enabled()
             && !first_color_target
                 .is_some_and(GpuColorTargetStateDescriptor::has_blendable_alpha_channel)

@@ -1,6 +1,6 @@
 use runen_gpu::{
     GpuBlendComponent, GpuBlendFactor, GpuBlendOperation, GpuBlendState,
-    GpuColorTargetStateDescriptor, GpuColorWriteMask, GpuCompareFunction, GpuDepthStateDescriptor,
+    GpuColorTargetStateDescriptor, GpuColorWriteMask, GpuCompareFunction, GpuDepthBiasState, GpuDepthStateDescriptor,
     GpuDepthStencilStateDescriptor, GpuEntryPointName, GpuFragmentOutputStateDescriptor,
     GpuProgramContractCause, GpuShaderIoScalarClass, GpuTextureFormat,
 };
@@ -127,7 +127,8 @@ fn color_write_mask_rejects_unknown_bits_and_retains_components() {
 fn depth_stencil_state_requires_a_depth_format() {
     let depth = GpuDepthStateDescriptor::new(true, GpuCompareFunction::LessEqual);
     let state =
-        GpuDepthStencilStateDescriptor::new(GpuTextureFormat::Depth32Float, Some(depth), None)
+        GpuDepthStencilStateDescriptor::new(GpuTextureFormat::Depth32Float, Some(depth), None,
+            GpuDepthBiasState::default())
             .unwrap();
     assert_eq!(state.format(), GpuTextureFormat::Depth32Float);
     assert_eq!(state.depth(), Some(depth));
@@ -140,7 +141,8 @@ fn depth_stencil_state_requires_a_depth_format() {
             GpuCompareFunction::Always,
         )),
         None,
-    )
+    
+        GpuDepthBiasState::default(),)
     .expect_err("color formats are not depth-stencil formats");
     assert_eq!(
         error.cause(),

@@ -295,7 +295,15 @@ fn lower_depth_stencil(state: crate::GpuDepthStencilStateDescriptor) -> DepthSte
             .map(crate::GpuDepthStateDescriptor::compare)
             .map(render_mapping::compare_function),
         stencil: stencil.map(lower_stencil_state).unwrap_or_default(),
-        bias: DepthBiasState::default(),
+        bias: lower_depth_bias(state.bias()),
+    }
+}
+
+fn lower_depth_bias(state: crate::GpuDepthBiasState) -> DepthBiasState {
+    DepthBiasState {
+        constant: state.constant(),
+        slope_scale: state.slope_scale(),
+        clamp: state.clamp(),
     }
 }
 

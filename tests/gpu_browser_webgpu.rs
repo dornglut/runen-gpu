@@ -1245,7 +1245,8 @@ fn vs_main(@builtin(vertex_index) index: u32) -> @builtin(position) vec4f {
         let stencil =
             GpuStencilStateDescriptor::new(face, face, u32::MAX, if write { 0xff } else { 0 });
         let depth_stencil =
-            GpuDepthStencilStateDescriptor::new(GpuTextureFormat::Stencil8, None, Some(stencil))
+            GpuDepthStencilStateDescriptor::new(GpuTextureFormat::Stencil8, None, Some(stencil),
+                GpuDepthBiasState::default())
                 .unwrap();
         let state = GpuRenderPipelineStateDescriptor::new(
             GpuVertexInputStateDescriptor::new([]).unwrap(),
@@ -1629,7 +1630,8 @@ fn cs_main() {
             format,
             Some(GpuDepthStateDescriptor::new(depth_write, depth_compare)),
             Some(stencil),
-        )
+        
+            GpuDepthBiasState::default(),)
         .unwrap();
         let state = GpuRenderPipelineStateDescriptor::new(
             GpuVertexInputStateDescriptor::new([]).unwrap(),
