@@ -2189,6 +2189,11 @@ fn cs_main() {
             )
             .await
             .expect("advertised browser Stencil8 depth/stencil role must admit a context");
+            assert_eq!(
+                stencil_context.adapter_facts(),
+                transient_context.adapter_facts(),
+                "conditional transient Stencil8 proof must stay on the retained browser adapter"
+            );
             let (stencil_graph, stencil_readback_id) =
                 retained_transient_attachment::stencil_graph();
             let stencil_prepared = stencil_context
