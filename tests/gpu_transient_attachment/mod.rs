@@ -131,6 +131,9 @@ fn clear() -> GpuColorAttachmentLoad {
     GpuColorAttachmentLoad::Clear(GpuColorClearValue::new(1.0, 0.0, 1.0, 1.0).unwrap())
 }
 
+// This shared proof module is also embedded by the Metal aggregate, which reuses its
+// already-established qualification context rather than constructing this standalone context.
+#[allow(dead_code)]
 pub(crate) fn descriptor(backend: GpuBackendFamily) -> GpuContextDescriptor {
     let mut requirements = GpuCapabilityProfile::OffscreenGraphicsBaseline.requirements();
     requirements

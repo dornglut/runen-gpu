@@ -365,7 +365,7 @@ fn transient_color_clear_discard_can_reclear_without_persisting_coverage() {
         .declare_resource(GpuResourceRef::Texture(texture.clone()))
         .unwrap();
     fragment
-        .declare_resource(GpuResourceRef::TextureView(view))
+        .declare_resource(GpuResourceRef::TextureView(view.clone()))
         .unwrap();
     for name in ["transient clear discard A", "transient clear discard B"] {
         fragment
