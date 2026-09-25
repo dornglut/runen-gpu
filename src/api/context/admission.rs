@@ -429,6 +429,9 @@ pub(crate) fn admitted_device_facts(
     ))
 }
 
+const FIXED_BINDING_ARRAY_ELEMENT_BASELINE: u32 = 500_000;
+const FIXED_BINDING_ARRAY_SAMPLER_ELEMENT_BASELINE: u32 = 1_000;
+
 const ALL_LIMIT_KINDS: [GpuLimitKind; 19] = [
     GpuLimitKind::MaxUniformBufferBindingSize,
     GpuLimitKind::MaxStorageBufferBindingSize,
@@ -489,13 +492,13 @@ fn effective_workload_budget(
         .contains(&GpuCapabilityFeature::TextureBindingArray)
         || enabled_features.contains(&GpuCapabilityFeature::BufferBindingArray)
     {
-        500_000
+        FIXED_BINDING_ARRAY_ELEMENT_BASELINE
     } else {
         0
     };
     let sampler_binding_array_baseline =
         if enabled_features.contains(&GpuCapabilityFeature::TextureBindingArray) {
-            1_000
+            FIXED_BINDING_ARRAY_SAMPLER_ELEMENT_BASELINE
         } else {
             0
         };
@@ -741,12 +744,12 @@ mod tests {
             if features.contains(&GpuCapabilityFeature::TextureBindingArray)
                 || features.contains(&GpuCapabilityFeature::BufferBindingArray)
             {
-                500_000
+                FIXED_BINDING_ARRAY_ELEMENT_BASELINE
             } else {
                 0
             },
             if features.contains(&GpuCapabilityFeature::TextureBindingArray) {
-                1_000
+                FIXED_BINDING_ARRAY_SAMPLER_ELEMENT_BASELINE
             } else {
                 0
             },
