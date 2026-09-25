@@ -485,7 +485,10 @@ mod tests {
             assert!(
                 GpuDepthStencilStateDescriptor::new(
                     format,
-                    Some(GpuDepthStateDescriptor::new(true, GpuCompareFunction::LessEqual)),
+                    Some(GpuDepthStateDescriptor::new(
+                        true,
+                        GpuCompareFunction::LessEqual
+                    )),
                     None,
                 )
                 .is_ok()
@@ -541,17 +544,24 @@ mod tests {
                 .unwrap();
         assert_eq!(state.stencil(), Some(stencil));
         assert!(stencil.may_write());
-        assert!(GpuDepthStencilStateDescriptor::new(
-            GpuTextureFormat::Stencil8,
-            Some(GpuDepthStateDescriptor::new(false, GpuCompareFunction::Always)),
-            None,
-        )
-        .is_err());
-        assert!(GpuDepthStencilStateDescriptor::new(
-            GpuTextureFormat::Depth32Float,
-            None,
-            Some(stencil),
-        )
-        .is_err());
+        assert!(
+            GpuDepthStencilStateDescriptor::new(
+                GpuTextureFormat::Stencil8,
+                Some(GpuDepthStateDescriptor::new(
+                    false,
+                    GpuCompareFunction::Always
+                )),
+                None,
+            )
+            .is_err()
+        );
+        assert!(
+            GpuDepthStencilStateDescriptor::new(
+                GpuTextureFormat::Depth32Float,
+                None,
+                Some(stencil),
+            )
+            .is_err()
+        );
     }
 }

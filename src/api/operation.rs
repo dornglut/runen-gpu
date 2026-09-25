@@ -2,8 +2,8 @@ use super::work::{
     GpuBufferTextureLayout, GpuClearOperation, GpuColorAttachmentLoad, GpuComputeOperation,
     GpuCopyOperation, GpuDepthAttachmentLoad, GpuDrawIntent, GpuPresentOperation,
     GpuQueryResolveOperation, GpuRenderColorAttachment, GpuRenderDepthStencilAttachment,
-    GpuStencilAttachmentLoad,
-    GpuTextureCopyRegion, GpuTimestampMarkerOperation, GpuTimestampWrites,
+    GpuStencilAttachmentLoad, GpuTextureCopyRegion, GpuTimestampMarkerOperation,
+    GpuTimestampWrites,
 };
 use super::{
     GpuBufferAccess, GpuBufferAccessKind, GpuBufferRange, GpuCapabilityFeature,
@@ -181,7 +181,13 @@ fn validate_depth_stencil_access_for_draw(
         return Err(GpuWorkOperationError::invalid(
             "validate GPU render draw depth access",
             "read-only depth attachment with depth-writing pipeline",
-            Some(attachment.source().descriptor().texture().diagnostic_identity()),
+            Some(
+                attachment
+                    .source()
+                    .descriptor()
+                    .texture()
+                    .diagnostic_identity(),
+            ),
             GpuWorkOperationCause::InvalidAttachment,
             "disable pipeline depth writes when the render pass uses a read-only depth attachment",
         ));
@@ -196,7 +202,13 @@ fn validate_depth_stencil_access_for_draw(
         return Err(GpuWorkOperationError::invalid(
             "validate GPU render draw stencil access",
             "read-only stencil attachment with stencil-writing pipeline",
-            Some(attachment.source().descriptor().texture().diagnostic_identity()),
+            Some(
+                attachment
+                    .source()
+                    .descriptor()
+                    .texture()
+                    .diagnostic_identity(),
+            ),
             GpuWorkOperationCause::InvalidAttachment,
             "disable stencil writes when the render pass uses a read-only stencil attachment",
         ));

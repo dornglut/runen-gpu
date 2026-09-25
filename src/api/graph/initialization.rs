@@ -1034,14 +1034,17 @@ fn operation_initialization(
                 }
             }
             if let Some(attachment) = render.depth_stencil_attachment() {
-                if let (Some(state), Some(access)) = (attachment.depth(), attachment.depth_access()) {
+                if let (Some(state), Some(access)) = (attachment.depth(), attachment.depth_access())
+                {
                     let access = GpuResourceAccess::Texture(access.clone());
                     match state.load() {
                         GpuDepthAttachmentLoad::Load => require(&access),
                         GpuDepthAttachmentLoad::Clear(_) => effect(&access),
                     }
                 }
-                if let (Some(state), Some(access)) = (attachment.stencil(), attachment.stencil_access()) {
+                if let (Some(state), Some(access)) =
+                    (attachment.stencil(), attachment.stencil_access())
+                {
                     let access = GpuResourceAccess::Texture(access.clone());
                     match state.load() {
                         crate::GpuStencilAttachmentLoad::Load => require(&access),

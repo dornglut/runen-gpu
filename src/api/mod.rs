@@ -67,8 +67,7 @@ pub use work::{
     GpuDrawIntent, GpuDrawRange, GpuMultisampleResolveTarget, GpuPresentOperation,
     GpuQueryResolveOperation, GpuRenderColorAttachment, GpuRenderDepthStencilAttachment,
     GpuStencilAttachmentLoad, GpuStencilAttachmentState, GpuStencilClearValue,
-    GpuTextureCopyRegion,
-    GpuTextureOrigin, GpuTimestampMarkerOperation, GpuTimestampWrites,
+    GpuTextureCopyRegion, GpuTextureOrigin, GpuTimestampMarkerOperation, GpuTimestampWrites,
 };
 pub use work_resource_id::{
     GpuWorkResourceId, GpuWorkResourceIdAllocationError, GpuWorkResourceIdAllocator,
