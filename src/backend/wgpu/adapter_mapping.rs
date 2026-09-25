@@ -415,6 +415,35 @@ mod tests {
     }
 
     #[test]
+    fn shader_f16_mapping_requires_the_exact_advertised_feature() {
+        for backend in [Backend::Vulkan, Backend::BrowserWebGpu, Backend::Metal] {
+            let supported = normalized_features(
+                backend,
+                Features::SHADER_F16,
+                DownlevelFlags::empty(),
+                false,
+                false,
+            );
+            assert!(
+                supported.contains(&GpuCapabilityFeature::ShaderF16),
+                "{backend:?}"
+            );
+
+            let unsupported = normalized_features(
+                backend,
+                Features::empty(),
+                DownlevelFlags::empty(),
+                false,
+                false,
+            );
+            assert!(
+                !unsupported.contains(&GpuCapabilityFeature::ShaderF16),
+                "{backend:?}"
+            );
+        }
+    }
+
+    #[test]
     fn metal_does_not_claim_timestamp_query_from_the_advertised_backend_bit() {
         let metal = normalized_features(
             Backend::Metal,
