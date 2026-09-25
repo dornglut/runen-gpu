@@ -638,8 +638,7 @@ fn is_declared_extension(feature: GpuCapabilityFeature) -> bool {
 
 fn is_declared_format_role_extension(format: GpuTextureFormat, role: GpuFormatRole) -> bool {
     format == GpuTextureFormat::Depth32FloatStencil8
-        || (format == GpuTextureFormat::Rg11b10Ufloat
-            && role == GpuFormatRole::ColorAttachment)
+        || (format == GpuTextureFormat::Rg11b10Ufloat && role == GpuFormatRole::ColorAttachment)
 }
 
 #[cfg(test)]
@@ -1168,19 +1167,26 @@ mod tests {
             let descriptor = GpuContextDescriptor::new(GpuCapabilityRequirements::new())
                 .require_format_role(format, role);
             let candidate = evaluate_candidate(&descriptor, make_adapter(), true).unwrap();
-            assert_eq!(candidate.portability(), GpuPortabilityClass::PortableBaseline);
-            assert!(!candidate.portability_evidence().reasons().any(|reason| matches!(
-                reason,
-                GpuPortabilityReason::DeclaredFormatRoleExtension {
-                    format: GpuTextureFormat::Rg11b10Ufloat,
-                    ..
-                }
-            )));
+            assert_eq!(
+                candidate.portability(),
+                GpuPortabilityClass::PortableBaseline
+            );
+            assert!(
+                !candidate
+                    .portability_evidence()
+                    .reasons()
+                    .any(|reason| matches!(
+                        reason,
+                        GpuPortabilityReason::DeclaredFormatRoleExtension {
+                            format: GpuTextureFormat::Rg11b10Ufloat,
+                            ..
+                        }
+                    ))
+            );
             assert!(
                 evaluate_candidate(
-                    &descriptor.with_portability_policy(
-                        GpuPortabilityPolicy::RequirePortableBaseline
-                    ),
+                    &descriptor
+                        .with_portability_policy(GpuPortabilityPolicy::RequirePortableBaseline),
                     make_adapter(),
                     true,
                 )
@@ -1196,10 +1202,11 @@ mod tests {
             GpuPortabilityClass::PortableWithDeclaredExtensions
         );
         assert!(candidate.portability_evidence().reasons().any(|reason| {
-            reason == GpuPortabilityReason::DeclaredFormatRoleExtension {
-                format,
-                role: GpuFormatRole::ColorAttachment,
-            }
+            reason
+                == GpuPortabilityReason::DeclaredFormatRoleExtension {
+                    format,
+                    role: GpuFormatRole::ColorAttachment,
+                }
         }));
         assert!(matches!(
             evaluate_candidate(
