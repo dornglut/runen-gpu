@@ -8,20 +8,76 @@ struct BcCase {
 }
 
 const BC_CASES: [BcCase; 14] = [
-    BcCase { format: GpuTextureFormat::Bc1RgbaUnorm, block_bytes: 8, srgb: false },
-    BcCase { format: GpuTextureFormat::Bc1RgbaUnormSrgb, block_bytes: 8, srgb: true },
-    BcCase { format: GpuTextureFormat::Bc2RgbaUnorm, block_bytes: 16, srgb: false },
-    BcCase { format: GpuTextureFormat::Bc2RgbaUnormSrgb, block_bytes: 16, srgb: true },
-    BcCase { format: GpuTextureFormat::Bc3RgbaUnorm, block_bytes: 16, srgb: false },
-    BcCase { format: GpuTextureFormat::Bc3RgbaUnormSrgb, block_bytes: 16, srgb: true },
-    BcCase { format: GpuTextureFormat::Bc4RUnorm, block_bytes: 8, srgb: false },
-    BcCase { format: GpuTextureFormat::Bc4RSnorm, block_bytes: 8, srgb: false },
-    BcCase { format: GpuTextureFormat::Bc5RgUnorm, block_bytes: 16, srgb: false },
-    BcCase { format: GpuTextureFormat::Bc5RgSnorm, block_bytes: 16, srgb: false },
-    BcCase { format: GpuTextureFormat::Bc6hRgbUfloat, block_bytes: 16, srgb: false },
-    BcCase { format: GpuTextureFormat::Bc6hRgbFloat, block_bytes: 16, srgb: false },
-    BcCase { format: GpuTextureFormat::Bc7RgbaUnorm, block_bytes: 16, srgb: false },
-    BcCase { format: GpuTextureFormat::Bc7RgbaUnormSrgb, block_bytes: 16, srgb: true },
+    BcCase {
+        format: GpuTextureFormat::Bc1RgbaUnorm,
+        block_bytes: 8,
+        srgb: false,
+    },
+    BcCase {
+        format: GpuTextureFormat::Bc1RgbaUnormSrgb,
+        block_bytes: 8,
+        srgb: true,
+    },
+    BcCase {
+        format: GpuTextureFormat::Bc2RgbaUnorm,
+        block_bytes: 16,
+        srgb: false,
+    },
+    BcCase {
+        format: GpuTextureFormat::Bc2RgbaUnormSrgb,
+        block_bytes: 16,
+        srgb: true,
+    },
+    BcCase {
+        format: GpuTextureFormat::Bc3RgbaUnorm,
+        block_bytes: 16,
+        srgb: false,
+    },
+    BcCase {
+        format: GpuTextureFormat::Bc3RgbaUnormSrgb,
+        block_bytes: 16,
+        srgb: true,
+    },
+    BcCase {
+        format: GpuTextureFormat::Bc4RUnorm,
+        block_bytes: 8,
+        srgb: false,
+    },
+    BcCase {
+        format: GpuTextureFormat::Bc4RSnorm,
+        block_bytes: 8,
+        srgb: false,
+    },
+    BcCase {
+        format: GpuTextureFormat::Bc5RgUnorm,
+        block_bytes: 16,
+        srgb: false,
+    },
+    BcCase {
+        format: GpuTextureFormat::Bc5RgSnorm,
+        block_bytes: 16,
+        srgb: false,
+    },
+    BcCase {
+        format: GpuTextureFormat::Bc6hRgbUfloat,
+        block_bytes: 16,
+        srgb: false,
+    },
+    BcCase {
+        format: GpuTextureFormat::Bc6hRgbFloat,
+        block_bytes: 16,
+        srgb: false,
+    },
+    BcCase {
+        format: GpuTextureFormat::Bc7RgbaUnorm,
+        block_bytes: 16,
+        srgb: false,
+    },
+    BcCase {
+        format: GpuTextureFormat::Bc7RgbaUnormSrgb,
+        block_bytes: 16,
+        srgb: true,
+    },
 ];
 
 fn label(value: impl AsRef<str>) -> GpuResourceLabel {
@@ -48,7 +104,9 @@ fn common(value: impl AsRef<str>) -> GpuResourceCommon {
 fn copy_requirements() -> GpuCapabilityRequirements {
     let mut requirements = GpuCapabilityRequirements::new();
     requirements
-        .insert(GpuCapabilityRequirement::Required(GpuCapabilityFeature::Copy))
+        .insert(GpuCapabilityRequirement::Required(
+            GpuCapabilityFeature::Copy,
+        ))
         .unwrap();
     requirements
 }
@@ -80,14 +138,7 @@ fn descriptor(
     GpuTextureDescriptor::new(
         common("BC descriptor"),
         dimension,
-        GpuTextureExtent::new(
-            &resource_label,
-            dimension,
-            width,
-            height,
-            depth_or_layers,
-        )
-        .unwrap(),
+        GpuTextureExtent::new(&resource_label, dimension, width, height, depth_or_layers).unwrap(),
         mip_level_count,
         sample_count,
         format,
@@ -232,17 +283,7 @@ fn bc_resource_contract_is_d2_single_sample_block_aligned_and_non_render_storage
             GpuTextureUsage::DepthStencilAttachment,
         ] {
             assert!(
-                descriptor(
-                    GpuTextureDimension::D2,
-                    8,
-                    8,
-                    1,
-                    1,
-                    1,
-                    case.format,
-                    [usage],
-                )
-                .is_err(),
+                descriptor(GpuTextureDimension::D2, 8, 8, 1, 1, 1, case.format, [usage],).is_err(),
                 "{:?} {usage:?}",
                 case.format
             );

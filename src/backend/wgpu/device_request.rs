@@ -15,7 +15,7 @@ use crate::{
 };
 use crate::api::texture_format;
 #[cfg(not(target_arch = "wasm32"))]
-use crate::{GpuAdapterFacts, canonical_candidate_input_key};
+use crate::GpuAdapterFacts;
 use std::sync::Arc;
 #[cfg(not(target_arch = "wasm32"))]
 use wgpu::Backends;
@@ -290,7 +290,7 @@ fn select_enumerated_adapter<T>(
     mut candidates: Vec<NativeAdapterCandidate<T>>,
 ) -> Result<(T, GpuCandidateSelection), GpuContextRequestError> {
     candidates.sort_by_key(|candidate| {
-        canonical_candidate_input_key(&candidate.facts, candidate.environment)
+        crate::canonical_candidate_input_key(&candidate.facts, candidate.environment)
     });
     let selection = select_candidate_inputs(
         descriptor,

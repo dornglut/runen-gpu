@@ -9,6 +9,7 @@ pub(crate) use records::{
     TextureRealizationRecord, TextureViewRealizationRecord,
 };
 
+use super::texture_format_mapping::texture_format;
 use super::{WgpuContextState, WgpuDeviceHealth, WgpuErrorAttributionGate};
 use crate::{
     GpuBufferHandle, GpuContext, GpuContextAffinity, GpuContextAffinityError, GpuQuerySetHandle,
@@ -321,7 +322,7 @@ impl GpuContext {
                     .object
                     .create_view(&TextureViewDescriptor {
                         label: Some(descriptor.common().label().as_str()),
-                        format: descriptor.format().map(lowering::map_texture_format),
+                        format: descriptor.format().map(texture_format),
                         dimension: Some(lowering::map_texture_view_dimension(&descriptor)),
                         usage: None,
                         aspect: map_texture_aspect(subresources.aspect()),
