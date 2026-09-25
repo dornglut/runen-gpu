@@ -625,11 +625,9 @@ mod browser {
                         format_provenance("browser packed color attachment clear"),
                     )
                     .unwrap();
-                let graph = GpuPreparedWorkGraph::prepare(
-                    format_label(name),
-                    [builder.finish().unwrap()],
-                )
-                .unwrap();
+                let graph =
+                    GpuPreparedWorkGraph::prepare(format_label(name), [builder.finish().unwrap()])
+                        .unwrap();
                 let prepared = context.prepare_submission(graph).await.unwrap();
                 let submission = context.submit_prepared(prepared).unwrap();
                 const MAX_PROGRESS_TICKS: usize = 2_000;

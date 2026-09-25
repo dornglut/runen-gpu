@@ -248,12 +248,8 @@ fn exercise_role_realization(
             let binding = GpuBindingDeclaration::new(
                 binding_key,
                 GpuShaderStages::one(GpuShaderStage::Compute),
-                GpuBindingKind::sampled_texture(
-                    sample_class,
-                    GpuTextureViewDimension::D2,
-                    false,
-                )
-                .unwrap(),
+                GpuBindingKind::sampled_texture(sample_class, GpuTextureViewDimension::D2, false)
+                    .unwrap(),
                 None,
                 "packed_texture",
                 GpuBindingProvenance::new("packed sampled binding qualification", None).unwrap(),
@@ -269,17 +265,14 @@ fn exercise_role_realization(
                 )],
             )
             .unwrap();
-            let _realized_bind_group = pollster::block_on(
-                context.realize_bind_group(&realized_layout, [binding_value]),
-            )
-            .expect("packed sampled binding must realize");
+            let _realized_bind_group =
+                pollster::block_on(context.realize_bind_group(&realized_layout, [binding_value]))
+                    .expect("packed sampled binding must realize");
         }
         GpuFormatRole::ColorAttachment => {
             let attachment = GpuRenderColorAttachment::new(
                 view.clone(),
-                GpuColorAttachmentLoad::Clear(
-                    GpuColorClearValue::new(0.0, 0.0, 0.0, 0.0).unwrap(),
-                ),
+                GpuColorAttachmentLoad::Clear(GpuColorClearValue::new(0.0, 0.0, 0.0, 0.0).unwrap()),
                 GpuAttachmentStore::Store,
                 None,
             )
