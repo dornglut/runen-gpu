@@ -157,6 +157,7 @@ impl GpuReadbackOperation {
         source: GpuTransferRegion,
         id: GpuReadbackId,
     ) -> Result<Self, GpuWorkOperationError> {
+        source.logical_byte_len()?;
         let source_access = source.access(
             GpuBufferAccessKind::CopySource,
             GpuTextureAccessKind::CopySource,

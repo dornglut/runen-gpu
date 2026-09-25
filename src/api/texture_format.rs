@@ -51,6 +51,20 @@ impl GpuTextureAspectClass {
     const fn has_stencil(self) -> bool {
         matches!(self, Self::Stencil | Self::DepthStencil)
     }
+
+    const fn requires_full_copy_plane(self) -> bool {
+        !matches!(self, Self::Color)
+    }
+
+    const fn texture_to_texture_copy_aspect_valid(self, aspect: GpuTextureAspect) -> bool {
+        matches!(
+            (self, self.canonical(aspect)),
+            (Self::Color, Some(GpuTextureAspect::Color))
+                | (Self::Depth, Some(GpuTextureAspect::DepthOnly))
+                | (Self::Stencil, Some(GpuTextureAspect::StencilOnly))
+                | (Self::DepthStencil, Some(GpuTextureAspect::All))
+        )
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -480,18 +494,6 @@ const fn semantics(format: GpuTextureFormat) -> GpuTextureFormatSemantics {
     }
 }
 
-pub(crate) const fn bytes_per_texel(format: GpuTextureFormat) -> u32 {
-    let value = semantics(format);
-    match (
-        value.color_copy_block_size,
-        value.depth_copy_block_size,
-        value.stencil_copy_block_size,
-    ) {
-        (Some(size), None, None) | (None, Some(size), None) | (None, None, Some(size)) => size,
-        _ => 0,
-    }
-}
-
 pub(crate) const fn is_depth(format: GpuTextureFormat) -> bool {
     semantics(format).aspect_class.has_depth()
 }
@@ -531,6 +533,19 @@ pub(crate) const fn default_copy_block_size(format: GpuTextureFormat) -> Option<
 
 pub(crate) const fn supports_aspect(format: GpuTextureFormat, aspect: GpuTextureAspect) -> bool {
     semantics(format).aspect_class.supports(aspect)
+}
+
+pub(crate) const fn requires_full_copy_plane(format: GpuTextureFormat) -> bool {
+    semantics(format).aspect_class.requires_full_copy_plane()
+}
+
+pub(crate) const fn texture_to_texture_copy_aspect_valid(
+    format: GpuTextureFormat,
+    aspect: GpuTextureAspect,
+) -> bool {
+    semantics(format)
+        .aspect_class
+        .texture_to_texture_copy_aspect_valid(aspect)
 }
 
 pub(crate) const fn canonical_copy_aspect(
@@ -985,7 +1000,12 @@ mod tests {
             assert_eq!(block_dimensions(format), (1, 1));
             assert_eq!(copy_block_size(format, GpuTextureAspect::All), Some(bytes));
             assert_eq!(copy_block_size(format, explicit_aspect), Some(bytes));
-            assert_eq!(bytes_per_texel(format), bytes);
+            assert_eq!(format.block_dimensions(), block_dimensions(format));
+            assert_eq!(
+                format.copy_block_size(GpuTextureAspect::All),
+                copy_block_size(format, GpuTextureAspect::All)
+            );
+            assert_eq!(format.copy_block_size(GpuTextureAspect::All), Some(bytes));
             assert_eq!(is_depth(format), depth);
             assert_eq!(is_srgb(format), srgb);
             assert_eq!(paired_view_format(format), pair);
@@ -1167,6 +1187,43 @@ mod tests {
                     GpuTextureAspectClass::Stencil | GpuTextureAspectClass::DepthStencil
                 )
             );
+        }
+    }
+
+    #[test]
+    fn copy_operation_rules_are_closed_over_aspect_identity() {
+        for (class, full_plane, valid_aspect, invalid_aspects) in [
+            (
+                GpuTextureAspectClass::Color,
+                false,
+                GpuTextureAspect::Color,
+                [GpuTextureAspect::DepthOnly, GpuTextureAspect::StencilOnly],
+            ),
+            (
+                GpuTextureAspectClass::Depth,
+                true,
+                GpuTextureAspect::DepthOnly,
+                [GpuTextureAspect::Color, GpuTextureAspect::StencilOnly],
+            ),
+            (
+                GpuTextureAspectClass::Stencil,
+                true,
+                GpuTextureAspect::StencilOnly,
+                [GpuTextureAspect::Color, GpuTextureAspect::DepthOnly],
+            ),
+            (
+                GpuTextureAspectClass::DepthStencil,
+                true,
+                GpuTextureAspect::All,
+                [GpuTextureAspect::DepthOnly, GpuTextureAspect::StencilOnly],
+            ),
+        ] {
+            assert_eq!(class.requires_full_copy_plane(), full_plane);
+            assert!(class.texture_to_texture_copy_aspect_valid(valid_aspect));
+            assert!(class.texture_to_texture_copy_aspect_valid(GpuTextureAspect::All));
+            for invalid in invalid_aspects {
+                assert!(!class.texture_to_texture_copy_aspect_valid(invalid));
+            }
         }
     }
 

@@ -647,6 +647,46 @@ fn depth_attachment_load_clear_store_and_requirements_are_typed() {
 }
 
 #[test]
+fn depth_texture_to_texture_copy_accepts_canonical_whole_aspect() {
+    let mut allocator = allocator();
+    let source = texture(
+        &mut allocator,
+        "depth copy source",
+        1,
+        GpuTextureFormat::Depth32Float,
+        [GpuTextureUsage::CopySource],
+    );
+    let destination = texture(
+        &mut allocator,
+        "depth copy destination",
+        1,
+        GpuTextureFormat::Depth32Float,
+        [GpuTextureUsage::CopyDestination],
+    );
+    let extent = GpuCopyExtent::new(16, 16, 1).unwrap();
+    let source_region = GpuTextureCopyRegion::new(
+        &source,
+        0,
+        GpuTextureOrigin::new(0, 0, 0),
+        GpuTextureAspect::All,
+        extent,
+    )
+    .unwrap();
+    let destination_region = GpuTextureCopyRegion::new(
+        &destination,
+        0,
+        GpuTextureOrigin::new(0, 0, 0),
+        GpuTextureAspect::DepthOnly,
+        extent,
+    )
+    .unwrap();
+
+    assert_eq!(source_region.aspect(), GpuTextureAspect::DepthOnly);
+    assert_eq!(destination_region.aspect(), GpuTextureAspect::DepthOnly);
+    assert!(GpuCopyOperation::texture_to_texture(source_region, destination_region).is_ok());
+}
+
+#[test]
 fn all_copy_directions_validate_logical_coverage() {
     let mut allocator = allocator();
     let source = buffer(&mut allocator, "source", 2048, [GpuBufferUsage::CopySource]);

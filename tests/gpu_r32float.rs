@@ -123,10 +123,13 @@ fn progress_submission_and_readback(
 }
 
 #[test]
-fn r32float_is_public_backend_neutral_and_four_bytes_per_texel() {
+fn r32float_is_public_backend_neutral_with_four_byte_copy_blocks() {
     let format = GpuTextureFormat::R32Float;
 
-    assert_eq!(format.bytes_per_texel(), 4);
+    assert_eq!(format.block_dimensions(), (1, 1));
+    assert_eq!(format.copy_block_size(GpuTextureAspect::All), Some(4));
+    assert_eq!(format.copy_block_size(GpuTextureAspect::Color), Some(4));
+    assert_eq!(format.copy_block_size(GpuTextureAspect::DepthOnly), None);
     assert!(!format.is_depth());
     assert!(!format.is_srgb());
 }
@@ -403,7 +406,10 @@ fn new_32bit_formats_round_trip_when_adapter_reports_copy_roles() {
             .expect("admitted 32-bit format must have adapter facts");
         assert!(admitted.copy_source && admitted.copy_destination);
         let mut allocator = GpuWorkResourceIdAllocator::new();
-        let bytes_per_row = WIDTH * format.bytes_per_texel();
+        let bytes_per_row = WIDTH
+            * format
+                .copy_block_size(GpuTextureAspect::Color)
+                .expect("32-bit color format must have a copy block size");
         let expected = (0..bytes_per_row * HEIGHT)
             .map(|index| (index % 251) as u8)
             .collect::<Vec<_>>();

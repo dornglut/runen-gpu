@@ -131,15 +131,14 @@ impl GpuTextureCopyRegion {
                 "use a valid mip of a single-sampled texture",
             ));
         }
-        let Some(canonical_aspect) =
-            texture_format::canonical_copy_aspect(descriptor.format(), aspect)
+        let Some(canonical_aspect) = texture_format::canonical_aspect(descriptor.format(), aspect)
         else {
             return Err(GpuWorkOperationError::invalid(
                 "construct GPU texture copy region",
                 label,
                 Some(texture.diagnostic_identity()),
                 GpuWorkOperationCause::InvalidCopyRegion,
-                "select a copy aspect represented unambiguously by the normalized texture format",
+                "select an aspect represented by the normalized texture format",
             ));
         };
         let (mip_width, mip_height, mip_depth_or_layers) = mip_extent(texture, mip_level);
@@ -169,7 +168,7 @@ impl GpuTextureCopyRegion {
                 "keep origin, extent, and aspect inside the selected mip",
             ));
         }
-        if canonical_aspect == GpuTextureAspect::DepthOnly
+        if texture_format::requires_full_copy_plane(descriptor.format())
             && (origin.x() != 0
                 || origin.y() != 0
                 || extent.width() != mip_width
@@ -180,7 +179,7 @@ impl GpuTextureCopyRegion {
                 label,
                 Some(texture.diagnostic_identity()),
                 GpuWorkOperationCause::InvalidCopyRegion,
-                "copy the complete depth mip plane from zero x/y origin",
+                "copy the complete depth/stencil mip plane from zero x/y origin",
             ));
         }
         let (base_array_layer, array_layer_count) = match descriptor.dimension() {
@@ -398,15 +397,29 @@ impl GpuCopyOperation {
             destination.texture().descriptor().format(),
         );
         let same_extent = source.extent() == destination.extent();
+        let source_aspect_valid = texture_format::texture_to_texture_copy_aspect_valid(
+            source.texture().descriptor().format(),
+            source.aspect(),
+        );
+        let destination_aspect_valid = texture_format::texture_to_texture_copy_aspect_valid(
+            destination.texture().descriptor().format(),
+            destination.aspect(),
+        );
         let aliases = source.texture() == destination.texture()
             && source
                 .subresources()
                 .overlaps(destination.subresources(), source.aspect());
-        if !copy_compatible || !same_extent || source.aspect() != destination.aspect() || aliases {
+        if !copy_compatible
+            || !same_extent
+            || source.aspect() != destination.aspect()
+            || !source_aspect_valid
+            || !destination_aspect_valid
+            || aliases
+        {
             return Err(copy_error(
                 "construct GPU texture-to-texture copy",
                 source.texture().diagnostic_identity(),
-                "use copy-compatible formats, matching aspects/extents, and non-overlapping source/destination storage",
+                "use copy-compatible formats, texture-to-texture-valid matching aspects/extents, and non-overlapping source/destination storage",
             ));
         }
         texture_copy_access(&source, GpuTextureAccessKind::CopySource)?;

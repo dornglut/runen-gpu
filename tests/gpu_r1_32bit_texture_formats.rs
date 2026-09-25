@@ -84,7 +84,7 @@ fn inspect() {{
 }
 
 #[test]
-fn baseline_32bit_formats_expose_exact_public_pixel_sizes() {
+fn baseline_32bit_formats_expose_exact_public_copy_block_sizes() {
     for (format, bytes) in [
         (GpuTextureFormat::R32Sint, 4),
         (GpuTextureFormat::Rg32Uint, 8),
@@ -94,7 +94,10 @@ fn baseline_32bit_formats_expose_exact_public_pixel_sizes() {
         (GpuTextureFormat::Rgba32Sint, 16),
         (GpuTextureFormat::Rgba32Float, 16),
     ] {
-        assert_eq!(format.bytes_per_texel(), bytes);
+        assert_eq!(format.block_dimensions(), (1, 1));
+        assert_eq!(format.copy_block_size(GpuTextureAspect::All), Some(bytes));
+        assert_eq!(format.copy_block_size(GpuTextureAspect::Color), Some(bytes));
+        assert_eq!(format.copy_block_size(GpuTextureAspect::DepthOnly), None);
         assert!(!format.is_depth());
         assert!(!format.is_srgb());
     }
@@ -229,7 +232,7 @@ fn prepared_texture_data_uses_4_8_and_16_byte_block_rows_through_public_descript
     const WIDTH: u32 = 3;
     const HEIGHT: u32 = 2;
 
-    for (name, format, bytes_per_texel) in [
+    for (name, format, copy_block_bytes) in [
         ("r32sint", GpuTextureFormat::R32Sint, 4_u32),
         ("rg32float", GpuTextureFormat::Rg32Float, 8_u32),
         ("rgba32sint", GpuTextureFormat::Rgba32Sint, 16_u32),
@@ -238,7 +241,7 @@ fn prepared_texture_data_uses_4_8_and_16_byte_block_rows_through_public_descript
         let extent =
             GpuTextureExtent::new(&resource_label, GpuTextureDimension::D2, WIDTH, HEIGHT, 1)
                 .unwrap();
-        let bytes_per_row = WIDTH * bytes_per_texel;
+        let bytes_per_row = WIDTH * copy_block_bytes;
         let byte_len = (bytes_per_row * HEIGHT) as usize;
         let data = PreparedGpuData::<TransferData>::from_pod_transfer(
             format!("{name} bytes"),
