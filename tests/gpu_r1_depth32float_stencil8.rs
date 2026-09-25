@@ -231,6 +231,7 @@ fn combined_pipeline(
         GpuTextureFormat::Depth32FloatStencil8,
         Some(GpuDepthStateDescriptor::new(depth_write, depth_compare)),
         Some(stencil),
+        GpuDepthBiasState::default(),
     )
     .unwrap();
     let state = GpuRenderPipelineStateDescriptor::new(

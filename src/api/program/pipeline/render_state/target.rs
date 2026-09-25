@@ -383,11 +383,64 @@ impl GpuStencilStateDescriptor {
     }
 }
 
+/// Canonical finite depth-bias state.
+///
+/// Floating values are stored as canonical IEEE-754 bits so render-pipeline
+/// equality and hashing remain deterministic. Negative zero is normalized to
+/// positive zero; NaN and infinity are rejected.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+pub struct GpuDepthBiasState {
+    constant: i32,
+    slope_scale_bits: u32,
+    clamp_bits: u32,
+}
+
+impl GpuDepthBiasState {
+    pub fn new(
+        constant: i32,
+        slope_scale: f32,
+        clamp: f32,
+    ) -> Result<Self, GpuProgramContractError> {
+        if !slope_scale.is_finite() || !clamp.is_finite() {
+            return Err(invalid_attachment_state(
+                format!(
+                    "depth_bias_constant={constant}, slope_scale={slope_scale:?}, clamp={clamp:?}"
+                ),
+                "provide finite depth-bias slope-scale and clamp values",
+            ));
+        }
+        let slope_scale = if slope_scale == 0.0 { 0.0 } else { slope_scale };
+        let clamp = if clamp == 0.0 { 0.0 } else { clamp };
+        Ok(Self {
+            constant,
+            slope_scale_bits: slope_scale.to_bits(),
+            clamp_bits: clamp.to_bits(),
+        })
+    }
+
+    pub const fn constant(self) -> i32 {
+        self.constant
+    }
+
+    pub fn slope_scale(self) -> f32 {
+        f32::from_bits(self.slope_scale_bits)
+    }
+
+    pub fn clamp(self) -> f32 {
+        f32::from_bits(self.clamp_bits)
+    }
+
+    pub const fn is_zero(self) -> bool {
+        self.constant == 0 && self.slope_scale_bits == 0 && self.clamp_bits == 0
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct GpuDepthStencilStateDescriptor {
     format: GpuTextureFormat,
     depth: Option<GpuDepthStateDescriptor>,
     stencil: Option<GpuStencilStateDescriptor>,
+    bias: GpuDepthBiasState,
 }
 
 impl GpuDepthStencilStateDescriptor {
@@ -395,6 +448,7 @@ impl GpuDepthStencilStateDescriptor {
         format: GpuTextureFormat,
         depth: Option<GpuDepthStateDescriptor>,
         stencil: Option<GpuStencilStateDescriptor>,
+        bias: GpuDepthBiasState,
     ) -> Result<Self, GpuProgramContractError> {
         if depth.is_none() && stencil.is_none() {
             return Err(invalid_attachment_state(
@@ -418,6 +472,7 @@ impl GpuDepthStencilStateDescriptor {
             format,
             depth,
             stencil,
+            bias,
         })
     }
 
@@ -431,6 +486,10 @@ impl GpuDepthStencilStateDescriptor {
 
     pub const fn stencil(self) -> Option<GpuStencilStateDescriptor> {
         self.stencil
+    }
+
+    pub const fn bias(self) -> GpuDepthBiasState {
+        self.bias
     }
 }
 
@@ -567,6 +626,7 @@ mod tests {
                         GpuCompareFunction::LessEqual
                     )),
                     None,
+                    GpuDepthBiasState::default(),
                 )
                 .is_ok()
             );
@@ -637,9 +697,13 @@ mod tests {
             GpuStencilOperation::Replace,
         );
         let stencil = GpuStencilStateDescriptor::new(keep, replace, u32::MAX, 0xff);
-        let state =
-            GpuDepthStencilStateDescriptor::new(GpuTextureFormat::Stencil8, None, Some(stencil))
-                .unwrap();
+        let state = GpuDepthStencilStateDescriptor::new(
+            GpuTextureFormat::Stencil8,
+            None,
+            Some(stencil),
+            GpuDepthBiasState::default(),
+        )
+        .unwrap();
         assert_eq!(state.stencil(), Some(stencil));
         assert!(stencil.may_write());
 
@@ -649,6 +713,7 @@ mod tests {
                 GpuTextureFormat::Depth24PlusStencil8,
                 Some(depth),
                 None,
+                GpuDepthBiasState::default(),
             )
             .is_ok()
         );
@@ -657,6 +722,7 @@ mod tests {
                 GpuTextureFormat::Depth24PlusStencil8,
                 None,
                 Some(stencil),
+                GpuDepthBiasState::default(),
             )
             .is_ok()
         );
@@ -664,6 +730,7 @@ mod tests {
             GpuTextureFormat::Depth24PlusStencil8,
             Some(depth),
             Some(stencil),
+            GpuDepthBiasState::default(),
         )
         .unwrap();
         assert_eq!(combined.depth(), Some(depth));
@@ -676,6 +743,7 @@ mod tests {
                     GpuCompareFunction::Always
                 )),
                 None,
+                GpuDepthBiasState::default(),
             )
             .is_err()
         );
@@ -684,6 +752,7 @@ mod tests {
                 GpuTextureFormat::Depth32Float,
                 None,
                 Some(stencil),
+                GpuDepthBiasState::default(),
             )
             .is_err()
         );

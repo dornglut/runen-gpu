@@ -135,6 +135,9 @@ pub(super) fn normalized_features(
     {
         supported.push(GpuCapabilityFeature::IndirectExecution);
     }
+    if !unknown_flags && flags.contains(DownlevelFlags::DEPTH_BIAS_CLAMP) {
+        supported.push(GpuCapabilityFeature::DepthBiasClamp);
+    }
     // The current WGPU Metal timestamp surface is not sufficient proof of RunenGPU's ordered
     // marker semantics. Keep the normalized capability conservative until Apple-native
     // marker + resolve/readback evidence proves the backend path truthful.
@@ -368,6 +371,7 @@ mod tests {
         assert!(full.contains(&GpuCapabilityFeature::IndirectExecution));
         assert!(full.contains(&GpuCapabilityFeature::RenderPipeline));
         assert!(full.contains(&GpuCapabilityFeature::Copy));
+        assert!(full.contains(&GpuCapabilityFeature::DepthBiasClamp));
         assert!(!full.contains(&GpuCapabilityFeature::Presentation));
 
         let missing_compute = normalized_features(
@@ -381,6 +385,16 @@ mod tests {
         assert!(!missing_compute.contains(&GpuCapabilityFeature::IndirectExecution));
         assert!(!missing_compute.contains(&GpuCapabilityFeature::RenderPipeline));
         assert!(!missing_compute.contains(&GpuCapabilityFeature::Copy));
+        assert!(!missing_compute.contains(&GpuCapabilityFeature::DepthBiasClamp));
+
+        let clamp_only = normalized_features(
+            Backend::Vulkan,
+            Features::empty(),
+            DownlevelFlags::DEPTH_BIAS_CLAMP,
+            false,
+            false,
+        );
+        assert!(clamp_only.contains(&GpuCapabilityFeature::DepthBiasClamp));
 
         let unknown = normalized_features(
             Backend::Vulkan,
@@ -393,6 +407,7 @@ mod tests {
         assert!(!unknown.contains(&GpuCapabilityFeature::IndirectExecution));
         assert!(!unknown.contains(&GpuCapabilityFeature::RenderPipeline));
         assert!(!unknown.contains(&GpuCapabilityFeature::Copy));
+        assert!(!unknown.contains(&GpuCapabilityFeature::DepthBiasClamp));
         assert!(unknown.contains(&GpuCapabilityFeature::Presentation));
     }
 

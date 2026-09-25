@@ -111,13 +111,21 @@ impl GpuRenderPipelineDescriptor {
             &mut requirements,
             GpuCapabilityRequirement::Required(GpuCapabilityFeature::RenderPipeline),
         )?;
-        if state.depth_stencil().is_some() {
+        if let Some(depth_stencil) = state.depth_stencil() {
             insert_pipeline_requirement(
                 operation,
                 entry_points.diagnostic_label(),
                 &mut requirements,
                 GpuCapabilityRequirement::Required(GpuCapabilityFeature::DepthAttachment),
             )?;
+            if depth_stencil.bias().clamp() != 0.0 {
+                insert_pipeline_requirement(
+                    operation,
+                    entry_points.diagnostic_label(),
+                    &mut requirements,
+                    GpuCapabilityRequirement::Required(GpuCapabilityFeature::DepthBiasClamp),
+                )?;
+            }
         }
         for requirement in program.requirements().iter() {
             insert_pipeline_requirement(

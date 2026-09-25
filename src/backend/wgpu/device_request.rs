@@ -431,6 +431,7 @@ fn wgpu_features_for(feature: GpuCapabilityFeature) -> Features {
             Features::STORAGE_RESOURCE_BINDING_ARRAY
         }
         GpuCapabilityFeature::UniformBufferBindingArray => Features::UNIFORM_BUFFER_BINDING_ARRAYS,
+        GpuCapabilityFeature::DepthBiasClamp => Features::empty(),
         _ => Features::empty(),
     }
 }
@@ -863,6 +864,14 @@ mod tests {
         assert!(
             requested_features(&candidate_with_rg11b10_role(GpuFormatRole::ColorAttachment))
                 .contains(Features::RG11B10UFLOAT_RENDERABLE)
+        );
+    }
+
+    #[test]
+    fn depth_bias_clamp_is_an_admission_fact_not_a_wgpu_feature_request() {
+        assert_eq!(
+            wgpu_features_for(GpuCapabilityFeature::DepthBiasClamp),
+            Features::empty()
         );
     }
 

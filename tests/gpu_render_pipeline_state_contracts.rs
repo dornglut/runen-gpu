@@ -1,6 +1,6 @@
 use runen_gpu::{
-    GpuColorTargetStateDescriptor, GpuColorWriteMask, GpuCompareFunction, GpuDepthStateDescriptor,
-    GpuDepthStencilStateDescriptor, GpuFragmentOutputStateDescriptor,
+    GpuColorTargetStateDescriptor, GpuColorWriteMask, GpuCompareFunction, GpuDepthBiasState,
+    GpuDepthStateDescriptor, GpuDepthStencilStateDescriptor, GpuFragmentOutputStateDescriptor,
     GpuMultisampleStateDescriptor, GpuPrimitiveStateDescriptor, GpuProgramContractCause,
     GpuRenderPipelineStateDescriptor, GpuTextureFormat, GpuVertexInputStateDescriptor,
 };
@@ -24,6 +24,7 @@ fn depth_state() -> GpuDepthStencilStateDescriptor {
             GpuCompareFunction::LessEqual,
         )),
         None,
+        GpuDepthBiasState::default(),
     )
     .expect("test depth state should be valid")
 }
@@ -151,4 +152,104 @@ fn alpha_to_coverage_requires_the_first_blendable_alpha_target() {
     )
     .expect("the first color target supports alpha-to-coverage");
     assert!(valid.has_color_targets());
+}
+
+#[test]
+fn depth_bias_is_retained_canonical_and_part_of_pipeline_identity() {
+    let bias = GpuDepthBiasState::new(7, -0.0, 0.25).unwrap();
+    assert_eq!(bias.constant(), 7);
+    assert_eq!(bias.slope_scale().to_bits(), 0.0_f32.to_bits());
+    assert_eq!(bias.clamp(), 0.25);
+    assert!(!bias.is_zero());
+    assert!(GpuDepthBiasState::default().is_zero());
+    assert!(GpuDepthBiasState::new(0, f32::NAN, 0.0).is_err());
+    assert!(GpuDepthBiasState::new(0, f32::INFINITY, 0.0).is_err());
+    assert!(GpuDepthBiasState::new(0, 0.0, f32::NEG_INFINITY).is_err());
+
+    let depth = GpuDepthStencilStateDescriptor::new(
+        GpuTextureFormat::Depth32Float,
+        Some(GpuDepthStateDescriptor::new(
+            true,
+            GpuCompareFunction::LessEqual,
+        )),
+        None,
+        bias,
+    )
+    .unwrap();
+    assert_eq!(depth.bias(), bias);
+
+    let triangle = GpuRenderPipelineStateDescriptor::new(
+        vertex_input(),
+        Some(GpuFragmentOutputStateDescriptor::new([color_target(
+            GpuTextureFormat::Rgba8Unorm,
+        )])),
+        GpuPrimitiveStateDescriptor::default(),
+        Some(depth),
+        GpuMultisampleStateDescriptor::default(),
+    )
+    .unwrap();
+    let neutral_depth = GpuDepthStencilStateDescriptor::new(
+        GpuTextureFormat::Depth32Float,
+        Some(GpuDepthStateDescriptor::new(
+            true,
+            GpuCompareFunction::LessEqual,
+        )),
+        None,
+        GpuDepthBiasState::default(),
+    )
+    .unwrap();
+    let neutral = GpuRenderPipelineStateDescriptor::new(
+        vertex_input(),
+        Some(GpuFragmentOutputStateDescriptor::new([color_target(
+            GpuTextureFormat::Rgba8Unorm,
+        )])),
+        GpuPrimitiveStateDescriptor::default(),
+        Some(neutral_depth),
+        GpuMultisampleStateDescriptor::default(),
+    )
+    .unwrap();
+    assert_ne!(triangle, neutral);
+    assert_ne!(hash_of(&triangle), hash_of(&neutral));
+}
+
+#[test]
+fn nonzero_depth_bias_is_rejected_for_point_and_line_topologies() {
+    let bias = GpuDepthBiasState::new(1, 0.5, 0.25).unwrap();
+    for topology in [
+        runen_gpu::GpuPrimitiveTopology::PointList,
+        runen_gpu::GpuPrimitiveTopology::LineList,
+        runen_gpu::GpuPrimitiveTopology::LineStrip,
+    ] {
+        let primitive = GpuPrimitiveStateDescriptor::new(
+            topology,
+            None,
+            runen_gpu::GpuFrontFace::CounterClockwise,
+            runen_gpu::GpuCullMode::None,
+        )
+        .unwrap();
+        let depth = GpuDepthStencilStateDescriptor::new(
+            GpuTextureFormat::Depth32Float,
+            Some(GpuDepthStateDescriptor::new(
+                true,
+                GpuCompareFunction::LessEqual,
+            )),
+            None,
+            bias,
+        )
+        .unwrap();
+        let error = GpuRenderPipelineStateDescriptor::new(
+            vertex_input(),
+            Some(GpuFragmentOutputStateDescriptor::new([color_target(
+                GpuTextureFormat::Rgba8Unorm,
+            )])),
+            primitive,
+            Some(depth),
+            GpuMultisampleStateDescriptor::default(),
+        )
+        .expect_err("non-triangle depth bias must be rejected");
+        assert_eq!(
+            error.cause(),
+            GpuProgramContractCause::RenderPipelineStateInvalid
+        );
+    }
 }
