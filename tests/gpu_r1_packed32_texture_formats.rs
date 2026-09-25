@@ -193,8 +193,16 @@ fn exercise_role_realization(
     usage: GpuTextureUsage,
     label_text: &str,
 ) {
+    let mut role_requirements = GpuCapabilityRequirements::new();
+    if role == GpuFormatRole::ColorAttachment {
+        role_requirements
+            .insert(GpuCapabilityRequirement::Required(
+                GpuCapabilityFeature::RenderPipeline,
+            ))
+            .unwrap();
+    }
     let context = pollster::block_on(GpuContext::request(
-        GpuContextDescriptor::new(GpuCapabilityRequirements::new())
+        GpuContextDescriptor::new(role_requirements)
             .require_format_role(format, role)
             .with_fallback_policy(GpuSoftwareFallbackPolicy::Require)
             .with_allowed_backends([GpuBackendFamily::Vulkan])

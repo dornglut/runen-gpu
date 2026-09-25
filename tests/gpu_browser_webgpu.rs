@@ -582,8 +582,14 @@ mod browser {
             }
 
             if facts.color_attachment {
+                let mut color_requirements = GpuCapabilityRequirements::new();
+                color_requirements
+                    .insert(GpuCapabilityRequirement::Required(
+                        GpuCapabilityFeature::RenderPipeline,
+                    ))
+                    .unwrap();
                 let context = GpuContext::request(
-                    GpuContextDescriptor::new(GpuCapabilityRequirements::new())
+                    GpuContextDescriptor::new(color_requirements)
                         .require_format_role(format, GpuFormatRole::ColorAttachment)
                         .with_allowed_backends([GpuBackendFamily::BrowserWebGpu])
                         .with_label(format!("{format:?} browser color-attachment realization")),
