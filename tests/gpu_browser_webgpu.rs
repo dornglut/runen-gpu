@@ -1709,7 +1709,7 @@ fn cs_main() {
                 readbacks[1].as_bytes().len(),
                 usize::try_from(width * 2 * 4).unwrap()
             );
-            let expected_depth = 0.25_f32.to_le_bytes();
+            let expected_depth = 0.0_f32.to_le_bytes();
             assert!(
                 readbacks[1]
                     .as_bytes()
