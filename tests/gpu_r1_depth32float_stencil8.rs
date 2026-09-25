@@ -699,7 +699,7 @@ fn run_native_combined(width: u32) -> bool {
 }
 
 #[test]
-fn depth32float_stencil8_public_copy_and_sampling_contract_is_aspect_specific() {
+fn depth32float_stencil8_copy_operations_preserve_aspect_contract() {
     let format = GpuTextureFormat::Depth32FloatStencil8;
     assert!(format.is_depth());
     assert!(format.is_stencil());
@@ -709,6 +709,107 @@ fn depth32float_stencil8_public_copy_and_sampling_contract_is_aspect_specific() 
         format.copy_block_size(GpuTextureAspect::StencilOnly),
         Some(1)
     );
+
+    let mut allocator = GpuWorkResourceIdAllocator::new();
+    let (source, _) = combined_texture(
+        &mut allocator,
+        "Depth32FloatStencil8 copy source",
+        16,
+        [GpuTextureUsage::CopySource],
+    );
+    let (destination, _) = combined_texture(
+        &mut allocator,
+        "Depth32FloatStencil8 copy destination",
+        16,
+        [GpuTextureUsage::CopyDestination],
+    );
+    let extent = GpuCopyExtent::new(16, 2, 1).unwrap();
+
+    let source_all = GpuTextureCopyRegion::new(
+        &source,
+        0,
+        GpuTextureOrigin::new(0, 0, 0),
+        GpuTextureAspect::All,
+        extent,
+    )
+    .unwrap();
+    let destination_all = GpuTextureCopyRegion::new(
+        &destination,
+        0,
+        GpuTextureOrigin::new(0, 0, 0),
+        GpuTextureAspect::All,
+        extent,
+    )
+    .unwrap();
+    assert!(GpuCopyOperation::texture_to_texture(source_all, destination_all).is_ok());
+
+    for aspect in [GpuTextureAspect::DepthOnly, GpuTextureAspect::StencilOnly] {
+        let source_region = GpuTextureCopyRegion::new(
+            &source,
+            0,
+            GpuTextureOrigin::new(0, 0, 0),
+            aspect,
+            extent,
+        )
+        .unwrap();
+        let destination_region = GpuTextureCopyRegion::new(
+            &destination,
+            0,
+            GpuTextureOrigin::new(0, 0, 0),
+            aspect,
+            extent,
+        )
+        .unwrap();
+        assert!(
+            GpuCopyOperation::texture_to_texture(source_region, destination_region).is_err()
+        );
+    }
+
+    let buffer_label = label("Depth32FloatStencil8 linear source");
+    let buffer = allocator
+        .allocate_buffer_handle(
+            GpuBufferDescriptor::new(
+                common("Depth32FloatStencil8 linear source"),
+                4096,
+                GpuBufferUsages::new(&buffer_label, [GpuBufferUsage::CopySource]).unwrap(),
+                GpuBufferInitialization::Uninitialized,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+
+    let depth_region = GpuTextureCopyRegion::new(
+        &destination,
+        0,
+        GpuTextureOrigin::new(0, 0, 0),
+        GpuTextureAspect::DepthOnly,
+        extent,
+    )
+    .unwrap();
+    let depth_layout = GpuBufferTextureLayout::new(&buffer, 0, 64, 0).unwrap();
+    assert!(GpuCopyOperation::buffer_to_texture(depth_layout, depth_region).is_ok());
+
+    let stencil_region = GpuTextureCopyRegion::new(
+        &destination,
+        0,
+        GpuTextureOrigin::new(0, 0, 0),
+        GpuTextureAspect::StencilOnly,
+        extent,
+    )
+    .unwrap();
+    let stencil_layout = GpuBufferTextureLayout::new(&buffer, 0, 16, 0).unwrap();
+    assert!(GpuCopyOperation::buffer_to_texture(stencil_layout, stencil_region).is_ok());
+
+    let all_region = GpuTextureCopyRegion::new(
+        &destination,
+        0,
+        GpuTextureOrigin::new(0, 0, 0),
+        GpuTextureAspect::All,
+        extent,
+    )
+    .unwrap();
+    let all_layout = GpuBufferTextureLayout::new(&buffer, 0, 64, 0).unwrap();
+    assert!(GpuCopyOperation::buffer_to_texture(all_layout, all_region).is_err());
 }
 
 #[test]
