@@ -401,12 +401,12 @@ async fn run_case(context: &GpuContext, case: BiasCase) {
     let prepared = context.prepare_submission(graph).await.unwrap();
     let submission = context.submit_prepared(prepared).unwrap();
     let bytes = readback_wait::wait_for_readback(
-            context,
-            &submission,
-            readback_id,
-            format!("{} depth-bias", case.name),
-        )
-        .await;
+        context,
+        &submission,
+        readback_id,
+        format!("{} depth-bias", case.name),
+    )
+    .await;
     assert_eq!(bytes.texture_format(), Some(GpuTextureFormat::Rgba8Unorm));
     assert_eq!(
         pixel_at(&bytes, WIDTH / 2, HEIGHT / 2),
