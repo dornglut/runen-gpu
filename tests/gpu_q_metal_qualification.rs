@@ -390,6 +390,169 @@ fn capability_report(context: &GpuContext) -> Value {
     Value::Object(capabilities)
 }
 
+
+const SELECTED_FIXED_ARRAY_WGSL: &str = r#"
+enable wgpu_binding_array;
+
+@group(0) @binding(0)
+var sampled_textures: binding_array<texture_2d<u32>, 3>;
+
+@compute @workgroup_size(1)
+fn inspect_textures() {
+    let dimensions = textureDimensions(sampled_textures[0]);
+}
+"#;
+
+const UNUSED_FIXED_ARRAY_WGSL: &str = r#"
+enable wgpu_binding_array;
+
+@group(0) @binding(0)
+var unused_textures: binding_array<texture_2d<u32>, 3>;
+
+@compute @workgroup_size(1)
+fn compute_main() {}
+"#;
+
+fn admitted_probe_program(
+    key: &str,
+    wgsl: &str,
+    entry_point: &str,
+) -> GpuProgramDescriptor {
+    let identity = GpuProgramSourceIdentity::new(
+        GpuProgramSourceOwnerId::allocate().expect("probe source owner should allocate"),
+        GpuProgramSourceKey::new(key).expect("probe source key should be valid"),
+        GpuProgramSourceRevision::try_from_raw(1).expect("probe source revision should be nonzero"),
+    );
+    let mut registry =
+        GpuProgramSourceRegistry::new(1, 4096).expect("probe source registry should construct");
+    let source = registry
+        .admit_wgsl(
+            identity,
+            wgsl,
+            GpuProgramSourceProvenance::new("issue-97-fixed-binding-array-reproduction", None)
+                .expect("probe provenance should be valid"),
+        )
+        .expect("probe source should admit");
+    GpuProgramDescriptor::new(
+        source,
+        [GpuEntryPointName::new(entry_point).expect("probe entry-point name should be valid")],
+        std::iter::empty::<GpuBindingLayoutRefinement>(),
+    )
+    .expect("probe program should admit before backend realization")
+}
+
+fn realization_error_report(error: &GpuProgramBindingRealizationError) -> Value {
+    json!({
+        "category": format!("{:?}", error.category()),
+        "request": error.request(),
+        "detail": error.detail(),
+        "secondary_detail": error.secondary_detail(),
+    })
+}
+
+fn fixed_array_limit_reproduction(expected_adapter_name: &str) -> Value {
+    let program = admitted_probe_program(
+        "issue-97.selected-fixed-array",
+        SELECTED_FIXED_ARRAY_WGSL,
+        "inspect_textures",
+    );
+    let requires_texture_binding_array = matches!(
+        program
+            .requirements()
+            .get(GpuCapabilityFeature::TextureBindingArray),
+        Some(GpuCapabilityRequirement::Required(
+            GpuCapabilityFeature::TextureBindingArray
+        ))
+    );
+    let interface_binding_count = program.interface().bindings().len();
+
+    let descriptor = GpuContextDescriptor::new(program.requirements().clone())
+        .with_allowed_backends([GpuBackendFamily::Metal])
+        .with_label("issue-97 selected fixed binding-array reproduction");
+    let context = match pollster::block_on(GpuContext::request(descriptor)) {
+        Ok(context) => context,
+        Err(error) => {
+            return json!({
+                "program_requires_texture_binding_array": requires_texture_binding_array,
+                "selected_interface_binding_count": interface_binding_count,
+                "context_request": {
+                    "status": "ERROR",
+                    "error": error.to_string(),
+                },
+            });
+        }
+    };
+
+    assert_eq!(
+        context.adapter_facts().diagnostic_name(),
+        Some(expected_adapter_name),
+        "fixed-array reproduction must use the same retained Metal adapter"
+    );
+
+    let enabled_texture_binding_array = context
+        .device_facts()
+        .is_enabled(GpuCapabilityFeature::TextureBindingArray);
+    let layout = GpuPipelineLayoutDescriptor::from_interface(program.interface())
+        .expect("selected fixed-array interface should derive a public pipeline layout");
+    let group = layout
+        .group(0)
+        .expect("selected fixed-array interface should retain bind group zero");
+
+    let layout_realization = match pollster::block_on(context.realize_bind_group_layout(group)) {
+        Ok(_) => json!({ "status": "SUCCESS" }),
+        Err(error) => json!({
+            "status": "ERROR",
+            "error": realization_error_report(&error),
+        }),
+    };
+
+    json!({
+        "program_requires_texture_binding_array": requires_texture_binding_array,
+        "selected_interface_binding_count": interface_binding_count,
+        "context_request": {
+            "status": "SUCCESS",
+            "adapter": context.adapter_facts().diagnostic_name(),
+            "texture_binding_array_enabled": enabled_texture_binding_array,
+        },
+        "layout_realization": layout_realization,
+    })
+}
+
+fn unused_module_global_reproduction(context: &GpuContext) -> Value {
+    let program = admitted_probe_program(
+        "issue-97.unused-fixed-array",
+        UNUSED_FIXED_ARRAY_WGSL,
+        "compute_main",
+    );
+    let requires_texture_binding_array = matches!(
+        program
+            .requirements()
+            .get(GpuCapabilityFeature::TextureBindingArray),
+        Some(GpuCapabilityRequirement::Required(
+            GpuCapabilityFeature::TextureBindingArray
+        ))
+    );
+    let interface_binding_count = program.interface().bindings().len();
+    let device_enabled_texture_binding_array = context
+        .device_facts()
+        .is_enabled(GpuCapabilityFeature::TextureBindingArray);
+
+    let program_realization = match pollster::block_on(context.realize_program(&program)) {
+        Ok(_) => json!({ "status": "SUCCESS" }),
+        Err(error) => json!({
+            "status": "ERROR",
+            "error": realization_error_report(&error),
+        }),
+    };
+
+    json!({
+        "selected_interface_binding_count": interface_binding_count,
+        "program_requires_texture_binding_array": requires_texture_binding_array,
+        "device_texture_binding_array_enabled": device_enabled_texture_binding_array,
+        "program_realization": program_realization,
+    })
+}
+
 fn write_report(path: &Path, report: &Value) {
     let parent = path
         .parent()
@@ -452,6 +615,9 @@ fn metal_qualification_records_exact_public_api_evidence() {
         .diagnostic_name()
         .expect("Metal qualification requires a recorded adapter name")
         .to_owned();
+
+    let fixed_array_limit_reproduction = fixed_array_limit_reproduction(&adapter_name);
+    let unused_module_global_reproduction = unused_module_global_reproduction(&context);
 
     assert!(
         !adapter
@@ -523,6 +689,10 @@ fn metal_qualification_records_exact_public_api_evidence() {
             adapter.vendor(),
             adapter.device(),
         ),
+        "issue_97_fixed_binding_array_reproduction": {
+            "selected_fixed_array_limit_path": fixed_array_limit_reproduction,
+            "unused_module_global_feature_path": unused_module_global_reproduction,
+        },
         "limits": {
             "adapter": limits_report(adapter.adapter_limits().values()),
             "device": limits_report(context.device_facts().device_limits().values()),
