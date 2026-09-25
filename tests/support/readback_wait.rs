@@ -69,6 +69,14 @@ pub(crate) async fn wait_for_readback(
             panic!("{proof} submission failed: {error:?}");
         }
 
+        #[cfg(not(target_arch = "wasm32"))]
+        assert!(
+            Instant::now() < deadline,
+            "{proof} proof timed out after {MAX_PROGRESS_DURATION:?}"
+        );
+
+        progress_yield().await;
+
         #[cfg(target_arch = "wasm32")]
         {
             progress_ticks += 1;
@@ -77,12 +85,5 @@ pub(crate) async fn wait_for_readback(
                 "{proof} proof exceeded its bounded browser progress budget"
             );
         }
-        #[cfg(not(target_arch = "wasm32"))]
-        assert!(
-            Instant::now() < deadline,
-            "{proof} proof timed out after {MAX_PROGRESS_DURATION:?}"
-        );
-
-        progress_yield().await;
     }
 }
