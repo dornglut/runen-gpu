@@ -963,6 +963,20 @@ mod tests {
             2048,
         )
         .unwrap();
+        assert_eq!(limits.max_binding_array_elements_per_shader_stage(), 0);
+        assert_eq!(
+            limits.max_binding_array_sampler_elements_per_shader_stage(),
+            0
+        );
+        let binding_array_limits = limits.with_binding_array_limits(500_000, 1_000);
+        assert_eq!(
+            binding_array_limits.max_binding_array_elements_per_shader_stage(),
+            500_000
+        );
+        assert_eq!(
+            binding_array_limits.max_binding_array_sampler_elements_per_shader_stage(),
+            1_000
+        );
         assert_eq!(limits.max_texture_dimension_2d(), 8192);
         assert_eq!(limits.max_bind_groups(), 4);
         assert_eq!(limits.max_bind_groups_plus_vertex_buffers(), 24);
