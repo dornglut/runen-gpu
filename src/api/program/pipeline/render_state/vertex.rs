@@ -4,7 +4,7 @@ use super::super::super::{
     GpuShaderIoScalarClass, GpuShaderIoValueType,
 };
 
-const VERTEX_ALIGNMENT: u64 = 4;
+const VERTEX_STRIDE_ALIGNMENT: u64 = 4;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum GpuVertexStepMode {
@@ -14,6 +14,18 @@ pub enum GpuVertexStepMode {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum GpuVertexFormat {
+    Uint8,
+    Uint8x2,
+    Uint8x4,
+    Sint8,
+    Sint8x2,
+    Sint8x4,
+    Unorm8,
+    Unorm8x2,
+    Unorm8x4,
+    Snorm8,
+    Snorm8x2,
+    Snorm8x4,
     Float32,
     Float32x2,
     Float32x3,
@@ -31,27 +43,44 @@ pub enum GpuVertexFormat {
 impl GpuVertexFormat {
     pub const fn size_bytes(self) -> u64 {
         match self {
-            Self::Float32 | Self::Uint32 | Self::Sint32 => 4,
+            Self::Uint8 | Self::Sint8 | Self::Unorm8 | Self::Snorm8 => 1,
+            Self::Uint8x2 | Self::Sint8x2 | Self::Unorm8x2 | Self::Snorm8x2 => 2,
+            Self::Uint8x4
+            | Self::Sint8x4
+            | Self::Unorm8x4
+            | Self::Snorm8x4
+            | Self::Float32
+            | Self::Uint32
+            | Self::Sint32 => 4,
             Self::Float32x2 | Self::Uint32x2 | Self::Sint32x2 => 8,
             Self::Float32x3 | Self::Uint32x3 | Self::Sint32x3 => 12,
             Self::Float32x4 | Self::Uint32x4 | Self::Sint32x4 => 16,
         }
     }
 
+    pub const fn attribute_alignment_bytes(self) -> u64 {
+        let size = self.size_bytes();
+        if size < VERTEX_STRIDE_ALIGNMENT {
+            size
+        } else {
+            VERTEX_STRIDE_ALIGNMENT
+        }
+    }
+
     pub fn shader_io_type(self) -> GpuShaderIoValueType {
         let (class, width) = match self {
-            Self::Float32 => (GpuShaderIoScalarClass::Float, 1),
-            Self::Float32x2 => (GpuShaderIoScalarClass::Float, 2),
+            Self::Uint8 | Self::Uint32 => (GpuShaderIoScalarClass::Uint, 1),
+            Self::Uint8x2 | Self::Uint32x2 => (GpuShaderIoScalarClass::Uint, 2),
+            Self::Uint8x4 | Self::Uint32x4 => (GpuShaderIoScalarClass::Uint, 4),
+            Self::Sint8 | Self::Sint32 => (GpuShaderIoScalarClass::Sint, 1),
+            Self::Sint8x2 | Self::Sint32x2 => (GpuShaderIoScalarClass::Sint, 2),
+            Self::Sint8x4 | Self::Sint32x4 => (GpuShaderIoScalarClass::Sint, 4),
+            Self::Unorm8 | Self::Snorm8 | Self::Float32 => (GpuShaderIoScalarClass::Float, 1),
+            Self::Unorm8x2 | Self::Snorm8x2 | Self::Float32x2 => (GpuShaderIoScalarClass::Float, 2),
             Self::Float32x3 => (GpuShaderIoScalarClass::Float, 3),
-            Self::Float32x4 => (GpuShaderIoScalarClass::Float, 4),
-            Self::Uint32 => (GpuShaderIoScalarClass::Uint, 1),
-            Self::Uint32x2 => (GpuShaderIoScalarClass::Uint, 2),
+            Self::Unorm8x4 | Self::Snorm8x4 | Self::Float32x4 => (GpuShaderIoScalarClass::Float, 4),
             Self::Uint32x3 => (GpuShaderIoScalarClass::Uint, 3),
-            Self::Uint32x4 => (GpuShaderIoScalarClass::Uint, 4),
-            Self::Sint32 => (GpuShaderIoScalarClass::Sint, 1),
-            Self::Sint32x2 => (GpuShaderIoScalarClass::Sint, 2),
             Self::Sint32x3 => (GpuShaderIoScalarClass::Sint, 3),
-            Self::Sint32x4 => (GpuShaderIoScalarClass::Sint, 4),
         };
         GpuShaderIoValueType::try_new(class, width)
             .expect("GPU vertex formats always map to valid shader IO")
@@ -102,7 +131,7 @@ impl GpuVertexBufferLayoutDescriptor {
         step_mode: GpuVertexStepMode,
         attributes: impl IntoIterator<Item = GpuVertexAttribute>,
     ) -> Result<Self, GpuProgramContractError> {
-        if array_stride == 0 || !array_stride.is_multiple_of(VERTEX_ALIGNMENT) {
+        if array_stride == 0 || !array_stride.is_multiple_of(VERTEX_STRIDE_ALIGNMENT) {
             return Err(invalid_vertex_state(
                 format!("slot={slot}, array_stride={array_stride}"),
                 "use a nonzero vertex stride aligned to four bytes",
@@ -125,7 +154,9 @@ impl GpuVertexBufferLayoutDescriptor {
         }
 
         for attribute in &attributes {
-            let range_is_valid = attribute.offset().is_multiple_of(VERTEX_ALIGNMENT)
+            let range_is_valid = attribute
+                .offset()
+                .is_multiple_of(attribute.format().attribute_alignment_bytes())
                 && attribute
                     .offset()
                     .checked_add(attribute.format().size_bytes())

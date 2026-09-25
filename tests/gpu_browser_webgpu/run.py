@@ -99,6 +99,7 @@ const done = arguments[arguments.length - 1];
         typeof wasm.runengpu_browser_packed32_exercised_mask !== "function" ||
         typeof wasm.runengpu_browser_packed32_sampled_mask !== "function" ||
         typeof wasm.runengpu_browser_packed32_color_attachment_mask !== "function" ||
+        typeof wasm.runengpu_browser_vertex8_exercised_mask !== "function" ||
         typeof wasm.runengpu_browser_depth_sampled_exercised_mask !== "function" ||
         typeof wasm.runengpu_browser_depth_attachment_exercised_mask !== "function" ||
         typeof wasm.runengpu_browser_depth_copy_exercised_mask !== "function" ||
@@ -125,6 +126,7 @@ const done = arguments[arguments.length - 1];
           packed32Mask: wasm.runengpu_browser_packed32_exercised_mask(),
           packed32SampledMask: wasm.runengpu_browser_packed32_sampled_mask(),
           packed32ColorAttachmentMask: wasm.runengpu_browser_packed32_color_attachment_mask(),
+          vertex8Mask: wasm.runengpu_browser_vertex8_exercised_mask(),
           depthSampledMask: wasm.runengpu_browser_depth_sampled_exercised_mask(),
           depthAttachmentMask: wasm.runengpu_browser_depth_attachment_exercised_mask(),
           depthCopyMask: wasm.runengpu_browser_depth_copy_exercised_mask(),
@@ -766,6 +768,40 @@ def main() -> int:
             "ColorAttachment",
             "submitted color-attachment clear render pass with admitted role",
         )
+        vertex8_names = (
+            "Uint8",
+            "Uint8x2",
+            "Uint8x4",
+            "Sint8",
+            "Sint8x2",
+            "Sint8x4",
+            "Unorm8",
+            "Unorm8x2",
+            "Unorm8x4",
+            "Snorm8",
+            "Snorm8x2",
+            "Snorm8x4",
+        )
+        vertex8_mask = read_exercised_mask(
+            value, "vertex8Mask", "Vertex8", len(vertex8_names)
+        )
+        vertex8_full_mask = (1 << len(vertex8_names)) - 1
+        for index, format_name in enumerate(vertex8_names):
+            if vertex8_mask & (1 << index):
+                print(
+                    f"RunenGPU actual-browser {format_name} vertex: "
+                    "EXERCISED (compact-offset vertex draw + exact readback)"
+                )
+            else:
+                print(
+                    f"RunenGPU actual-browser {format_name} vertex: NOT EXERCISED"
+                )
+        if vertex8_mask != vertex8_full_mask:
+            raise RuntimeError(
+                "RunenGPU actual-browser Vertex8: NOT QUALIFIED "
+                f"(mask={vertex8_mask:#x}, expected={vertex8_full_mask:#x})"
+            )
+
         report_depth_proofs(value)
         report_stencil8_proof(value)
         report_depth24plus_stencil8_proof(value)
