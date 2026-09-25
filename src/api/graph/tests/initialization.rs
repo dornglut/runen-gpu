@@ -320,6 +320,164 @@ fn attachment_store_preserves_and_discard_invalidates_exact_coverage() {
 }
 
 #[test]
+fn transient_color_clear_discard_can_reclear_without_persisting_coverage() {
+    let mut allocator = allocator();
+    let texture = texture(
+        &mut allocator,
+        "transient graph attachment",
+        GpuTextureInitialization::Uninitialized,
+        1,
+        1,
+        [
+            GpuTextureUsage::ColorAttachment,
+            GpuTextureUsage::TransientAttachment,
+        ],
+    );
+    let range = GpuTextureSubresourceRange::whole(&texture).unwrap();
+    let view = texture_view(
+        &mut allocator,
+        &texture,
+        "transient graph attachment view",
+        range,
+    );
+    let render = || {
+        GpuWorkOperation::Render(
+            GpuRenderOperation::new(
+                [GpuRenderColorAttachment::new(
+                    view.clone(),
+                    GpuColorAttachmentLoad::Clear(
+                        GpuColorClearValue::new(0.0, 0.0, 0.0, 1.0).unwrap(),
+                    ),
+                    GpuAttachmentStore::Discard,
+                    None,
+                )
+                .unwrap()],
+                None,
+                [],
+                None,
+            )
+            .unwrap(),
+        )
+    };
+
+    let mut fragment = builder("transient re-clear");
+    fragment
+        .declare_resource(GpuResourceRef::Texture(texture.clone()))
+        .unwrap();
+    fragment
+        .declare_resource(GpuResourceRef::TextureView(view))
+        .unwrap();
+    for name in ["transient clear discard A", "transient clear discard B"] {
+        fragment
+            .add_node(
+                label(name),
+                render(),
+                [],
+                GpuCapabilityRequirements::new(),
+                GpuExecutionPreference::GraphicsRequired,
+                provenance(name),
+            )
+            .unwrap();
+    }
+
+    let graph = GpuPreparedWorkGraph::prepare(
+        label("transient re-clear graph"),
+        [fragment.finish().unwrap()],
+    )
+    .unwrap();
+    let summary = graph
+        .initialization()
+        .iter()
+        .find(|summary| summary.resource().diagnostic_identity() == texture.diagnostic_identity())
+        .unwrap();
+    assert!(summary.final_coverage().is_none());
+}
+
+#[test]
+fn transient_combined_depth_stencil_requires_and_discards_both_aspects() {
+    let mut allocator = allocator();
+    let resource_label = label("transient combined attachment");
+    let texture = allocator
+        .allocate_texture_handle(
+            GpuTextureDescriptor::new(
+                common("transient combined attachment"),
+                GpuTextureDimension::D2,
+                GpuTextureExtent::new(&resource_label, GpuTextureDimension::D2, 8, 8, 1).unwrap(),
+                1,
+                1,
+                GpuTextureFormat::Depth24PlusStencil8,
+                GpuTextureUsages::new(
+                    &resource_label,
+                    [
+                        GpuTextureUsage::DepthStencilAttachment,
+                        GpuTextureUsage::TransientAttachment,
+                    ],
+                )
+                .unwrap(),
+                GpuTextureInitialization::Uninitialized,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+    let view = texture_view(
+        &mut allocator,
+        &texture,
+        "transient combined attachment view",
+        GpuTextureSubresourceRange::whole(&texture).unwrap(),
+    );
+    let depth = GpuDepthAttachmentState::new(
+        GpuDepthStencilAccess::ReadWrite,
+        GpuDepthAttachmentLoad::Clear(GpuDepthClearValue::new(1.0).unwrap()),
+        GpuAttachmentStore::Discard,
+    )
+    .unwrap();
+    let stencil = GpuStencilAttachmentState::new(
+        GpuDepthStencilAccess::ReadWrite,
+        GpuStencilAttachmentLoad::Clear(GpuStencilClearValue::new(0).unwrap()),
+        GpuAttachmentStore::Discard,
+    )
+    .unwrap();
+
+    assert!(
+        GpuRenderDepthStencilAttachment::new(view.clone(), Some(depth), None).is_err(),
+        "combined transient formats must configure every present aspect"
+    );
+    let attachment =
+        GpuRenderDepthStencilAttachment::new(view.clone(), Some(depth), Some(stencil)).unwrap();
+    let render =
+        GpuWorkOperation::Render(GpuRenderOperation::new([], Some(attachment), [], None).unwrap());
+    let mut fragment = builder("transient combined discard");
+    fragment
+        .declare_resource(GpuResourceRef::Texture(texture.clone()))
+        .unwrap();
+    fragment
+        .declare_resource(GpuResourceRef::TextureView(view))
+        .unwrap();
+    fragment
+        .add_node(
+            label("transient combined clear discard"),
+            render,
+            [],
+            GpuCapabilityRequirements::new(),
+            GpuExecutionPreference::GraphicsRequired,
+            provenance("transient combined clear discard"),
+        )
+        .unwrap();
+
+    let graph = GpuPreparedWorkGraph::prepare(
+        label("transient combined discard graph"),
+        [fragment.finish().unwrap()],
+    )
+    .unwrap();
+    let summary = graph
+        .initialization()
+        .iter()
+        .find(|summary| summary.resource().diagnostic_identity() == texture.diagnostic_identity())
+        .unwrap();
+    assert!(summary.final_coverage().is_none());
+}
+
+#[test]
 fn combined_depth_stencil_store_and_discard_track_aspects_independently() {
     let mut allocator = allocator();
     let resource_label = label("combined initialization");
