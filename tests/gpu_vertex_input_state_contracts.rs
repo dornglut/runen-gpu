@@ -145,3 +145,106 @@ fn empty_vertex_input_state_supports_vertexless_draws() {
         0
     );
 }
+
+
+#[test]
+fn compact_vertex_formats_derive_exact_size_alignment_and_shader_io() {
+    let cases = [
+        (GpuVertexFormat::Uint8, 1, 1, GpuShaderIoScalarClass::Uint, 1),
+        (GpuVertexFormat::Uint8x2, 2, 2, GpuShaderIoScalarClass::Uint, 2),
+        (GpuVertexFormat::Uint8x4, 4, 4, GpuShaderIoScalarClass::Uint, 4),
+        (GpuVertexFormat::Sint8, 1, 1, GpuShaderIoScalarClass::Sint, 1),
+        (GpuVertexFormat::Sint8x2, 2, 2, GpuShaderIoScalarClass::Sint, 2),
+        (GpuVertexFormat::Sint8x4, 4, 4, GpuShaderIoScalarClass::Sint, 4),
+        (GpuVertexFormat::Unorm8, 1, 1, GpuShaderIoScalarClass::Float, 1),
+        (GpuVertexFormat::Unorm8x2, 2, 2, GpuShaderIoScalarClass::Float, 2),
+        (GpuVertexFormat::Unorm8x4, 4, 4, GpuShaderIoScalarClass::Float, 4),
+        (GpuVertexFormat::Snorm8, 1, 1, GpuShaderIoScalarClass::Float, 1),
+        (GpuVertexFormat::Snorm8x2, 2, 2, GpuShaderIoScalarClass::Float, 2),
+        (GpuVertexFormat::Snorm8x4, 4, 4, GpuShaderIoScalarClass::Float, 4),
+    ];
+    assert_eq!(cases.len(), 12);
+    for (format, size, alignment, class, width) in cases {
+        assert_eq!(format.size_bytes(), size, "{format:?}");
+        assert_eq!(format.attribute_alignment_bytes(), alignment, "{format:?}");
+        let value_type = format.shader_io_type();
+        assert_eq!(value_type.scalar_class(), class, "{format:?}");
+        assert_eq!(value_type.vector_width().get(), width, "{format:?}");
+    }
+
+    for format in [
+        GpuVertexFormat::Float32,
+        GpuVertexFormat::Float32x2,
+        GpuVertexFormat::Float32x3,
+        GpuVertexFormat::Float32x4,
+        GpuVertexFormat::Uint32,
+        GpuVertexFormat::Uint32x2,
+        GpuVertexFormat::Uint32x3,
+        GpuVertexFormat::Uint32x4,
+        GpuVertexFormat::Sint32,
+        GpuVertexFormat::Sint32x2,
+        GpuVertexFormat::Sint32x3,
+        GpuVertexFormat::Sint32x4,
+    ] {
+        assert_eq!(format.attribute_alignment_bytes(), 4, "{format:?}");
+    }
+}
+
+#[test]
+fn compact_vertex_attribute_offsets_use_per_format_alignment_while_stride_stays_four_byte_aligned() {
+    for (format, offset) in [
+        (GpuVertexFormat::Uint8, 1),
+        (GpuVertexFormat::Sint8, 1),
+        (GpuVertexFormat::Unorm8, 1),
+        (GpuVertexFormat::Snorm8, 1),
+        (GpuVertexFormat::Uint8x2, 2),
+        (GpuVertexFormat::Sint8x2, 2),
+        (GpuVertexFormat::Unorm8x2, 2),
+        (GpuVertexFormat::Snorm8x2, 2),
+        (GpuVertexFormat::Uint8x4, 0),
+        (GpuVertexFormat::Sint8x4, 0),
+        (GpuVertexFormat::Unorm8x4, 0),
+        (GpuVertexFormat::Snorm8x4, 0),
+    ] {
+        GpuVertexBufferLayoutDescriptor::new(
+            0,
+            4,
+            GpuVertexStepMode::Vertex,
+            [GpuVertexAttribute::new(0, offset, format)],
+        )
+        .unwrap_or_else(|error| panic!("{format:?} offset {offset} should be valid: {error:?}"));
+    }
+
+    for (format, offset) in [
+        (GpuVertexFormat::Uint8x2, 1),
+        (GpuVertexFormat::Sint8x2, 1),
+        (GpuVertexFormat::Unorm8x2, 1),
+        (GpuVertexFormat::Snorm8x2, 1),
+        (GpuVertexFormat::Uint8x4, 2),
+        (GpuVertexFormat::Sint8x4, 2),
+        (GpuVertexFormat::Unorm8x4, 2),
+        (GpuVertexFormat::Snorm8x4, 2),
+    ] {
+        assert!(
+            GpuVertexBufferLayoutDescriptor::new(
+                0,
+                8,
+                GpuVertexStepMode::Vertex,
+                [GpuVertexAttribute::new(0, offset, format)],
+            )
+            .is_err(),
+            "{format:?} offset {offset} must fail its format alignment"
+        );
+    }
+
+    assert!(
+        GpuVertexBufferLayoutDescriptor::new(
+            0,
+            2,
+            GpuVertexStepMode::Vertex,
+            [GpuVertexAttribute::new(0, 0, GpuVertexFormat::Uint8x2)],
+        )
+        .is_err(),
+        "compact attributes do not relax the four-byte vertex stride alignment"
+    );
+}

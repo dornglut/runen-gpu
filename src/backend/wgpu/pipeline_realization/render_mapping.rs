@@ -26,6 +26,18 @@ pub(super) fn color_write_mask(mask: GpuColorWriteMask) -> ColorWrites {
 
 pub(super) const fn vertex_format(value: GpuVertexFormat) -> VertexFormat {
     match value {
+        GpuVertexFormat::Uint8 => VertexFormat::Uint8,
+        GpuVertexFormat::Uint8x2 => VertexFormat::Uint8x2,
+        GpuVertexFormat::Uint8x4 => VertexFormat::Uint8x4,
+        GpuVertexFormat::Sint8 => VertexFormat::Sint8,
+        GpuVertexFormat::Sint8x2 => VertexFormat::Sint8x2,
+        GpuVertexFormat::Sint8x4 => VertexFormat::Sint8x4,
+        GpuVertexFormat::Unorm8 => VertexFormat::Unorm8,
+        GpuVertexFormat::Unorm8x2 => VertexFormat::Unorm8x2,
+        GpuVertexFormat::Unorm8x4 => VertexFormat::Unorm8x4,
+        GpuVertexFormat::Snorm8 => VertexFormat::Snorm8,
+        GpuVertexFormat::Snorm8x2 => VertexFormat::Snorm8x2,
+        GpuVertexFormat::Snorm8x4 => VertexFormat::Snorm8x4,
         GpuVertexFormat::Float32 => VertexFormat::Float32,
         GpuVertexFormat::Float32x2 => VertexFormat::Float32x2,
         GpuVertexFormat::Float32x3 => VertexFormat::Float32x3,
@@ -164,6 +176,22 @@ mod tests {
             vertex_format(GpuVertexFormat::Sint32x4),
             VertexFormat::Sint32x4
         );
+        for (normalized, native) in [
+            (GpuVertexFormat::Uint8, VertexFormat::Uint8),
+            (GpuVertexFormat::Uint8x2, VertexFormat::Uint8x2),
+            (GpuVertexFormat::Uint8x4, VertexFormat::Uint8x4),
+            (GpuVertexFormat::Sint8, VertexFormat::Sint8),
+            (GpuVertexFormat::Sint8x2, VertexFormat::Sint8x2),
+            (GpuVertexFormat::Sint8x4, VertexFormat::Sint8x4),
+            (GpuVertexFormat::Unorm8, VertexFormat::Unorm8),
+            (GpuVertexFormat::Unorm8x2, VertexFormat::Unorm8x2),
+            (GpuVertexFormat::Unorm8x4, VertexFormat::Unorm8x4),
+            (GpuVertexFormat::Snorm8, VertexFormat::Snorm8),
+            (GpuVertexFormat::Snorm8x2, VertexFormat::Snorm8x2),
+            (GpuVertexFormat::Snorm8x4, VertexFormat::Snorm8x4),
+        ] {
+            assert_eq!(vertex_format(normalized), native);
+        }
         assert_eq!(
             primitive_topology(GpuPrimitiveTopology::LineStrip),
             PrimitiveTopology::LineStrip

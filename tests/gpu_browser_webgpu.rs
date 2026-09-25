@@ -4,10 +4,13 @@ mod retained_offscreen_indexed;
 #[cfg(target_arch = "wasm32")]
 #[path = "gpu_prefix_scan_native.rs"]
 mod retained_prefix_scan;
+#[cfg(target_arch = "wasm32")]
+#[path = "gpu_r1_vertex8_formats.rs"]
+mod retained_vertex8;
 
 #[cfg(target_arch = "wasm32")]
 mod browser {
-    use super::{retained_offscreen_indexed, retained_prefix_scan};
+    use super::{retained_offscreen_indexed, retained_prefix_scan, retained_vertex8};
     use runen_gpu::*;
     use std::cell::RefCell;
     use std::future::Future;
@@ -25,6 +28,7 @@ mod browser {
         static PACKED32_EXERCISED_MASK: RefCell<u32> = RefCell::new(0);
         static PACKED32_SAMPLED_MASK: RefCell<u32> = RefCell::new(0);
         static PACKED32_COLOR_ATTACHMENT_MASK: RefCell<u32> = RefCell::new(0);
+        static VERTEX8_EXERCISED_MASK: RefCell<u32> = RefCell::new(0);
         static DEPTH_SAMPLED_EXERCISED_MASK: RefCell<u32> = RefCell::new(0);
         static DEPTH_ATTACHMENT_EXERCISED_MASK: RefCell<u32> = RefCell::new(0);
         static DEPTH_COPY_EXERCISED_MASK: RefCell<u32> = RefCell::new(0);
@@ -2109,6 +2113,8 @@ fn cs_main() {
         run_browser_r16_copy().await;
         run_browser_rg16_copy().await;
         run_browser_packed32().await;
+        let vertex8_mask = retained_vertex8::run_browser_vertex8().await;
+        VERTEX8_EXERCISED_MASK.with(|slot| *slot.borrow_mut() = vertex8_mask);
         run_browser_depth_formats().await;
         run_browser_stencil8().await;
         run_browser_depth24plus_stencil8().await;
@@ -2187,6 +2193,11 @@ fn cs_main() {
     #[unsafe(no_mangle)]
     pub extern "C" fn runengpu_browser_packed32_color_attachment_mask() -> u32 {
         PACKED32_COLOR_ATTACHMENT_MASK.with(|mask| *mask.borrow())
+    }
+
+    #[unsafe(no_mangle)]
+    pub extern "C" fn runengpu_browser_vertex8_exercised_mask() -> u32 {
+        VERTEX8_EXERCISED_MASK.with(|mask| *mask.borrow())
     }
 
     #[unsafe(no_mangle)]
