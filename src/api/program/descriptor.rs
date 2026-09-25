@@ -1,6 +1,4 @@
-use super::analysis::{
-    FixedArrayRequirementScope, analyze_program, fixed_array_capabilities,
-};
+use super::analysis::{FixedArrayRequirementScope, analyze_program, fixed_array_capabilities};
 use super::contract_diagnostics::{GpuProgramContractCause, GpuProgramContractError};
 use super::entry_point::{GpuEntryPointDescriptor, GpuEntryPointName};
 use super::interface::{
