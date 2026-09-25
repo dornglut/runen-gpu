@@ -64,7 +64,10 @@ fn fragment_main() -> @location(0) vec4<f32> {
 }
 "#;
 
-fn admitted_source(key: &str) -> (GpuProgramSourceRegistry, GpuAdmittedProgramSource) {
+fn admitted_source_from(
+    key: &str,
+    wgsl: &str,
+) -> (GpuProgramSourceRegistry, GpuAdmittedProgramSource) {
     let identity = GpuProgramSourceIdentity::new(
         GpuProgramSourceOwnerId::allocate().expect("test source owner should allocate"),
         GpuProgramSourceKey::new(key).expect("test source key should be valid"),
@@ -75,12 +78,16 @@ fn admitted_source(key: &str) -> (GpuProgramSourceRegistry, GpuAdmittedProgramSo
     let source = registry
         .admit_wgsl(
             identity,
-            FIXED_ARRAY_WGSL,
+            wgsl,
             GpuProgramSourceProvenance::new("gpu-program-requirement-test", None)
                 .expect("test source provenance should be valid"),
         )
         .expect("test source should admit");
     (registry, source)
+}
+
+fn admitted_source(key: &str) -> (GpuProgramSourceRegistry, GpuAdmittedProgramSource) {
+    admitted_source_from(key, FIXED_ARRAY_WGSL)
 }
 
 fn entry_point(name: &str) -> GpuEntryPointName {
@@ -175,4 +182,69 @@ fn render_pipeline_inherits_program_interface_requirements() {
     )
     .unwrap();
     assert_fixed_array_requirements(pipeline.requirements());
+}
+
+#[test]
+fn unused_module_global_fixed_array_contributes_shader_compilation_requirement_only() {
+    const WGSL: &str = r#"
+enable wgpu_binding_array;
+
+@group(0) @binding(0)
+var unused_textures: binding_array<texture_2d<u32>, 3>;
+
+@compute @workgroup_size(1)
+fn compute_main() {}
+"#;
+
+    let (_registry, source) = admitted_source_from("unused.module-array", WGSL);
+    let program = GpuProgramDescriptor::new(
+        source,
+        [entry_point("compute_main")],
+        std::iter::empty::<GpuBindingLayoutRefinement>(),
+    )
+    .expect("unused module-global fixed array should admit with compiler-derived requirements");
+
+    assert_eq!(program.interface().bindings().len(), 0);
+    assert_required(
+        program.requirements(),
+        GpuCapabilityFeature::TextureBindingArray,
+    );
+}
+
+#[test]
+fn unused_uniform_array_does_not_invent_selected_non_uniform_indexing_requirement() {
+    const WGSL: &str = r#"
+enable wgpu_binding_array;
+
+struct UniformValue {
+    value: vec4<f32>,
+}
+
+@group(0) @binding(0)
+var<uniform> unused_uniforms: binding_array<UniformValue, 2>;
+
+@compute @workgroup_size(1)
+fn compute_main() {}
+"#;
+
+    let (_registry, source) = admitted_source_from("unused.uniform-array", WGSL);
+    let program = GpuProgramDescriptor::new(
+        source,
+        [entry_point("compute_main")],
+        std::iter::empty::<GpuBindingLayoutRefinement>(),
+    )
+    .expect("unused uniform array should derive only its module-compilation feature");
+
+    assert_eq!(program.interface().bindings().len(), 0);
+    assert_required(
+        program.requirements(),
+        GpuCapabilityFeature::BufferBindingArray,
+    );
+    assert!(
+        program
+            .requirements()
+            .get(GpuCapabilityFeature::UniformBufferBindingArray)
+            .is_none(),
+        "unused uniform arrays need basic buffer-array compilation support, not selected-layout non-uniform indexing"
+    );
 }

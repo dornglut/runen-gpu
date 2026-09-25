@@ -95,6 +95,8 @@ fn normalized_limits(native: &wgpu::Limits) -> GpuLimits {
         native.max_color_attachments,
         native.max_vertex_buffers,
         native.max_bindings_per_bind_group,
+        native.max_binding_array_elements_per_shader_stage,
+        native.max_binding_array_sampler_elements_per_shader_stage,
         native.max_texture_dimension_2d,
         native.max_bind_groups,
         native.max_bind_groups_plus_vertex_buffers,
@@ -346,6 +348,8 @@ mod tests {
     #[test]
     fn adapter_limit_mapping_preserves_public_descriptor_limits() {
         let mut native = wgpu::Limits::defaults();
+        native.max_binding_array_elements_per_shader_stage = 654_321;
+        native.max_binding_array_sampler_elements_per_shader_stage = 987;
         native.max_buffer_size = 123_456_789;
         native.max_texture_dimension_1d = 4096;
         native.max_texture_dimension_3d = 1024;
@@ -353,6 +357,14 @@ mod tests {
         native.max_vertex_attributes = 12;
         native.max_vertex_buffer_array_stride = 1024;
         let limits = normalized_limits(&native);
+        assert_eq!(
+            limits.max_binding_array_elements_per_shader_stage(),
+            654_321
+        );
+        assert_eq!(
+            limits.max_binding_array_sampler_elements_per_shader_stage(),
+            987
+        );
         assert_eq!(limits.max_buffer_size(), 123_456_789);
         assert_eq!(limits.max_texture_dimension_1d(), 4096);
         assert_eq!(limits.max_texture_dimension_3d(), 1024);

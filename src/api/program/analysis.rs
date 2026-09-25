@@ -1,10 +1,10 @@
 use super::contract_diagnostics::{GpuProgramContractCause, GpuProgramContractError};
 use super::entry_point::{GpuEntryPointDescriptor, GpuEntryPointName};
 use super::interface::{
-    GpuBindingDeclaration, GpuBindingKey, GpuBindingKind, GpuBindingLayoutRefinement,
-    GpuBindingProvenance, GpuProgramInterfaceDescriptor, GpuSamplerClass, GpuShaderStage,
-    GpuShaderStages, GpuStorageBufferAccess, GpuStorageTextureAccess, GpuTextureSampleClass,
-    GpuTextureViewDimension,
+    GpuBindingClass, GpuBindingDeclaration, GpuBindingKey, GpuBindingKind,
+    GpuBindingLayoutRefinement, GpuBindingProvenance, GpuProgramInterfaceDescriptor,
+    GpuSamplerClass, GpuShaderStage, GpuShaderStages, GpuStorageBufferAccess,
+    GpuStorageTextureAccess, GpuTextureSampleClass, GpuTextureViewDimension,
 };
 use super::source::GpuAdmittedProgramSource;
 use super::stage_io::{
@@ -64,6 +64,50 @@ enum CompilerBindingKind {
     },
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum FixedArrayRequirementScope {
+    ModuleCompilation,
+    SelectedLayout,
+}
+
+pub(super) fn fixed_array_capabilities(
+    class: GpuBindingClass,
+    scope: FixedArrayRequirementScope,
+) -> &'static [GpuCapabilityFeature] {
+    match (class, scope) {
+        (GpuBindingClass::UniformBuffer, FixedArrayRequirementScope::ModuleCompilation) => {
+            &[GpuCapabilityFeature::BufferBindingArray]
+        }
+        (GpuBindingClass::UniformBuffer, FixedArrayRequirementScope::SelectedLayout) => &[
+            GpuCapabilityFeature::BufferBindingArray,
+            GpuCapabilityFeature::UniformBufferBindingArray,
+        ],
+        (GpuBindingClass::StorageBuffer, _) => &[
+            GpuCapabilityFeature::BufferBindingArray,
+            GpuCapabilityFeature::StorageResourceBindingArray,
+        ],
+        (GpuBindingClass::SampledTexture | GpuBindingClass::Sampler, _) => {
+            &[GpuCapabilityFeature::TextureBindingArray]
+        }
+        (GpuBindingClass::StorageTexture, _) => &[
+            GpuCapabilityFeature::TextureBindingArray,
+            GpuCapabilityFeature::StorageResourceBindingArray,
+        ],
+    }
+}
+
+impl CompilerBindingKind {
+    const fn class(self) -> GpuBindingClass {
+        match self {
+            Self::UniformBuffer { .. } => GpuBindingClass::UniformBuffer,
+            Self::StorageBuffer { .. } => GpuBindingClass::StorageBuffer,
+            Self::SampledTexture { .. } => GpuBindingClass::SampledTexture,
+            Self::StorageTexture { .. } => GpuBindingClass::StorageTexture,
+            Self::Sampler { .. } => GpuBindingClass::Sampler,
+        }
+    }
+}
+
 pub(crate) fn analyze_program(
     source: &GpuAdmittedProgramSource,
     selected_entry_points: impl IntoIterator<Item = GpuEntryPointName>,
@@ -72,7 +116,7 @@ pub(crate) fn analyze_program(
     let operation = "admit canonical WGSL program";
     let source_label = source.identity().diagnostic_label();
     let baseline_capabilities = baseline_analysis_capabilities();
-    let (module, analysis_capabilities, required_features) = match parse_wgsl(
+    let (module, analysis_capabilities, mut required_features) = match parse_wgsl(
         source.canonical_wgsl(),
         baseline_capabilities,
     ) {
@@ -188,15 +232,6 @@ pub(crate) fn analyze_program(
         let Some(binding) = global.binding else {
             continue;
         };
-        let used_stages = selected_indices
-            .iter()
-            .filter_map(|(stage, index, _)| {
-                (!module_info.get_entry_point(*index)[global_handle].is_empty()).then_some(*stage)
-            })
-            .collect::<Vec<_>>();
-        if used_stages.is_empty() {
-            continue;
-        }
 
         let key = GpuBindingKey::try_new(binding.group as u64, binding.binding as u64)?;
         let (base_type, array_count) =
@@ -208,15 +243,56 @@ pub(crate) fn analyze_program(
                     detail,
                 )
             })?;
-        let compiler_kind = compiler_binding_kind(&module, &module_info, global.space, base_type)
-            .map_err(|detail| {
-            invalid(
-                operation,
-                &format!("binding {key}"),
-                GpuProgramContractCause::ProgramInterfaceMismatch,
-                detail,
+        let module_array_kind = if array_count.is_some() {
+            Some(
+                compiler_binding_kind(&module, &module_info, global.space, base_type).map_err(
+                    |detail| {
+                        invalid(
+                            operation,
+                            &format!("binding {key}"),
+                            GpuProgramContractCause::ProgramInterfaceMismatch,
+                            detail,
+                        )
+                    },
+                )?,
             )
-        })?;
+        } else {
+            None
+        };
+        if let Some(compiler_kind) = module_array_kind {
+            for feature in fixed_array_capabilities(
+                compiler_kind.class(),
+                FixedArrayRequirementScope::ModuleCompilation,
+            ) {
+                if !required_features.contains(feature) {
+                    required_features.push(*feature);
+                }
+            }
+        }
+
+        let used_stages = selected_indices
+            .iter()
+            .filter_map(|(stage, index, _)| {
+                (!module_info.get_entry_point(*index)[global_handle].is_empty()).then_some(*stage)
+            })
+            .collect::<Vec<_>>();
+        if used_stages.is_empty() {
+            continue;
+        }
+
+        let compiler_kind = match module_array_kind {
+            Some(compiler_kind) => compiler_kind,
+            None => compiler_binding_kind(&module, &module_info, global.space, base_type).map_err(
+                |detail| {
+                    invalid(
+                        operation,
+                        &format!("binding {key}"),
+                        GpuProgramContractCause::ProgramInterfaceMismatch,
+                        detail,
+                    )
+                },
+            )?,
+        };
         let observed_visibility = GpuShaderStages::new(used_stages)?;
         let refinement_index = refinements
             .binary_search_by_key(&key, GpuBindingLayoutRefinement::key)

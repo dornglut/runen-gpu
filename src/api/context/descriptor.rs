@@ -64,6 +64,8 @@ pub enum GpuLimitKind {
     MaxColorAttachments,
     MaxVertexBuffers,
     MaxBindingsPerGroup,
+    MaxBindingArrayElementsPerShaderStage,
+    MaxBindingArraySamplerElementsPerShaderStage,
     MaxTextureDimension2d,
     MaxBindGroups,
     MaxBindGroupsPlusVertexBuffers,

@@ -5,8 +5,8 @@ use super::{
 use crate::{
     GpuBindingClass, GpuBindingDeclaration, GpuBufferAccess, GpuBufferAccessKind, GpuBufferRange,
     GpuPipelineLayoutDescriptor, GpuProgramContractCause, GpuProgramContractError,
-    GpuResourceAccess, GpuSamplerUse, GpuStorageBufferAccess, GpuStorageTextureAccess,
-    GpuTextureAccess, GpuTextureAccessKind, GpuTextureAccessResource,
+    GpuResourceAccess, GpuSamplerUse, GpuShaderStage, GpuStorageBufferAccess,
+    GpuStorageTextureAccess, GpuTextureAccess, GpuTextureAccessKind, GpuTextureAccessResource,
 };
 use core::hash::{Hash, Hasher};
 use std::collections::BTreeMap;
@@ -291,9 +291,18 @@ fn validate_pipeline_binding_limits(
 
     let mut dynamic_uniform_buffers = 0_u64;
     let mut dynamic_storage_buffers = 0_u64;
+    let mut binding_array_elements = PerStageBindingArrayCount::default();
+    let mut binding_array_sampler_elements = PerStageBindingArrayCount::default();
 
     for group in layout.groups() {
         for declaration in group.bindings() {
+            if let Some(array_count) = declaration.array_count() {
+                binding_array_elements.add(declaration.visibility(), array_count.get());
+                if declaration.kind().class() == GpuBindingClass::Sampler {
+                    binding_array_sampler_elements.add(declaration.visibility(), array_count.get());
+                }
+            }
+
             if !declaration.kind().uses_dynamic_offset() {
                 continue;
             }
@@ -328,7 +337,53 @@ fn validate_pipeline_binding_limits(
             "reduce dynamic storage-buffer declarations to the admitted pipeline-layout limit",
         ));
     }
+    if binding_array_elements.max() > device_facts.max_binding_array_elements_per_shader_stage() {
+        return Err(device_incompatible(
+            "binding-array elements per shader stage",
+            "reduce fixed binding-array cardinality or request a larger admitted binding-array element limit",
+        ));
+    }
+    if binding_array_sampler_elements.max()
+        > device_facts.max_binding_array_sampler_elements_per_shader_stage()
+    {
+        return Err(device_incompatible(
+            "binding-array sampler elements per shader stage",
+            "reduce fixed sampler-array cardinality or request a larger admitted sampler-array element limit",
+        ));
+    }
     Ok(())
+}
+
+#[derive(Debug, Default)]
+struct PerStageBindingArrayCount {
+    compute: u32,
+    vertex: u32,
+    fragment: u32,
+}
+
+impl PerStageBindingArrayCount {
+    fn add(&mut self, visibility: crate::GpuShaderStages, count: u32) {
+        for stage in visibility.iter() {
+            match stage {
+                GpuShaderStage::Compute => self.compute = self.compute.saturating_add(count),
+                GpuShaderStage::Vertex => self.vertex = self.vertex.saturating_add(count),
+                GpuShaderStage::Fragment => self.fragment = self.fragment.saturating_add(count),
+            }
+        }
+    }
+
+    const fn max(&self) -> u32 {
+        let compute_or_vertex = if self.compute > self.vertex {
+            self.compute
+        } else {
+            self.vertex
+        };
+        if compute_or_vertex > self.fragment {
+            compute_or_vertex
+        } else {
+            self.fragment
+        }
+    }
 }
 
 fn required_bind_group_slots(layout: &GpuPipelineLayoutDescriptor) -> u64 {
@@ -358,4 +413,129 @@ fn device_incompatible(
         GpuProgramContractCause::RuntimeBindingIncompatible,
         correction,
     )
+}
+
+#[cfg(test)]
+mod binding_array_limit_tests {
+    use super::*;
+    use crate::{
+        GpuBindGroupLayoutDescriptor, GpuBindingKey, GpuBindingKind, GpuBindingProvenance,
+        GpuSamplerClass, GpuShaderStages,
+    };
+    use core::num::NonZeroU32;
+
+    fn storage_array(
+        group: u32,
+        binding: u32,
+        stages: impl IntoIterator<Item = GpuShaderStage>,
+        count: u32,
+    ) -> GpuBindingDeclaration {
+        GpuBindingDeclaration::new(
+            GpuBindingKey::try_new(u64::from(group), u64::from(binding)).unwrap(),
+            GpuShaderStages::new(stages).unwrap(),
+            GpuBindingKind::storage_buffer(GpuStorageBufferAccess::ReadOnly, false, None),
+            NonZeroU32::new(count),
+            format!("storage-array-{group}-{binding}"),
+            GpuBindingProvenance::new("binding-array-limit-test", None).unwrap(),
+        )
+        .unwrap()
+    }
+
+    fn sampler_array(
+        group: u32,
+        binding: u32,
+        stages: impl IntoIterator<Item = GpuShaderStage>,
+        count: u32,
+    ) -> GpuBindingDeclaration {
+        GpuBindingDeclaration::new(
+            GpuBindingKey::try_new(u64::from(group), u64::from(binding)).unwrap(),
+            GpuShaderStages::new(stages).unwrap(),
+            GpuBindingKind::sampler(GpuSamplerClass::Filtering),
+            NonZeroU32::new(count),
+            format!("sampler-array-{group}-{binding}"),
+            GpuBindingProvenance::new("binding-array-limit-test", None).unwrap(),
+        )
+        .unwrap()
+    }
+
+    fn facts(general: u32, samplers: u32) -> GpuRuntimeBindingDeviceFacts {
+        GpuRuntimeBindingDeviceFacts::new(None, None, 8, 0, 0, general, samplers, [])
+    }
+
+    fn layout(
+        groups: impl IntoIterator<Item = GpuBindGroupLayoutDescriptor>,
+    ) -> GpuPipelineLayoutDescriptor {
+        GpuPipelineLayoutDescriptor::new(groups).unwrap()
+    }
+
+    #[test]
+    fn same_stage_fixed_arrays_sum_across_bind_groups() {
+        let layout = layout([
+            GpuBindGroupLayoutDescriptor::new(
+                0,
+                [storage_array(0, 0, [GpuShaderStage::Compute], 4)],
+            )
+            .unwrap(),
+            GpuBindGroupLayoutDescriptor::new(
+                1,
+                [storage_array(1, 0, [GpuShaderStage::Compute], 3)],
+            )
+            .unwrap(),
+        ]);
+
+        assert!(validate_pipeline_binding_limits(&layout, &facts(6, 0)).is_err());
+        validate_pipeline_binding_limits(&layout, &facts(7, 0))
+            .expect("same-stage array demand should equal the summed cardinality");
+    }
+
+    #[test]
+    fn different_stage_fixed_arrays_use_the_maximum_not_a_global_sum() {
+        let layout = layout([
+            GpuBindGroupLayoutDescriptor::new(
+                0,
+                [storage_array(0, 0, [GpuShaderStage::Compute], 4)],
+            )
+            .unwrap(),
+            GpuBindGroupLayoutDescriptor::new(
+                1,
+                [storage_array(1, 0, [GpuShaderStage::Vertex], 5)],
+            )
+            .unwrap(),
+            GpuBindGroupLayoutDescriptor::new(
+                2,
+                [storage_array(
+                    2,
+                    0,
+                    [GpuShaderStage::Compute, GpuShaderStage::Fragment],
+                    3,
+                )],
+            )
+            .unwrap(),
+        ]);
+
+        validate_pipeline_binding_limits(&layout, &facts(7, 0)).expect(
+            "per-stage demand should sum only declarations visible to that stage and then take the maximum",
+        );
+        assert!(validate_pipeline_binding_limits(&layout, &facts(6, 0)).is_err());
+    }
+
+    #[test]
+    fn sampler_arrays_consume_both_general_and_sampler_array_counters() {
+        let layout = layout([GpuBindGroupLayoutDescriptor::new(
+            0,
+            [sampler_array(0, 0, [GpuShaderStage::Fragment], 3)],
+        )
+        .unwrap()]);
+
+        assert!(
+            validate_pipeline_binding_limits(&layout, &facts(2, 3)).is_err(),
+            "sampler arrays must consume the pinned WGPU general array counter"
+        );
+        assert!(
+            validate_pipeline_binding_limits(&layout, &facts(3, 2)).is_err(),
+            "sampler arrays must also consume the sampler-specific array counter"
+        );
+        validate_pipeline_binding_limits(&layout, &facts(3, 3))
+            .expect("both array counters at the exact demand should admit");
+    }
 }

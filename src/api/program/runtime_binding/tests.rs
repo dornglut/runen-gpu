@@ -78,6 +78,8 @@ fn device_facts_with_limits(
         max_bind_groups,
         max_dynamic_uniform_buffers,
         max_dynamic_storage_buffers,
+        u32::MAX,
+        u32::MAX,
         [],
     )
 }
@@ -194,7 +196,7 @@ fn runtime_bindings_require_only_the_alignment_fact_the_binding_uses() {
     let empty_layout = GpuPipelineLayoutDescriptor::new([]).unwrap();
     let empty = GpuRuntimeBindingSet::new(empty_layout, [])
         .expect("empty runtime bindings should construct logically");
-    let no_alignments = GpuRuntimeBindingDeviceFacts::new(None, None, 4, 8, 4, []);
+    let no_alignments = GpuRuntimeBindingDeviceFacts::new(None, None, 4, 8, 4, 0, 0, []);
     empty
         .validate_device_facts(&no_alignments)
         .expect("binding-free work must not require unrelated alignment facts");

@@ -4,7 +4,9 @@ use runen_gpu::{
 };
 use std::collections::BTreeSet;
 
-const PUBLIC_DESCRIPTOR_LIMITS: [GpuLimitKind; 6] = [
+const PUBLIC_DESCRIPTOR_LIMITS: [GpuLimitKind; 8] = [
+    GpuLimitKind::MaxBindingArrayElementsPerShaderStage,
+    GpuLimitKind::MaxBindingArraySamplerElementsPerShaderStage,
     GpuLimitKind::MaxBufferSize,
     GpuLimitKind::MaxTextureDimension1d,
     GpuLimitKind::MaxTextureDimension3d,

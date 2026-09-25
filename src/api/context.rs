@@ -128,12 +128,15 @@ impl GpuContext {
         let device_limits = self.device.device_limits();
         let alignments = device_limits.alignments();
         let limits = device_limits.values();
+        let workload_limits = self.device.workload_budget().limits();
         GpuRuntimeBindingDeviceFacts::new(
             alignments.uniform_dynamic_offset.and_then(NonZeroU64::new),
             alignments.storage_dynamic_offset.and_then(NonZeroU64::new),
             limits.max_bind_groups(),
             limits.max_dynamic_uniform_buffers_per_pipeline_layout(),
             limits.max_dynamic_storage_buffers_per_pipeline_layout(),
+            workload_limits.max_binding_array_elements_per_shader_stage(),
+            workload_limits.max_binding_array_sampler_elements_per_shader_stage(),
             self.adapter.supported().formats(),
         )
     }
