@@ -910,14 +910,13 @@ mod tests {
 
     #[test]
     fn explicit_array_limit_policy_composes_with_feature_scoped_baselines() {
-        let descriptor = GpuContextDescriptor::new(requirements([
-            GpuCapabilityFeature::TextureBindingArray,
-        ]))
-        .permit_limit(GpuLimitKind::MaxBindingArrayElementsPerShaderStage, 32)
-        .permit_limit(
-            GpuLimitKind::MaxBindingArraySamplerElementsPerShaderStage,
-            16,
-        );
+        let descriptor =
+            GpuContextDescriptor::new(requirements([GpuCapabilityFeature::TextureBindingArray]))
+                .permit_limit(GpuLimitKind::MaxBindingArrayElementsPerShaderStage, 32)
+                .permit_limit(
+                    GpuLimitKind::MaxBindingArraySamplerElementsPerShaderStage,
+                    16,
+                );
         let capped = evaluate_candidate(
             &descriptor,
             adapter([GpuCapabilityFeature::TextureBindingArray]),
@@ -940,13 +939,8 @@ mod tests {
         );
 
         let raised = evaluate_candidate(
-            &GpuContextDescriptor::new(requirements([
-                GpuCapabilityFeature::TextureBindingArray,
-            ]))
-            .require_limit(
-                GpuLimitKind::MaxBindingArrayElementsPerShaderStage,
-                750_000,
-            ),
+            &GpuContextDescriptor::new(requirements([GpuCapabilityFeature::TextureBindingArray]))
+                .require_limit(GpuLimitKind::MaxBindingArrayElementsPerShaderStage, 750_000),
             adapter([GpuCapabilityFeature::TextureBindingArray]),
             true,
         )
