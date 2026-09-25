@@ -1,13 +1,13 @@
 //! Typed G4B layout/runtime lowering owned by the private G4C2 realization boundary.
 
 use super::super::texture_format_mapping::texture_format;
+use crate::api::fixed_array_layout_capabilities;
 use crate::{
     GpuBindGroupLayoutDescriptor, GpuBindingClass, GpuBindingDeclaration, GpuContext,
     GpuProgramBindingRealizationError, GpuProgramBindingRealizationErrorCategory, GpuSamplerClass,
     GpuStorageBufferAccess, GpuStorageTextureAccess, GpuTextureSampleClass,
     GpuTextureViewDimension,
 };
-use crate::api::fixed_array_layout_capabilities;
 use wgpu::{
     BindGroupLayoutEntry, BindingType, BufferBindingType, SamplerBindingType, ShaderStages,
     StorageTextureAccess, TextureSampleType, TextureViewDimension,
