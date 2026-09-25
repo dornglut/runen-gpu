@@ -26,6 +26,21 @@ pub enum GpuVertexFormat {
     Snorm8,
     Snorm8x2,
     Snorm8x4,
+    Uint16,
+    Uint16x2,
+    Uint16x4,
+    Sint16,
+    Sint16x2,
+    Sint16x4,
+    Unorm16,
+    Unorm16x2,
+    Unorm16x4,
+    Snorm16,
+    Snorm16x2,
+    Snorm16x4,
+    Float16,
+    Float16x2,
+    Float16x4,
     Float32,
     Float32x2,
     Float32x3,
@@ -44,15 +59,35 @@ impl GpuVertexFormat {
     pub const fn size_bytes(self) -> u64 {
         match self {
             Self::Uint8 | Self::Sint8 | Self::Unorm8 | Self::Snorm8 => 1,
-            Self::Uint8x2 | Self::Sint8x2 | Self::Unorm8x2 | Self::Snorm8x2 => 2,
+            Self::Uint8x2
+            | Self::Sint8x2
+            | Self::Unorm8x2
+            | Self::Snorm8x2
+            | Self::Uint16
+            | Self::Sint16
+            | Self::Unorm16
+            | Self::Snorm16
+            | Self::Float16 => 2,
             Self::Uint8x4
             | Self::Sint8x4
             | Self::Unorm8x4
             | Self::Snorm8x4
+            | Self::Uint16x2
+            | Self::Sint16x2
+            | Self::Unorm16x2
+            | Self::Snorm16x2
+            | Self::Float16x2
             | Self::Float32
             | Self::Uint32
             | Self::Sint32 => 4,
-            Self::Float32x2 | Self::Uint32x2 | Self::Sint32x2 => 8,
+            Self::Uint16x4
+            | Self::Sint16x4
+            | Self::Unorm16x4
+            | Self::Snorm16x4
+            | Self::Float16x4
+            | Self::Float32x2
+            | Self::Uint32x2
+            | Self::Sint32x2 => 8,
             Self::Float32x3 | Self::Uint32x3 | Self::Sint32x3 => 12,
             Self::Float32x4 | Self::Uint32x4 | Self::Sint32x4 => 16,
         }
@@ -69,16 +104,39 @@ impl GpuVertexFormat {
 
     pub fn shader_io_type(self) -> GpuShaderIoValueType {
         let (class, width) = match self {
-            Self::Uint8 | Self::Uint32 => (GpuShaderIoScalarClass::Uint, 1),
-            Self::Uint8x2 | Self::Uint32x2 => (GpuShaderIoScalarClass::Uint, 2),
-            Self::Uint8x4 | Self::Uint32x4 => (GpuShaderIoScalarClass::Uint, 4),
-            Self::Sint8 | Self::Sint32 => (GpuShaderIoScalarClass::Sint, 1),
-            Self::Sint8x2 | Self::Sint32x2 => (GpuShaderIoScalarClass::Sint, 2),
-            Self::Sint8x4 | Self::Sint32x4 => (GpuShaderIoScalarClass::Sint, 4),
-            Self::Unorm8 | Self::Snorm8 | Self::Float32 => (GpuShaderIoScalarClass::Float, 1),
-            Self::Unorm8x2 | Self::Snorm8x2 | Self::Float32x2 => (GpuShaderIoScalarClass::Float, 2),
+            Self::Uint8 | Self::Uint16 | Self::Uint32 => (GpuShaderIoScalarClass::Uint, 1),
+            Self::Uint8x2 | Self::Uint16x2 | Self::Uint32x2 => {
+                (GpuShaderIoScalarClass::Uint, 2)
+            }
+            Self::Uint8x4 | Self::Uint16x4 | Self::Uint32x4 => {
+                (GpuShaderIoScalarClass::Uint, 4)
+            }
+            Self::Sint8 | Self::Sint16 | Self::Sint32 => (GpuShaderIoScalarClass::Sint, 1),
+            Self::Sint8x2 | Self::Sint16x2 | Self::Sint32x2 => {
+                (GpuShaderIoScalarClass::Sint, 2)
+            }
+            Self::Sint8x4 | Self::Sint16x4 | Self::Sint32x4 => {
+                (GpuShaderIoScalarClass::Sint, 4)
+            }
+            Self::Unorm8
+            | Self::Snorm8
+            | Self::Unorm16
+            | Self::Snorm16
+            | Self::Float16
+            | Self::Float32 => (GpuShaderIoScalarClass::Float, 1),
+            Self::Unorm8x2
+            | Self::Snorm8x2
+            | Self::Unorm16x2
+            | Self::Snorm16x2
+            | Self::Float16x2
+            | Self::Float32x2 => (GpuShaderIoScalarClass::Float, 2),
             Self::Float32x3 => (GpuShaderIoScalarClass::Float, 3),
-            Self::Unorm8x4 | Self::Snorm8x4 | Self::Float32x4 => (GpuShaderIoScalarClass::Float, 4),
+            Self::Unorm8x4
+            | Self::Snorm8x4
+            | Self::Unorm16x4
+            | Self::Snorm16x4
+            | Self::Float16x4
+            | Self::Float32x4 => (GpuShaderIoScalarClass::Float, 4),
             Self::Uint32x3 => (GpuShaderIoScalarClass::Uint, 3),
             Self::Sint32x3 => (GpuShaderIoScalarClass::Sint, 3),
         };
