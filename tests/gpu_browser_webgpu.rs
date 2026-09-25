@@ -10,11 +10,15 @@ mod retained_vertex16;
 #[cfg(target_arch = "wasm32")]
 #[path = "gpu_r1_vertex8_formats.rs"]
 mod retained_vertex8;
+#[cfg(target_arch = "wasm32")]
+#[path = "gpu_r1_vertex_packed_formats.rs"]
+mod retained_vertex_packed;
 
 #[cfg(target_arch = "wasm32")]
 mod browser {
     use super::{
-        retained_offscreen_indexed, retained_prefix_scan, retained_vertex8, retained_vertex16,
+        retained_offscreen_indexed, retained_prefix_scan, retained_vertex_packed, retained_vertex8,
+        retained_vertex16,
     };
     use runen_gpu::*;
     use std::cell::RefCell;
@@ -35,6 +39,7 @@ mod browser {
         static PACKED32_COLOR_ATTACHMENT_MASK: RefCell<u32> = RefCell::new(0);
         static VERTEX8_EXERCISED_MASK: RefCell<u32> = RefCell::new(0);
         static VERTEX16_EXERCISED_MASK: RefCell<u32> = RefCell::new(0);
+        static VERTEX_PACKED_EXERCISED_MASK: RefCell<u32> = RefCell::new(0);
         static DEPTH_SAMPLED_EXERCISED_MASK: RefCell<u32> = RefCell::new(0);
         static DEPTH_ATTACHMENT_EXERCISED_MASK: RefCell<u32> = RefCell::new(0);
         static DEPTH_COPY_EXERCISED_MASK: RefCell<u32> = RefCell::new(0);
@@ -2123,6 +2128,8 @@ fn cs_main() {
         VERTEX8_EXERCISED_MASK.with(|slot| *slot.borrow_mut() = vertex8_mask);
         let vertex16_mask = retained_vertex16::run_browser_vertex16().await;
         VERTEX16_EXERCISED_MASK.with(|slot| *slot.borrow_mut() = vertex16_mask);
+        let vertex_packed_mask = retained_vertex_packed::run_browser_vertex_packed().await;
+        VERTEX_PACKED_EXERCISED_MASK.with(|slot| *slot.borrow_mut() = vertex_packed_mask);
         run_browser_depth_formats().await;
         run_browser_stencil8().await;
         run_browser_depth24plus_stencil8().await;
@@ -2211,6 +2218,11 @@ fn cs_main() {
     #[unsafe(no_mangle)]
     pub extern "C" fn runengpu_browser_vertex16_exercised_mask() -> u32 {
         VERTEX16_EXERCISED_MASK.with(|mask| *mask.borrow())
+    }
+
+    #[unsafe(no_mangle)]
+    pub extern "C" fn runengpu_browser_vertex_packed_exercised_mask() -> u32 {
+        VERTEX_PACKED_EXERCISED_MASK.with(|mask| *mask.borrow())
     }
 
     #[unsafe(no_mangle)]

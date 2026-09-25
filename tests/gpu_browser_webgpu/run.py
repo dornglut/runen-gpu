@@ -101,6 +101,7 @@ const done = arguments[arguments.length - 1];
         typeof wasm.runengpu_browser_packed32_color_attachment_mask !== "function" ||
         typeof wasm.runengpu_browser_vertex8_exercised_mask !== "function" ||
         typeof wasm.runengpu_browser_vertex16_exercised_mask !== "function" ||
+        typeof wasm.runengpu_browser_vertex_packed_exercised_mask !== "function" ||
         typeof wasm.runengpu_browser_depth_sampled_exercised_mask !== "function" ||
         typeof wasm.runengpu_browser_depth_attachment_exercised_mask !== "function" ||
         typeof wasm.runengpu_browser_depth_copy_exercised_mask !== "function" ||
@@ -129,6 +130,7 @@ const done = arguments[arguments.length - 1];
           packed32ColorAttachmentMask: wasm.runengpu_browser_packed32_color_attachment_mask(),
           vertex8Mask: wasm.runengpu_browser_vertex8_exercised_mask(),
           vertex16Mask: wasm.runengpu_browser_vertex16_exercised_mask(),
+          vertexPackedMask: wasm.runengpu_browser_vertex_packed_exercised_mask(),
           depthSampledMask: wasm.runengpu_browser_depth_sampled_exercised_mask(),
           depthAttachmentMask: wasm.runengpu_browser_depth_attachment_exercised_mask(),
           depthCopyMask: wasm.runengpu_browser_depth_copy_exercised_mask(),
@@ -839,6 +841,27 @@ def main() -> int:
             raise RuntimeError(
                 "RunenGPU actual-browser Vertex16: NOT QUALIFIED "
                 f"(mask={vertex16_mask:#x}, expected={vertex16_full_mask:#x})"
+            )
+
+        vertex_packed_names = ("Unorm10_10_10_2", "Unorm8x4Bgra")
+        vertex_packed_mask = read_exercised_mask(
+            value, "vertexPackedMask", "VertexPacked", len(vertex_packed_names)
+        )
+        vertex_packed_full_mask = (1 << len(vertex_packed_names)) - 1
+        for index, format_name in enumerate(vertex_packed_names):
+            if vertex_packed_mask & (1 << index):
+                print(
+                    f"RunenGPU actual-browser {format_name} vertex: "
+                    "EXERCISED (non-symmetric packed decode + exact readback)"
+                )
+            else:
+                print(
+                    f"RunenGPU actual-browser {format_name} vertex: NOT EXERCISED"
+                )
+        if vertex_packed_mask != vertex_packed_full_mask:
+            raise RuntimeError(
+                "RunenGPU actual-browser VertexPacked: NOT QUALIFIED "
+                f"(mask={vertex_packed_mask:#x}, expected={vertex_packed_full_mask:#x})"
             )
 
         report_depth_proofs(value)

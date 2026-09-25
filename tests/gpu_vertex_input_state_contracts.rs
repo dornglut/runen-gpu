@@ -495,3 +495,40 @@ fn vertex16_compact_scalar_offsets_use_two_byte_alignment_while_stride_stays_fou
         "16-bit attributes do not relax four-byte vertex stride alignment"
     );
 }
+
+#[test]
+fn packed_vertex_formats_reuse_four_byte_alignment_and_float4_shader_io() {
+    for format in [
+        GpuVertexFormat::Unorm10_10_10_2,
+        GpuVertexFormat::Unorm8x4Bgra,
+    ] {
+        assert_eq!(format.size_bytes(), 4, "{format:?}");
+        assert_eq!(format.attribute_alignment_bytes(), 4, "{format:?}");
+        let value_type = format.shader_io_type();
+        assert_eq!(
+            value_type.scalar_class(),
+            GpuShaderIoScalarClass::Float,
+            "{format:?}"
+        );
+        assert_eq!(value_type.vector_width().get(), 4, "{format:?}");
+
+        GpuVertexBufferLayoutDescriptor::new(
+            0,
+            4,
+            GpuVertexStepMode::Vertex,
+            [GpuVertexAttribute::new(0, 0, format)],
+        )
+        .unwrap_or_else(|error| panic!("{format:?} offset 0 should be valid: {error:?}"));
+
+        assert!(
+            GpuVertexBufferLayoutDescriptor::new(
+                0,
+                8,
+                GpuVertexStepMode::Vertex,
+                [GpuVertexAttribute::new(0, 2, format)],
+            )
+            .is_err(),
+            "{format:?} offset 2 must fail four-byte packed alignment"
+        );
+    }
+}
