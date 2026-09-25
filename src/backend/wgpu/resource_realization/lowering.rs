@@ -6,8 +6,7 @@ use crate::{
     GpuContext, GpuFilterMode, GpuFormatRole, GpuMemoryIntent, GpuQueryKind, GpuQuerySetDescriptor,
     GpuResourceCommon, GpuResourceOwnership, GpuResourceRealizationError,
     GpuResourceRealizationErrorCategory, GpuSamplerDescriptor, GpuSamplerFilterState,
-    GpuTextureAspect, GpuTextureDescriptor, GpuTextureDimension, GpuTextureFormat,
-    GpuTextureUsage,
+    GpuTextureAspect, GpuTextureDescriptor, GpuTextureDimension, GpuTextureFormat, GpuTextureUsage,
     GpuTextureViewDescriptor, GpuTextureViewDimension, GpuWorkResourceId,
 };
 use wgpu::{
@@ -637,7 +636,12 @@ mod tests {
         .unwrap();
         assert_eq!(
             map_sampler_filter_state(anisotropic),
-            (FilterMode::Linear, FilterMode::Linear, MipmapFilterMode::Linear, 8)
+            (
+                FilterMode::Linear,
+                FilterMode::Linear,
+                MipmapFilterMode::Linear,
+                8
+            )
         );
         assert_eq!(
             map_compare_function(GpuCompareFunction::LessEqual),

@@ -8,6 +8,9 @@ mod retained_offscreen_indexed;
 #[path = "gpu_prefix_scan_native.rs"]
 mod retained_prefix_scan;
 #[cfg(target_arch = "wasm32")]
+#[path = "gpu_r2_sampler_anisotropy.rs"]
+mod retained_sampler_anisotropy;
+#[cfg(target_arch = "wasm32")]
 #[path = "gpu_r1_vertex16_formats.rs"]
 mod retained_vertex16;
 #[cfg(target_arch = "wasm32")]
@@ -16,9 +19,6 @@ mod retained_vertex8;
 #[cfg(target_arch = "wasm32")]
 #[path = "gpu_r1_vertex_packed_formats.rs"]
 mod retained_vertex_packed;
-#[cfg(target_arch = "wasm32")]
-#[path = "gpu_r2_sampler_anisotropy.rs"]
-mod retained_sampler_anisotropy;
 
 #[cfg(target_arch = "wasm32")]
 mod browser {
@@ -2134,7 +2134,8 @@ fn cs_main() {
         run_browser_packed32().await;
         let bc_mask = retained_bc::run_browser_bc().await;
         BC_EXERCISED_MASK.with(|slot| *slot.borrow_mut() = bc_mask);
-        let sampler_anisotropy = retained_sampler_anisotropy::run_browser_sampler_anisotropy().await;
+        let sampler_anisotropy =
+            retained_sampler_anisotropy::run_browser_sampler_anisotropy().await;
         SAMPLER_ANISOTROPY_EXERCISED.with(|slot| *slot.borrow_mut() = sampler_anisotropy);
         let vertex8_mask = retained_vertex8::run_browser_vertex8().await;
         VERTEX8_EXERCISED_MASK.with(|slot| *slot.borrow_mut() = vertex8_mask);

@@ -139,9 +139,7 @@ fn native_context() -> GpuContext {
 fn sampler_anisotropy_native_realization_is_backend_proven() {
     let context = native_context();
     realize_anisotropic_sampler(&context);
-    println!(
-        "Sampler anisotropy: EXERCISED (requested max=8 through public sampler realization)"
-    );
+    println!("Sampler anisotropy: EXERCISED (requested max=8 through public sampler realization)");
 }
 
 #[cfg(target_arch = "wasm32")]
