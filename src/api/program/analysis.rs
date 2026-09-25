@@ -1,7 +1,8 @@
 use super::contract_diagnostics::{GpuProgramContractCause, GpuProgramContractError};
 use super::entry_point::{GpuEntryPointDescriptor, GpuEntryPointName};
+use super::fixed_array::fixed_array_compilation_capabilities;
 use super::interface::{
-    GpuBindingDeclaration, GpuBindingKey, GpuBindingKind, GpuBindingLayoutRefinement,
+    GpuBindingClass, GpuBindingDeclaration, GpuBindingKey, GpuBindingKind, GpuBindingLayoutRefinement,
     GpuBindingProvenance, GpuProgramInterfaceDescriptor, GpuSamplerClass, GpuShaderStage,
     GpuShaderStages, GpuStorageBufferAccess, GpuStorageTextureAccess, GpuTextureSampleClass,
     GpuTextureViewDimension,
@@ -64,6 +65,18 @@ enum CompilerBindingKind {
     },
 }
 
+impl CompilerBindingKind {
+    const fn class(self) -> GpuBindingClass {
+        match self {
+            Self::UniformBuffer { .. } => GpuBindingClass::UniformBuffer,
+            Self::StorageBuffer { .. } => GpuBindingClass::StorageBuffer,
+            Self::SampledTexture { .. } => GpuBindingClass::SampledTexture,
+            Self::StorageTexture { .. } => GpuBindingClass::StorageTexture,
+            Self::Sampler { .. } => GpuBindingClass::Sampler,
+        }
+    }
+}
+
 pub(crate) fn analyze_program(
     source: &GpuAdmittedProgramSource,
     selected_entry_points: impl IntoIterator<Item = GpuEntryPointName>,
@@ -72,7 +85,7 @@ pub(crate) fn analyze_program(
     let operation = "admit canonical WGSL program";
     let source_label = source.identity().diagnostic_label();
     let baseline_capabilities = baseline_analysis_capabilities();
-    let (module, analysis_capabilities, required_features) = match parse_wgsl(
+    let (module, analysis_capabilities, mut required_features) = match parse_wgsl(
         source.canonical_wgsl(),
         baseline_capabilities,
     ) {
@@ -111,6 +124,38 @@ pub(crate) fn analyze_program(
                     format!("canonical WGSL validation failed: {error}"),
                 )
             })?;
+
+    for (_, global) in module.global_variables.iter() {
+        let Some(binding) = global.binding else {
+            continue;
+        };
+        let (base_type, array_count) =
+            binding_array_type(&module, global.ty).map_err(|detail| {
+                invalid(
+                    operation,
+                    &format!("module binding @group({}) @binding({})", binding.group, binding.binding),
+                    GpuProgramContractCause::ProgramInterfaceMismatch,
+                    detail,
+                )
+            })?;
+        if array_count.is_none() {
+            continue;
+        }
+        let compiler_kind = compiler_binding_kind(&module, &module_info, global.space, base_type)
+            .map_err(|detail| {
+                invalid(
+                    operation,
+                    &format!("module binding @group({}) @binding({})", binding.group, binding.binding),
+                    GpuProgramContractCause::ProgramInterfaceMismatch,
+                    detail,
+                )
+            })?;
+        for feature in fixed_array_compilation_capabilities(compiler_kind.class()) {
+            if !required_features.contains(feature) {
+                required_features.push(*feature);
+            }
+        }
+    }
 
     let mut selected_names = selected_entry_points.into_iter().collect::<Vec<_>>();
     if selected_names.is_empty() {
