@@ -7,6 +7,7 @@ use crate::{
     GpuStorageBufferAccess, GpuStorageTextureAccess, GpuTextureSampleClass,
     GpuTextureViewDimension,
 };
+use crate::api::fixed_array_layout_capabilities;
 use wgpu::{
     BindGroupLayoutEntry, BindingType, BufferBindingType, SamplerBindingType, ShaderStages,
     StorageTextureAccess, TextureSampleType, TextureViewDimension,
@@ -130,25 +131,15 @@ fn validate_array_feature(
     if binding.array_count().is_none() {
         return Ok(());
     }
-    let required = match binding.kind().class() {
-        GpuBindingClass::UniformBuffer => {
-            wgpu::Features::BUFFER_BINDING_ARRAY | wgpu::Features::UNIFORM_BUFFER_BINDING_ARRAYS
+    for feature in fixed_array_layout_capabilities(binding.kind().class()) {
+        if !context.device_facts().is_enabled(*feature) {
+            return Err(layout_error(
+                descriptor,
+                format!(
+                    "the admitted RunenGPU device did not enable {feature:?}, required by this fixed binding-array layout"
+                ),
+            ));
         }
-        GpuBindingClass::StorageBuffer => {
-            wgpu::Features::BUFFER_BINDING_ARRAY | wgpu::Features::STORAGE_RESOURCE_BINDING_ARRAY
-        }
-        GpuBindingClass::SampledTexture | GpuBindingClass::Sampler => {
-            wgpu::Features::TEXTURE_BINDING_ARRAY
-        }
-        GpuBindingClass::StorageTexture => {
-            wgpu::Features::TEXTURE_BINDING_ARRAY | wgpu::Features::STORAGE_RESOURCE_BINDING_ARRAY
-        }
-    };
-    if !context.backend.device.features().contains(required) {
-        return Err(layout_error(
-            descriptor,
-            "the admitted device did not enable the WGPU fixed binding-array features required by this layout",
-        ));
     }
     Ok(())
 }
