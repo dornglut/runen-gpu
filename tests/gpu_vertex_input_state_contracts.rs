@@ -321,25 +321,114 @@ fn compact_vertex_attribute_offsets_use_per_format_alignment_while_stride_stays_
     );
 }
 
-
 #[test]
 fn vertex16_formats_derive_exact_size_alignment_and_shader_io() {
     let cases = [
-        (GpuVertexFormat::Uint16, 2, 2, GpuShaderIoScalarClass::Uint, 1),
-        (GpuVertexFormat::Uint16x2, 4, 4, GpuShaderIoScalarClass::Uint, 2),
-        (GpuVertexFormat::Uint16x4, 8, 4, GpuShaderIoScalarClass::Uint, 4),
-        (GpuVertexFormat::Sint16, 2, 2, GpuShaderIoScalarClass::Sint, 1),
-        (GpuVertexFormat::Sint16x2, 4, 4, GpuShaderIoScalarClass::Sint, 2),
-        (GpuVertexFormat::Sint16x4, 8, 4, GpuShaderIoScalarClass::Sint, 4),
-        (GpuVertexFormat::Unorm16, 2, 2, GpuShaderIoScalarClass::Float, 1),
-        (GpuVertexFormat::Unorm16x2, 4, 4, GpuShaderIoScalarClass::Float, 2),
-        (GpuVertexFormat::Unorm16x4, 8, 4, GpuShaderIoScalarClass::Float, 4),
-        (GpuVertexFormat::Snorm16, 2, 2, GpuShaderIoScalarClass::Float, 1),
-        (GpuVertexFormat::Snorm16x2, 4, 4, GpuShaderIoScalarClass::Float, 2),
-        (GpuVertexFormat::Snorm16x4, 8, 4, GpuShaderIoScalarClass::Float, 4),
-        (GpuVertexFormat::Float16, 2, 2, GpuShaderIoScalarClass::Float, 1),
-        (GpuVertexFormat::Float16x2, 4, 4, GpuShaderIoScalarClass::Float, 2),
-        (GpuVertexFormat::Float16x4, 8, 4, GpuShaderIoScalarClass::Float, 4),
+        (
+            GpuVertexFormat::Uint16,
+            2,
+            2,
+            GpuShaderIoScalarClass::Uint,
+            1,
+        ),
+        (
+            GpuVertexFormat::Uint16x2,
+            4,
+            4,
+            GpuShaderIoScalarClass::Uint,
+            2,
+        ),
+        (
+            GpuVertexFormat::Uint16x4,
+            8,
+            4,
+            GpuShaderIoScalarClass::Uint,
+            4,
+        ),
+        (
+            GpuVertexFormat::Sint16,
+            2,
+            2,
+            GpuShaderIoScalarClass::Sint,
+            1,
+        ),
+        (
+            GpuVertexFormat::Sint16x2,
+            4,
+            4,
+            GpuShaderIoScalarClass::Sint,
+            2,
+        ),
+        (
+            GpuVertexFormat::Sint16x4,
+            8,
+            4,
+            GpuShaderIoScalarClass::Sint,
+            4,
+        ),
+        (
+            GpuVertexFormat::Unorm16,
+            2,
+            2,
+            GpuShaderIoScalarClass::Float,
+            1,
+        ),
+        (
+            GpuVertexFormat::Unorm16x2,
+            4,
+            4,
+            GpuShaderIoScalarClass::Float,
+            2,
+        ),
+        (
+            GpuVertexFormat::Unorm16x4,
+            8,
+            4,
+            GpuShaderIoScalarClass::Float,
+            4,
+        ),
+        (
+            GpuVertexFormat::Snorm16,
+            2,
+            2,
+            GpuShaderIoScalarClass::Float,
+            1,
+        ),
+        (
+            GpuVertexFormat::Snorm16x2,
+            4,
+            4,
+            GpuShaderIoScalarClass::Float,
+            2,
+        ),
+        (
+            GpuVertexFormat::Snorm16x4,
+            8,
+            4,
+            GpuShaderIoScalarClass::Float,
+            4,
+        ),
+        (
+            GpuVertexFormat::Float16,
+            2,
+            2,
+            GpuShaderIoScalarClass::Float,
+            1,
+        ),
+        (
+            GpuVertexFormat::Float16x2,
+            4,
+            4,
+            GpuShaderIoScalarClass::Float,
+            2,
+        ),
+        (
+            GpuVertexFormat::Float16x4,
+            8,
+            4,
+            GpuShaderIoScalarClass::Float,
+            4,
+        ),
     ];
     assert_eq!(cases.len(), 15);
     for (format, size, alignment, class, width) in cases {

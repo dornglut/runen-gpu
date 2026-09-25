@@ -5,15 +5,17 @@ mod retained_offscreen_indexed;
 #[path = "gpu_prefix_scan_native.rs"]
 mod retained_prefix_scan;
 #[cfg(target_arch = "wasm32")]
-#[path = "gpu_r1_vertex8_formats.rs"]
-mod retained_vertex8;
-#[cfg(target_arch = "wasm32")]
 #[path = "gpu_r1_vertex16_formats.rs"]
 mod retained_vertex16;
+#[cfg(target_arch = "wasm32")]
+#[path = "gpu_r1_vertex8_formats.rs"]
+mod retained_vertex8;
 
 #[cfg(target_arch = "wasm32")]
 mod browser {
-    use super::{retained_offscreen_indexed, retained_prefix_scan, retained_vertex16, retained_vertex8};
+    use super::{
+        retained_offscreen_indexed, retained_prefix_scan, retained_vertex8, retained_vertex16,
+    };
     use runen_gpu::*;
     use std::cell::RefCell;
     use std::future::Future;
