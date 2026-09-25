@@ -16,7 +16,8 @@ use crate::{
     GpuProgramBindingRealizationErrorCategory, GpuProgramBindingRealizationPolicy,
     GpuProgramBindingRealizationStats, GpuProgramDescriptor, GpuRealizedBindGroup,
     GpuRealizedBindGroupLayout, GpuRealizedPipelineLayout, GpuRealizedProgram,
-    GpuRuntimeBindingResource, GpuRuntimeBindingValue, GpuValidatedBindGroupBindings,
+    GpuRuntimeBindingResource, GpuRuntimeBindingSet, GpuRuntimeBindingValue,
+    GpuValidatedBindGroupBindings,
 };
 use records::{
     BindGroupLayoutRealizationRecord as LayoutRecord, BindGroupRealizationRecord as GroupRecord,
@@ -207,6 +208,17 @@ impl GpuContext {
         descriptor: &GpuBindGroupLayoutDescriptor,
     ) -> Result<GpuRealizedBindGroupLayout, GpuProgramBindingRealizationError> {
         let request = layout_request_name(descriptor);
+        GpuRuntimeBindingSet::validate_bind_group_layout_array_limits(
+            descriptor,
+            &self.runtime_binding_device_facts(),
+        )
+        .map_err(|error| {
+            GpuProgramBindingRealizationError::new(
+                GpuProgramBindingRealizationErrorCategory::LayoutDescriptorInvalid,
+                request.clone(),
+                error.to_string(),
+            )
+        })?;
         loop {
             self.backend
                 .program_binding_realization
@@ -246,6 +258,17 @@ impl GpuContext {
         descriptor: &GpuPipelineLayoutDescriptor,
     ) -> Result<GpuRealizedPipelineLayout, GpuProgramBindingRealizationError> {
         let request = "pipeline layout".to_string();
+        GpuRuntimeBindingSet::validate_pipeline_layout_device_facts(
+            descriptor,
+            &self.runtime_binding_device_facts(),
+        )
+        .map_err(|error| {
+            GpuProgramBindingRealizationError::new(
+                GpuProgramBindingRealizationErrorCategory::LayoutDescriptorInvalid,
+                request.clone(),
+                error.to_string(),
+            )
+        })?;
         loop {
             self.backend
                 .program_binding_realization
