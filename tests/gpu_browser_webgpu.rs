@@ -1094,12 +1094,15 @@ fn vs_main(@builtin(vertex_index) index: u32) -> @builtin(position) vec4f {
                 "browser Stencil8 read-only test",
                 GpuWorkOperation::Render(read_render),
             ),
-            ("browser Stencil8 readback", GpuWorkOperation::Readback(readback)),
+            (
+                "browser Stencil8 readback",
+                GpuWorkOperation::Readback(readback),
+            ),
         ] {
             add_format_operation(&mut builder, node, operation);
         }
-        let graph =
-            GpuPreparedWorkGraph::prepare(format_label(&name), [builder.finish().unwrap()]).unwrap();
+        let graph = GpuPreparedWorkGraph::prepare(format_label(&name), [builder.finish().unwrap()])
+            .unwrap();
         let prepared = context.prepare_submission(graph).await.unwrap();
         let submission = context.submit_prepared(prepared).unwrap();
         let readbacks = wait_for_terminal_readbacks(context, &submission, &[readback_id]).await;

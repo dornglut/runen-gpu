@@ -70,14 +70,8 @@ fn stencil_texture(
             GpuTextureDescriptor::new(
                 common("Stencil8 target"),
                 GpuTextureDimension::D2,
-                GpuTextureExtent::new(
-                    &resource_label,
-                    GpuTextureDimension::D2,
-                    width,
-                    HEIGHT,
-                    1,
-                )
-                .unwrap(),
+                GpuTextureExtent::new(&resource_label, GpuTextureDimension::D2, width, HEIGHT, 1)
+                    .unwrap(),
                 1,
                 1,
                 GpuTextureFormat::Stencil8,
@@ -119,7 +113,10 @@ fn stencil_texture(
     (texture, view)
 }
 
-fn stencil_face(compare: GpuCompareFunction, pass_op: GpuStencilOperation) -> GpuStencilFaceStateDescriptor {
+fn stencil_face(
+    compare: GpuCompareFunction,
+    pass_op: GpuStencilOperation,
+) -> GpuStencilFaceStateDescriptor {
     GpuStencilFaceStateDescriptor::new(
         compare,
         GpuStencilOperation::Keep,
@@ -159,12 +156,8 @@ fn stencil_pipeline(write: bool) -> GpuRenderPipelineDescriptor {
     } else {
         stencil_face(GpuCompareFunction::Equal, GpuStencilOperation::Keep)
     };
-    let stencil = GpuStencilStateDescriptor::new(
-        face,
-        face,
-        u32::MAX,
-        if write { 0xff } else { 0 },
-    );
+    let stencil =
+        GpuStencilStateDescriptor::new(face, face, u32::MAX, if write { 0xff } else { 0 });
     let depth_stencil =
         GpuDepthStencilStateDescriptor::new(GpuTextureFormat::Stencil8, None, Some(stencil))
             .unwrap();
@@ -234,7 +227,10 @@ fn wait_for_readback(
             GpuSubmissionStatus::Failed(error) => panic!("Stencil8 submission failed: {error:?}"),
             GpuSubmissionStatus::Accepted => {}
         }
-        assert!(Instant::now() < deadline, "Stencil8 submission did not terminalize");
+        assert!(
+            Instant::now() < deadline,
+            "Stencil8 submission did not terminalize"
+        );
         std::thread::yield_now();
     }
     bytes
@@ -294,7 +290,10 @@ fn run_native_stencil8(width: u32) {
     builder.declare_resource(view.into()).unwrap();
     for (node, operation) in [
         ("Stencil8 write", GpuWorkOperation::Render(write_render)),
-        ("Stencil8 read-only test", GpuWorkOperation::Render(read_render)),
+        (
+            "Stencil8 read-only test",
+            GpuWorkOperation::Render(read_render),
+        ),
         ("Stencil8 readback", GpuWorkOperation::Readback(readback_op)),
     ] {
         builder
@@ -318,7 +317,10 @@ fn run_native_stencil8(width: u32) {
     let submission = context.submit_prepared(prepared).unwrap();
     let bytes = wait_for_readback(&context, &submission, &readback);
     assert_eq!(bytes.texture_format(), Some(GpuTextureFormat::Stencil8));
-    assert_eq!(bytes.as_bytes().len(), usize::try_from(width * HEIGHT).unwrap());
+    assert_eq!(
+        bytes.as_bytes().len(),
+        usize::try_from(width * HEIGHT).unwrap()
+    );
     assert!(
         bytes.as_bytes().iter().all(|byte| *byte == REFERENCE as u8),
         "full-target Replace must write the dynamic stencil reference to every covered pixel"
@@ -353,7 +355,10 @@ fn stencil8_structural_and_attachment_contracts_are_explicit() {
     assert!(
         GpuDepthStencilStateDescriptor::new(
             GpuTextureFormat::Stencil8,
-            Some(GpuDepthStateDescriptor::new(false, GpuCompareFunction::Always)),
+            Some(GpuDepthStateDescriptor::new(
+                false,
+                GpuCompareFunction::Always
+            )),
             None,
         )
         .is_err()

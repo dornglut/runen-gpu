@@ -1,7 +1,8 @@
 use runen_gpu::{
     GpuBlendMode, GpuColorTargetStateDescriptor, GpuColorWriteMask, GpuCompareFunction,
-    GpuDepthStateDescriptor, GpuDepthStencilStateDescriptor, GpuEntryPointName, GpuFragmentOutputStateDescriptor,
-    GpuProgramContractCause, GpuShaderIoScalarClass, GpuTextureFormat,
+    GpuDepthStateDescriptor, GpuDepthStencilStateDescriptor, GpuEntryPointName,
+    GpuFragmentOutputStateDescriptor, GpuProgramContractCause, GpuShaderIoScalarClass,
+    GpuTextureFormat,
 };
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
@@ -121,7 +122,10 @@ fn depth_stencil_state_requires_a_depth_format() {
 
     let error = GpuDepthStencilStateDescriptor::new(
         GpuTextureFormat::Rgba8Unorm,
-        Some(GpuDepthStateDescriptor::new(false, GpuCompareFunction::Always)),
+        Some(GpuDepthStateDescriptor::new(
+            false,
+            GpuCompareFunction::Always,
+        )),
         None,
     )
     .expect_err("color formats are not depth-stencil formats");
