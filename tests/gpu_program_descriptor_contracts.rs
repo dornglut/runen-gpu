@@ -212,7 +212,8 @@ fn fixed_binding_array_cardinality_and_capability_are_compiler_derived() {
 }
 
 #[test]
-fn unused_module_global_fixed_array_requires_compilation_feature_without_entering_selected_interface() {
+fn unused_module_global_fixed_array_requires_compilation_feature_without_entering_selected_interface()
+{
     let (_registry, source) = admitted_source_from(UNUSED_BINDING_ARRAY_WGSL);
     let program = GpuProgramDescriptor::new(
         source,
