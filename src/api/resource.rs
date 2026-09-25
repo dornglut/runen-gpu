@@ -1197,6 +1197,7 @@ pub struct GpuSamplerDescriptor {
 impl Eq for GpuSamplerDescriptor {}
 
 impl GpuSamplerDescriptor {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         common: GpuResourceCommon,
         address_u: GpuAddressMode,
