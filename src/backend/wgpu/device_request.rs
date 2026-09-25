@@ -399,12 +399,16 @@ fn requested_features(candidate: &crate::GpuCandidateAdmissionReport) -> Feature
         .fold(Features::empty(), |features, feature| {
             features | wgpu_features_for(feature)
         });
-    if candidate
-        .contract()
-        .format_roles()
-        .any(|(format, _)| format == GpuTextureFormat::Depth32FloatStencil8)
-    {
-        features |= Features::DEPTH32FLOAT_STENCIL8;
+    for (format, role) in candidate.contract().format_roles() {
+        match (format, role) {
+            (GpuTextureFormat::Depth32FloatStencil8, _) => {
+                features |= Features::DEPTH32FLOAT_STENCIL8;
+            }
+            (GpuTextureFormat::Rg11b10Ufloat, crate::GpuFormatRole::ColorAttachment) => {
+                features |= Features::RG11B10UFLOAT_RENDERABLE;
+            }
+            _ => {}
+        }
     }
     features
 }
@@ -725,6 +729,17 @@ mod tests {
             )
             .is_ok()
         );
+        assert!(
+            verify_requested_features(Features::RG11B10UFLOAT_RENDERABLE, Features::empty())
+                .is_err()
+        );
+        assert!(
+            verify_requested_features(
+                Features::RG11B10UFLOAT_RENDERABLE,
+                Features::RG11B10UFLOAT_RENDERABLE,
+            )
+            .is_ok()
+        );
     }
 
     fn candidate_with_depth32float_stencil8_role(
@@ -782,6 +797,64 @@ mod tests {
                 "{role:?}"
             );
         }
+    }
+
+    fn candidate_with_rg11b10_role(role: GpuFormatRole) -> crate::GpuCandidateAdmissionReport {
+        let limits = test_gpu_limits();
+        let mut format = GpuTextureFormatCapabilities::none();
+        match role {
+            GpuFormatRole::Sampled => format.sampled = true,
+            GpuFormatRole::ColorAttachment => format.color_attachment = true,
+            GpuFormatRole::CopySource => format.copy_source = true,
+            GpuFormatRole::CopyDestination => format.copy_destination = true,
+            other => panic!("unsupported focused packed role: {other:?}"),
+        }
+        let facts = GpuAdapterFacts::new(
+            GpuBackendFamily::Vulkan,
+            GpuAdapterClass::Discrete,
+            GpuSoftwareStatus::Hardware,
+            GpuFallbackStatus::ConfirmedNotFallback,
+            GpuCapabilities::from_normalized_facts(
+                [],
+                limits,
+                [(GpuTextureFormat::Rg11b10Ufloat, format)],
+            ),
+            GpuAdapterLimits::new(limits),
+            GpuAlignmentFacts {
+                uniform_dynamic_offset: Some(256),
+                storage_dynamic_offset: Some(256),
+                copy_buffer_offset: Some(4),
+                bytes_per_row: Some(256),
+                query_resolve_destination: Some(256),
+            },
+        );
+        select_candidate_with_host_evidence(
+            &GpuContextDescriptor::new(GpuCapabilityRequirements::new())
+                .require_format_role(GpuTextureFormat::Rg11b10Ufloat, role),
+            [(facts, GpuCandidateEnvironmentEvidence::headless())],
+        )
+        .unwrap()
+        .candidate
+    }
+
+    #[test]
+    fn rg11b10_render_role_requests_only_its_private_backend_prerequisite() {
+        assert!(!requested_features(&candidate()).contains(Features::RG11B10UFLOAT_RENDERABLE));
+        for role in [
+            GpuFormatRole::Sampled,
+            GpuFormatRole::CopySource,
+            GpuFormatRole::CopyDestination,
+        ] {
+            assert!(
+                !requested_features(&candidate_with_rg11b10_role(role))
+                    .contains(Features::RG11B10UFLOAT_RENDERABLE),
+                "{role:?}"
+            );
+        }
+        assert!(
+            requested_features(&candidate_with_rg11b10_role(GpuFormatRole::ColorAttachment))
+                .contains(Features::RG11B10UFLOAT_RENDERABLE)
+        );
     }
 
     #[test]

@@ -563,6 +563,19 @@ mod plain_color_sampled_class_tests {
                 GpuTextureFormat::Rg16Float,
                 GpuTextureSampleClass::FloatUnfilterable,
             ),
+            (
+                GpuTextureFormat::Rgb9e5Ufloat,
+                GpuTextureSampleClass::FloatUnfilterable,
+            ),
+            (GpuTextureFormat::Rgb10a2Uint, GpuTextureSampleClass::Uint),
+            (
+                GpuTextureFormat::Rgb10a2Unorm,
+                GpuTextureSampleClass::FloatUnfilterable,
+            ),
+            (
+                GpuTextureFormat::Rg11b10Ufloat,
+                GpuTextureSampleClass::FloatUnfilterable,
+            ),
             (GpuTextureFormat::R32Uint, GpuTextureSampleClass::Uint),
             (GpuTextureFormat::R32Sint, GpuTextureSampleClass::Sint),
         ] {
@@ -578,6 +591,16 @@ mod plain_color_sampled_class_tests {
         ));
         assert!(!sampled_texture_class_matches(
             GpuTextureFormat::Rg8Sint,
+            GpuTextureAspect::Color,
+            GpuTextureSampleClass::Uint
+        ));
+        assert!(!sampled_texture_class_matches(
+            GpuTextureFormat::Rgb10a2Uint,
+            GpuTextureAspect::Color,
+            GpuTextureSampleClass::FloatUnfilterable
+        ));
+        assert!(!sampled_texture_class_matches(
+            GpuTextureFormat::Rg11b10Ufloat,
             GpuTextureAspect::Color,
             GpuTextureSampleClass::Uint
         ));

@@ -96,6 +96,9 @@ const done = arguments[arguments.length - 1];
         typeof wasm.runengpu_browser_rg8_exercised_mask !== "function" ||
         typeof wasm.runengpu_browser_r16_exercised_mask !== "function" ||
         typeof wasm.runengpu_browser_rg16_exercised_mask !== "function" ||
+        typeof wasm.runengpu_browser_packed32_exercised_mask !== "function" ||
+        typeof wasm.runengpu_browser_packed32_sampled_mask !== "function" ||
+        typeof wasm.runengpu_browser_packed32_color_attachment_mask !== "function" ||
         typeof wasm.runengpu_browser_depth_sampled_exercised_mask !== "function" ||
         typeof wasm.runengpu_browser_depth_attachment_exercised_mask !== "function" ||
         typeof wasm.runengpu_browser_depth_copy_exercised_mask !== "function" ||
@@ -119,6 +122,9 @@ const done = arguments[arguments.length - 1];
           rg8Mask: wasm.runengpu_browser_rg8_exercised_mask(),
           r16Mask: wasm.runengpu_browser_r16_exercised_mask(),
           rg16Mask: wasm.runengpu_browser_rg16_exercised_mask(),
+          packed32Mask: wasm.runengpu_browser_packed32_exercised_mask(),
+          packed32SampledMask: wasm.runengpu_browser_packed32_sampled_mask(),
+          packed32ColorAttachmentMask: wasm.runengpu_browser_packed32_color_attachment_mask(),
           depthSampledMask: wasm.runengpu_browser_depth_sampled_exercised_mask(),
           depthAttachmentMask: wasm.runengpu_browser_depth_attachment_exercised_mask(),
           depthCopyMask: wasm.runengpu_browser_depth_copy_exercised_mask(),
@@ -182,6 +188,28 @@ def report_format_family(
         )
         print(message)
         raise RuntimeError(message)
+
+
+def report_optional_format_roles(
+    value: dict[str, object],
+    mask_key: str,
+    family: str,
+    format_names: tuple[str, ...],
+    role: str,
+    evidence: str,
+) -> None:
+    mask = read_exercised_mask(value, mask_key, f"{family} {role}", len(format_names))
+    for index, format_name in enumerate(format_names):
+        if mask & (1 << index):
+            print(
+                f"RunenGPU actual-browser {format_name} {role}: "
+                f"EXERCISED ({evidence})"
+            )
+        else:
+            print(
+                f"RunenGPU actual-browser {format_name} {role}: "
+                f"SKIPPED ({role} role not advertised)"
+            )
 
 
 def report_depth_proofs(value: dict[str, object]) -> None:
@@ -357,6 +385,11 @@ def verify_format_reporter() -> None:
         ("RG8", ("Rg8Unorm", "Rg8Snorm", "Rg8Uint", "Rg8Sint"), (0, 1, 9, 15)),
         ("R16", ("R16Uint", "R16Sint", "R16Float"), (0, 1, 5, 7)),
         ("RG16", ("Rg16Uint", "Rg16Sint", "Rg16Float"), (0, 1, 5, 7)),
+        (
+            "Packed32",
+            ("Rgb9e5Ufloat", "Rgb10a2Uint", "Rgb10a2Unorm", "Rg11b10Ufloat"),
+            (0, 1, 9, 15),
+        ),
     )
     for family, names, masks in families:
         full_mask = (1 << len(names)) - 1
@@ -703,6 +736,35 @@ def main() -> int:
             "RG16",
             ("Rg16Uint", "Rg16Sint", "Rg16Float"),
             "63px and 64px copy round trips",
+        )
+        packed_names = (
+            "Rgb9e5Ufloat",
+            "Rgb10a2Uint",
+            "Rgb10a2Unorm",
+            "Rg11b10Ufloat",
+        )
+        report_format_family(
+            value,
+            "packed32Mask",
+            "Packed32",
+            packed_names,
+            "zero-valued 63px and 64px copy round trips",
+        )
+        report_optional_format_roles(
+            value,
+            "packed32SampledMask",
+            "Packed32",
+            packed_names,
+            "Sampled",
+            "sampled-usage resource realization",
+        )
+        report_optional_format_roles(
+            value,
+            "packed32ColorAttachmentMask",
+            "Packed32",
+            packed_names,
+            "ColorAttachment",
+            "color-attachment resource realization with admitted role",
         )
         report_depth_proofs(value)
         report_stencil8_proof(value)

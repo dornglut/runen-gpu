@@ -636,8 +636,10 @@ fn is_declared_extension(feature: GpuCapabilityFeature) -> bool {
     )
 }
 
-fn is_declared_format_role_extension(format: GpuTextureFormat, _role: GpuFormatRole) -> bool {
+fn is_declared_format_role_extension(format: GpuTextureFormat, role: GpuFormatRole) -> bool {
     format == GpuTextureFormat::Depth32FloatStencil8
+        || (format == GpuTextureFormat::Rg11b10Ufloat
+            && role == GpuFormatRole::ColorAttachment)
 }
 
 #[cfg(test)]
@@ -1129,6 +1131,86 @@ mod tests {
             baseline.portability(),
             GpuPortabilityClass::PortableBaseline
         );
+    }
+
+    #[test]
+    fn rg11b10_renderability_is_role_specific_portability_evidence() {
+        let format = GpuTextureFormat::Rg11b10Ufloat;
+        let facts = GpuTextureFormatCapabilities {
+            sampled: true,
+            filterable: true,
+            storage_read: false,
+            storage_write: false,
+            color_attachment: true,
+            depth_stencil: false,
+            copy_source: true,
+            copy_destination: true,
+            block_dimensions: None,
+            block_copy_size: None,
+        };
+        let make_adapter = || {
+            GpuAdapterFacts::new(
+                GpuBackendFamily::Vulkan,
+                GpuAdapterClass::Discrete,
+                GpuSoftwareStatus::Hardware,
+                GpuFallbackStatus::ConfirmedNotFallback,
+                GpuCapabilities::from_normalized_facts([], limits(), [(format, facts)]),
+                GpuAdapterLimits::new(limits()),
+                alignments(),
+            )
+        };
+
+        for role in [
+            GpuFormatRole::Sampled,
+            GpuFormatRole::CopySource,
+            GpuFormatRole::CopyDestination,
+        ] {
+            let descriptor = GpuContextDescriptor::new(GpuCapabilityRequirements::new())
+                .require_format_role(format, role);
+            let candidate = evaluate_candidate(&descriptor, make_adapter(), true).unwrap();
+            assert_eq!(candidate.portability(), GpuPortabilityClass::PortableBaseline);
+            assert!(!candidate.portability_evidence().reasons().any(|reason| matches!(
+                reason,
+                GpuPortabilityReason::DeclaredFormatRoleExtension {
+                    format: GpuTextureFormat::Rg11b10Ufloat,
+                    ..
+                }
+            )));
+            assert!(
+                evaluate_candidate(
+                    &descriptor.with_portability_policy(
+                        GpuPortabilityPolicy::RequirePortableBaseline
+                    ),
+                    make_adapter(),
+                    true,
+                )
+                .is_ok()
+            );
+        }
+
+        let descriptor = GpuContextDescriptor::new(GpuCapabilityRequirements::new())
+            .require_format_role(format, GpuFormatRole::ColorAttachment);
+        let candidate = evaluate_candidate(&descriptor, make_adapter(), true).unwrap();
+        assert_eq!(
+            candidate.portability(),
+            GpuPortabilityClass::PortableWithDeclaredExtensions
+        );
+        assert!(candidate.portability_evidence().reasons().any(|reason| {
+            reason == GpuPortabilityReason::DeclaredFormatRoleExtension {
+                format,
+                role: GpuFormatRole::ColorAttachment,
+            }
+        }));
+        assert!(matches!(
+            evaluate_candidate(
+                &descriptor.with_portability_policy(
+                    GpuPortabilityPolicy::RequirePortableBaseline
+                ),
+                make_adapter(),
+                true,
+            ),
+            Err(error) if error.category() == GpuContextRequestErrorCategory::NoAdmissibleCandidate
+        ));
     }
 
     #[test]
