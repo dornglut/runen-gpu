@@ -127,6 +127,10 @@ renderers without importing renderer policy.
 - full blend factors and operations with independent color/alpha state;
 - depth bias, slope scale, and applicable clamp semantics;
 - complete stencil front/back operations and masks;
+- normalized transient-attachment content semantics for attachment-only
+  ephemeral contents, kept distinct from logical resource lifetime and privately
+  realizable through tile-local, memoryless, or ordinary backing as the accepted
+  contract permits;
 - mature portable optional raster capabilities behind truthful capability gates,
   such as depth-clip control and dual-source blending when their prerequisites are
   satisfied;
@@ -144,12 +148,23 @@ forcing callers to know backend feature bits.
 - integrate optional float/filter/blend and shader built-in requirements with
   existing format/capability authority rather than creating redundant policy;
 - preserve truthful fixed binding-array admission;
-- broaden array/indexing semantics only when their portable contract and support
-  maturity justify it.
+- plan normalized non-uniform sampled-texture and storage-resource indexing as an
+  advanced capability-gated path when source requirement discovery, admission,
+  limits, and focused proof are decision-complete;
+- keep large storage buffers as a valid scalable object/material-data baseline;
+  buffer binding arrays are not a prerequisite for that model;
+- keep partially-bound or sparse binding arrays deferred until their target
+  platform support and normalized occupancy semantics justify stable authority;
+- treat "bindless" only as an informal technique name, never as a substitute for
+  separate array-existence, occupancy, indexing, resource-class, and limit
+  contracts.
 
-Subgroups, subgroup-size control, immediates, native integer/f64 extensions, and
-similar facilities remain deferred while WebGPU/WGPU semantics or deployment are
-not sufficiently converged for stable RunenGPU authority.
+Subgroups remain deferred until standardized WebGPU/WGSL semantics, WGPU
+semantics, and retained backend conformance are sufficiently aligned for one
+normalized contract. Subgroup-size control and subgroup barriers may require
+separate dispositions. Immediates, native integer/f64 extensions, and similar
+facilities remain deferred while standards or deployment maturity is
+insufficient.
 
 ### R4 — Queries and GPU-driven/layered execution
 
@@ -159,8 +174,10 @@ Goal: cover mature generic GPU-driven execution without adding renderer meaning.
 - standardized indirect-first-instance support;
 - multiview and multisampled-array/layered execution as advanced capability-gated
   contracts after texture-view correctness is established;
-- add further multi-draw or bindless-style execution only when their portability
-  and semantic model meet the normal admission policy.
+- keep multi-draw-count deferred while its backend/platform scope remains narrow;
+  it is not a prerequisite for GPU-driven execution or for the Metal/M3 path;
+- add further GPU-driven execution only when each exact semantic contract meets
+  the normal admission policy rather than treating "bindless" as one feature.
 
 ### R5 — Modern physical presentation
 
@@ -195,11 +212,15 @@ Goal: improve cost without creating duplicate semantic authority.
 
 Candidate work includes reusable graph preparation, transient-resource aliasing,
 pass fusion, dead-work elimination, command preparation/scheduling, and private
-backend caches. These remain private or derived optimizations unless measurement
-proves value and an observable public contract genuinely requires new semantics.
+backend caches. Unified-memory-specific mapping or primary-buffer realization is
+also a measured private optimization candidate: public memory intent stays
+semantic unless an independently observable contract proves that new public
+vocabulary is required. These remain private or derived optimizations unless
+measurement proves value and an observable public contract genuinely requires new
+semantics.
 
-Explicit public backend queues and public backend pipeline-cache objects are not a
-roadmap objective.
+Explicit public backend queues, backend memory-feature bits, and public backend
+pipeline-cache objects are not a roadmap objective.
 
 ## Capability disposition summary
 
@@ -212,9 +233,11 @@ This is intentionally family-level rather than a mirror of WGPU's feature list.
 | Portable texture/view/vertex/depth-stencil vocabulary | `CORE` | `PLAN` — R1 |
 | BC/ETC2/ASTC compression | `ADVANCED` | `PLAN` — R1, capability-gated |
 | Anisotropy and complete portable raster/blend/depth/stencil state | `CORE` | `PLAN` — R2 |
+| Transient attachment content semantics | `ADVANCED` | `PLAN` — R2, distinct from logical resource lifetime |
 | WGSL `f16` and mature standardized optional shader features | `ADVANCED` | `PLAN` — R3 |
 | Fixed binding arrays | `ADVANCED` | `CURRENT`, retain truthful admission |
-| Partially-bound/non-uniform/bindless-style native extensions | `ADVANCED` | `DEFER` pending portable contract or concrete advanced-native pressure |
+| Non-uniform sampled-texture/storage-resource indexing | `ADVANCED` | `PLAN` — R3, capability-gated native-generic path |
+| Partially-bound/sparse binding arrays | `ADVANCED` | `DEFER` until target support and occupancy semantics justify stable authority |
 | Occlusion queries | `CORE` | `PLAN` — R4 |
 | Indirect-first-instance | `ADVANCED` | `PLAN` — R4 |
 | Multiview and multisampled arrays | `ADVANCED` | `PLAN` — R4 after view/resource foundations |
@@ -222,9 +245,11 @@ This is intentionally family-level rather than a mirror of WGPU's feature list.
 | Explicit surface color spaces and wide-gamut/HDR physical presentation | `ADVANCED` | `PLAN` — R5 |
 | Normalized imported-resource contract | `ADVANCED` | `PLAN` — R6, contract investigation precedes implementation |
 | External media textures | `ADVANCED` | `DEFER` until backend/portable maturity improves |
-| Subgroups and subgroup-size control | `ADVANCED` | `DEFER` until WebGPU/WGPU semantics and conformance converge |
+| Subgroups and subgroup-size control | `ADVANCED` | `DEFER` until standardized semantics, WGPU behavior, and retained backend conformance align |
 | Immediates | `ADVANCED` | `DEFER` until standards/deployment maturity is sufficient |
-| Ray tracing/query, mesh shaders, cooperative matrices | `DEFERRED` | `DEFER` while WGPU treats the facilities as experimental |
+| Acceleration structures and hardware ray traversal | `DEFERRED` | `DEFER` until stable accepted WGPU semantics, positive Metal/M3 build-order-traversal proof, usable update/refit disposition, and normalized lifetime/access/graph authority exist |
+| Mesh shaders | `DEFERRED` | `DEFER` until canonical WGSL/Naga/WGPU realization is mature on intended native targets without passthrough authority |
+| Cooperative matrices | `DEFERRED` | `DEFER` until semantics and backend maturity support stable normalized authority |
 | Raw backend resources/devices/queues/handles | `OUT-OF-SCOPE` | `OUT-OF-SCOPE` |
 | Public passthrough shader languages | `OUT-OF-SCOPE` | `OUT-OF-SCOPE` under canonical WGSL authority |
 | Renderer/product exposure, tone mapping, gamut and image policy | `OUT-OF-SCOPE` | `OUT-OF-SCOPE` |
@@ -243,9 +268,15 @@ qualification as reproducible infrastructure permits toward:
 
 1. real Vulkan hardware;
 2. Windows DX12;
-3. macOS Metal;
-4. browser WebGPU surface/presentation;
-5. a broader browser/backend matrix only when it provides maintainable evidence.
+3. generic macOS Metal execution;
+4. actual Apple M3 / Apple-family-9 hardware qualification;
+5. browser WebGPU surface/presentation;
+6. a broader browser/backend matrix only when it provides maintainable evidence.
+
+Apple M3 is a qualification target, not a public RunenGPU capability profile.
+Generic macOS/Metal evidence does not establish an M3-specific claim; such a
+claim requires actual M3-class execution evidence. Conversely, M3 evidence does
+not replace truthful per-capability qualification on other backends.
 
 Do not claim cross-platform support from a WGPU enum, one backend implementation,
 or one passing adapter. Every new capability needs focused public-API proof at the
