@@ -1119,7 +1119,11 @@ mod tests {
             );
             assert_eq!(
                 canonical_copy_aspect(format, GpuTextureAspect::All),
-                if combined { None } else { Some(explicit_aspect) }
+                if combined {
+                    None
+                } else {
+                    Some(explicit_aspect)
+                }
             );
             match bytes {
                 Some(bytes) => {
@@ -1411,7 +1415,10 @@ mod tests {
         assert!(is_depth(format));
         assert!(is_stencil(format));
         assert_eq!(block_dimensions(format), (1, 1));
-        assert_eq!(canonical_aspect(format, GpuTextureAspect::All), Some(GpuTextureAspect::All));
+        assert_eq!(
+            canonical_aspect(format, GpuTextureAspect::All),
+            Some(GpuTextureAspect::All)
+        );
         assert_eq!(
             canonical_aspect(format, GpuTextureAspect::DepthOnly),
             Some(GpuTextureAspect::DepthOnly)
