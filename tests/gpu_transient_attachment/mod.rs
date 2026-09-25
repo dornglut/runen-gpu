@@ -37,14 +37,8 @@ fn transient_target(
             GpuTextureDescriptor::new(
                 common(name, lifetime),
                 GpuTextureDimension::D2,
-                GpuTextureExtent::new(
-                    &resource_label,
-                    GpuTextureDimension::D2,
-                    WIDTH,
-                    HEIGHT,
-                    1,
-                )
-                .unwrap(),
+                GpuTextureExtent::new(&resource_label, GpuTextureDimension::D2, WIDTH, HEIGHT, 1)
+                    .unwrap(),
                 1,
                 sample_count,
                 GpuTextureFormat::Rgba8Unorm,
@@ -62,11 +56,10 @@ fn transient_target(
         )
         .unwrap();
     let view = scope
-        .texture_view(GpuTextureViewDescriptor::ordinary_full_owned(
-            format!("{name} view"),
-            &texture,
+        .texture_view(
+            GpuTextureViewDescriptor::ordinary_full_owned(format!("{name} view"), &texture)
+                .unwrap(),
         )
-        .unwrap())
         .unwrap();
     (texture, view)
 }
@@ -81,14 +74,8 @@ fn ordinary_resolve_target(
             GpuTextureDescriptor::new(
                 common(name, GpuResourceLifetime::Transient),
                 GpuTextureDimension::D2,
-                GpuTextureExtent::new(
-                    &resource_label,
-                    GpuTextureDimension::D2,
-                    WIDTH,
-                    HEIGHT,
-                    1,
-                )
-                .unwrap(),
+                GpuTextureExtent::new(&resource_label, GpuTextureDimension::D2, WIDTH, HEIGHT, 1)
+                    .unwrap(),
                 1,
                 1,
                 GpuTextureFormat::Rgba8Unorm,
@@ -106,11 +93,13 @@ fn ordinary_resolve_target(
         )
         .unwrap();
     let view = scope
-        .texture_view(GpuTextureViewDescriptor::ordinary_full_owned(
-            "transient resolve target view",
-            &texture,
+        .texture_view(
+            GpuTextureViewDescriptor::ordinary_full_owned(
+                "transient resolve target view",
+                &texture,
+            )
+            .unwrap(),
         )
-        .unwrap())
         .unwrap();
     (texture, view)
 }
@@ -144,13 +133,10 @@ pub(crate) fn graph() -> (GpuPreparedWorkGraph, GpuReadbackId) {
     let (resolve_texture, resolve_view) = ordinary_resolve_target(&mut scope);
 
     let single = GpuRenderOperation::new(
-        [GpuRenderColorAttachment::new(
-            single_view,
-            clear(),
-            GpuAttachmentStore::Discard,
-            None,
-        )
-        .unwrap()],
+        [
+            GpuRenderColorAttachment::new(single_view, clear(), GpuAttachmentStore::Discard, None)
+                .unwrap(),
+        ],
         None,
         [],
         None,
@@ -196,8 +182,11 @@ pub(crate) fn graph() -> (GpuPreparedWorkGraph, GpuReadbackId) {
     .unwrap();
 
     (
-        GpuPreparedWorkGraph::prepare(label("transient attachment retained proof graph"), [fragment])
-            .unwrap(),
+        GpuPreparedWorkGraph::prepare(
+            label("transient attachment retained proof graph"),
+            [fragment],
+        )
+        .unwrap(),
         readback_id,
     )
 }
