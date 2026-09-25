@@ -84,14 +84,8 @@ fn combined_texture(
             GpuTextureDescriptor::new(
                 common(name),
                 GpuTextureDimension::D2,
-                GpuTextureExtent::new(
-                    &resource_label,
-                    GpuTextureDimension::D2,
-                    width,
-                    HEIGHT,
-                    1,
-                )
-                .unwrap(),
+                GpuTextureExtent::new(&resource_label, GpuTextureDimension::D2, width, HEIGHT, 1)
+                    .unwrap(),
                 1,
                 1,
                 GpuTextureFormat::Depth24PlusStencil8,
@@ -283,7 +277,10 @@ fn wait_for_readback(
             }
             GpuSubmissionStatus::Accepted => {}
         }
-        assert!(Instant::now() < deadline, "{name} submission did not terminalize");
+        assert!(
+            Instant::now() < deadline,
+            "{name} submission did not terminalize"
+        );
         std::thread::yield_now();
     }
     bytes
@@ -390,9 +387,11 @@ fn run_native_combined(width: u32) {
     .unwrap();
 
     let final_readback_id = GpuReadbackId::allocate().unwrap();
-    let final_readback =
-        GpuReadbackOperation::new(readback_region(&destination, width).into(), final_readback_id)
-            .unwrap();
+    let final_readback = GpuReadbackOperation::new(
+        readback_region(&destination, width).into(),
+        final_readback_id,
+    )
+    .unwrap();
 
     let name = format!("Depth24PlusStencil8 {width}x{HEIGHT}");
     let mut builder = GpuWorkFragmentBuilder::new(label(&name), provenance(&name));
@@ -506,8 +505,7 @@ fn combined_pipeline_cannot_use_an_attachment_aspect_that_was_omitted() {
         GpuAttachmentStore::Store,
     )
     .unwrap();
-    let depth_only =
-        GpuRenderDepthStencilAttachment::new(view.clone(), Some(depth), None).unwrap();
+    let depth_only = GpuRenderDepthStencilAttachment::new(view.clone(), Some(depth), None).unwrap();
     assert!(
         GpuRenderOperation::new(
             [],
