@@ -737,20 +737,35 @@ mod tests {
         features: impl IntoIterator<Item = GpuCapabilityFeature>,
         fallback: GpuFallbackStatus,
     ) -> GpuAdapterFacts {
+        let features = features.into_iter().collect::<Vec<_>>();
+        let array_limits = limits().with_binding_array_limits(
+            if features.contains(&GpuCapabilityFeature::TextureBindingArray)
+                || features.contains(&GpuCapabilityFeature::BufferBindingArray)
+            {
+                500_000
+            } else {
+                0
+            },
+            if features.contains(&GpuCapabilityFeature::TextureBindingArray) {
+                1_000
+            } else {
+                0
+            },
+        );
         GpuAdapterFacts::new(
             GpuBackendFamily::Vulkan,
             GpuAdapterClass::Discrete,
             GpuSoftwareStatus::Hardware,
             fallback,
             GpuCapabilities::from_normalized_facts(
-                features,
-                limits(),
+                features.iter().copied(),
+                array_limits,
                 [(
                     GpuTextureFormat::Rgba8Unorm,
                     GpuTextureFormatCapabilities::none(),
                 )],
             ),
-            GpuAdapterLimits::new(limits()),
+            GpuAdapterLimits::new(array_limits),
             alignments(),
         )
     }
