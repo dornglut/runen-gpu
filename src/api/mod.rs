@@ -51,6 +51,7 @@ pub use ordinary::*;
 pub use ordinary_transfer::*;
 pub use pipeline_realization::*;
 pub use program::*;
+pub(crate) use program::fixed_array_layout_capabilities;
 pub use readback_id::*;
 pub use realization::*;
 pub use reconstruction::*;
