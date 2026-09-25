@@ -1113,7 +1113,7 @@ fn operation_initialization(
                     node,
                     prepared_id,
                 )?);
-                if texture_copy_is_complete(destination) {
+                if destination.completely_covers_selected_subresources() {
                     effects.push(texture_copy_region(destination, "texture copy destination"));
                 }
             }
@@ -1137,7 +1137,7 @@ fn operation_initialization(
                 destination,
             } => {
                 requirements.push(texture_copy_region(source, "texture copy source"));
-                if texture_copy_is_complete(destination) {
+                if destination.completely_covers_selected_subresources() {
                     effects.push(texture_copy_region(destination, "texture copy destination"));
                 }
             }
@@ -1297,26 +1297,6 @@ fn initialization_layout_error(
         GpuWorkGraphCause::OperationAccessContradiction,
         "retain the checked logical buffer-texture layout while preparing initialization",
     )
-}
-
-fn texture_copy_is_complete(region: &GpuTextureCopyRegion) -> bool {
-    let descriptor = region.texture().descriptor();
-    let mip = region.mip_level();
-    let width = (descriptor.extent().width() >> mip).max(1);
-    let height = (descriptor.extent().height() >> mip).max(1);
-    let origin = region.origin();
-    let extent = region.extent();
-    if origin.x() != 0 || origin.y() != 0 || extent.width() != width || extent.height() != height {
-        return false;
-    }
-    match descriptor.dimension() {
-        GpuTextureDimension::D1 => origin.z() == 0 && extent.depth_or_layers() == 1,
-        GpuTextureDimension::D2 => true,
-        GpuTextureDimension::D3 => {
-            origin.z() == 0
-                && extent.depth_or_layers() == (descriptor.extent().depth_or_layers() >> mip).max(1)
-        }
-    }
 }
 
 fn access_has_compatible_role(

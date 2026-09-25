@@ -572,19 +572,34 @@ mod tests {
             (GpuTextureFormat::Rgba16Sint, TextureFormat::Rgba16Sint),
             (GpuTextureFormat::Rgba16Float, TextureFormat::Rgba16Float),
             (GpuTextureFormat::Bc1RgbaUnorm, TextureFormat::Bc1RgbaUnorm),
-            (GpuTextureFormat::Bc1RgbaUnormSrgb, TextureFormat::Bc1RgbaUnormSrgb),
+            (
+                GpuTextureFormat::Bc1RgbaUnormSrgb,
+                TextureFormat::Bc1RgbaUnormSrgb,
+            ),
             (GpuTextureFormat::Bc2RgbaUnorm, TextureFormat::Bc2RgbaUnorm),
-            (GpuTextureFormat::Bc2RgbaUnormSrgb, TextureFormat::Bc2RgbaUnormSrgb),
+            (
+                GpuTextureFormat::Bc2RgbaUnormSrgb,
+                TextureFormat::Bc2RgbaUnormSrgb,
+            ),
             (GpuTextureFormat::Bc3RgbaUnorm, TextureFormat::Bc3RgbaUnorm),
-            (GpuTextureFormat::Bc3RgbaUnormSrgb, TextureFormat::Bc3RgbaUnormSrgb),
+            (
+                GpuTextureFormat::Bc3RgbaUnormSrgb,
+                TextureFormat::Bc3RgbaUnormSrgb,
+            ),
             (GpuTextureFormat::Bc4RUnorm, TextureFormat::Bc4RUnorm),
             (GpuTextureFormat::Bc4RSnorm, TextureFormat::Bc4RSnorm),
             (GpuTextureFormat::Bc5RgUnorm, TextureFormat::Bc5RgUnorm),
             (GpuTextureFormat::Bc5RgSnorm, TextureFormat::Bc5RgSnorm),
-            (GpuTextureFormat::Bc6hRgbUfloat, TextureFormat::Bc6hRgbUfloat),
+            (
+                GpuTextureFormat::Bc6hRgbUfloat,
+                TextureFormat::Bc6hRgbUfloat,
+            ),
             (GpuTextureFormat::Bc6hRgbFloat, TextureFormat::Bc6hRgbFloat),
             (GpuTextureFormat::Bc7RgbaUnorm, TextureFormat::Bc7RgbaUnorm),
-            (GpuTextureFormat::Bc7RgbaUnormSrgb, TextureFormat::Bc7RgbaUnormSrgb),
+            (
+                GpuTextureFormat::Bc7RgbaUnormSrgb,
+                TextureFormat::Bc7RgbaUnormSrgb,
+            ),
         ] {
             assert_eq!(map_texture_format(normalized), native);
         }

@@ -156,10 +156,10 @@ impl GpuTextureCopyRegion {
         let x_end = origin.x().checked_add(extent.width());
         let y_end = origin.y().checked_add(extent.height());
         let z_end = origin.z().checked_add(extent.depth_or_layers());
-        let x_bounds_valid = physical_mip_width
-            .is_some_and(|width| x_end.is_some_and(|end| end <= width));
-        let y_bounds_valid = physical_mip_height
-            .is_some_and(|height| y_end.is_some_and(|end| end <= height));
+        let x_bounds_valid =
+            physical_mip_width.is_some_and(|width| x_end.is_some_and(|end| end <= width));
+        let y_bounds_valid =
+            physical_mip_height.is_some_and(|height| y_end.is_some_and(|end| end <= height));
         let dimension_valid = match descriptor.dimension() {
             GpuTextureDimension::D1 => {
                 origin.y() == 0
@@ -265,6 +265,33 @@ impl GpuTextureCopyRegion {
             self.extent.height(),
             self.extent.depth_or_layers(),
         )
+    }
+
+    pub(crate) fn completely_covers_selected_subresources(&self) -> bool {
+        let descriptor = self.texture.descriptor();
+        let (mip_width, mip_height, mip_depth_or_layers) =
+            mip_extent(&self.texture, self.mip_level);
+        let (block_width, block_height) = texture_format::block_dimensions(descriptor.format());
+        let physical_mip_width = mip_width
+            .div_ceil(block_width)
+            .checked_mul(block_width);
+        let physical_mip_height = mip_height
+            .div_ceil(block_height)
+            .checked_mul(block_height);
+        if self.origin.x() != 0
+            || self.origin.y() != 0
+            || physical_mip_width != Some(self.extent.width())
+            || physical_mip_height != Some(self.extent.height())
+        {
+            return false;
+        }
+        match descriptor.dimension() {
+            GpuTextureDimension::D1 => self.origin.z() == 0 && self.extent.depth_or_layers() == 1,
+            GpuTextureDimension::D2 => true,
+            GpuTextureDimension::D3 => {
+                self.origin.z() == 0 && self.extent.depth_or_layers() == mip_depth_or_layers
+            }
+        }
     }
 }
 

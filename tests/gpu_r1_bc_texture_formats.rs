@@ -581,6 +581,13 @@ fn runtime_graph(
     )
 }
 
+#[test]
+fn bc_terminal_physical_block_initializes_logical_terminal_mip_for_following_work() {
+    let (graph, readbacks) = runtime_graph(0, BC_CASES[0]);
+    assert_eq!(graph.nodes().len(), 6);
+    assert_eq!(readbacks.len(), 2);
+}
+
 #[cfg(target_arch = "wasm32")]
 struct YieldOnce(bool);
 
@@ -649,7 +656,7 @@ async fn run_suite(context: &GpuContext) -> u32 {
         assert!(facts.sampled, "{:?}", case.format);
         assert!(facts.copy_source, "{:?}", case.format);
         assert!(facts.copy_destination, "{:?}", case.format);
-        assert!(!facts.filterable, "{:?}", case.format);
+        assert!(facts.filterable, "{:?}", case.format);
         assert!(
             !facts.storage_read && !facts.storage_write,
             "{:?}",
@@ -697,8 +704,7 @@ pub(crate) async fn run_browser_bc() -> u32 {
         let portable = facts.sampled && facts.copy_source && facts.copy_destination;
         let any_portable = facts.sampled || facts.copy_source || facts.copy_destination;
         assert!(
-            !facts.filterable
-                && !facts.storage_read
+            !facts.storage_read
                 && !facts.storage_write
                 && !facts.color_attachment
                 && !facts.depth_stencil,
@@ -706,10 +712,15 @@ pub(crate) async fn run_browser_bc() -> u32 {
             case.format
         );
         if portable {
+            assert!(
+                facts.filterable,
+                "{:?} supported browser BC must preserve guaranteed filtering",
+                case.format
+            );
             supported_count += 1;
         } else {
             assert!(
-                !any_portable,
+                !any_portable && !facts.filterable,
                 "{:?} browser BC family must be wholly available or wholly absent",
                 case.format
             );

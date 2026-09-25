@@ -1,12 +1,12 @@
 #[cfg(target_arch = "wasm32")]
+#[path = "gpu_r1_bc_texture_formats.rs"]
+mod retained_bc;
+#[cfg(target_arch = "wasm32")]
 #[path = "gpu_offscreen_indexed_native.rs"]
 mod retained_offscreen_indexed;
 #[cfg(target_arch = "wasm32")]
 #[path = "gpu_prefix_scan_native.rs"]
 mod retained_prefix_scan;
-#[cfg(target_arch = "wasm32")]
-#[path = "gpu_r1_bc_texture_formats.rs"]
-mod retained_bc;
 #[cfg(target_arch = "wasm32")]
 #[path = "gpu_r1_vertex16_formats.rs"]
 mod retained_vertex16;

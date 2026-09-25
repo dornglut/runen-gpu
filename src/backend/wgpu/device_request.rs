@@ -4,18 +4,18 @@ use super::{
     WgpuContextState, WgpuDeviceHealth, WgpuErrorAttributionGate, WgpuExecutionState,
     WgpuSurfaceState,
 };
+#[cfg(not(target_arch = "wasm32"))]
+use crate::GpuAdapterFacts;
+use crate::api::texture_format;
 use crate::{
-    GpuAlignmentFacts, GpuCandidateEnvironmentEvidence, GpuCandidateId,
-    GpuCandidateInput, GpuCandidateSelection, GpuCandidateSelectionKind, GpuCapabilityFeature,
-    GpuContext, GpuContextAdmissionReport, GpuContextAffinity, GpuContextDescriptor, GpuContextId,
+    GpuAlignmentFacts, GpuCandidateEnvironmentEvidence, GpuCandidateId, GpuCandidateInput,
+    GpuCandidateSelection, GpuCandidateSelectionKind, GpuCapabilityFeature, GpuContext,
+    GpuContextAdmissionReport, GpuContextAffinity, GpuContextDescriptor, GpuContextId,
     GpuContextRequestError, GpuContextRequestErrorCategory, GpuDeviceGeneration, GpuDeviceLimits,
     GpuDeviceRequestProfile, GpuExecutionPolicy, GpuFallbackStatus, GpuLimits,
     GpuRealizationPolicies, GpuSoftwareFallbackPolicy, GpuTextureFormat, admitted_device_facts,
     allocate_context_id, select_candidate_inputs,
 };
-use crate::api::texture_format;
-#[cfg(not(target_arch = "wasm32"))]
-use crate::GpuAdapterFacts;
 use std::sync::Arc;
 #[cfg(not(target_arch = "wasm32"))]
 use wgpu::Backends;
