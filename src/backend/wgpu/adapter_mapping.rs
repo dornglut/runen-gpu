@@ -108,6 +108,10 @@ fn normalized_limits(native: &wgpu::Limits) -> GpuLimits {
         native.max_vertex_attributes,
         native.max_vertex_buffer_array_stride,
     )
+    .with_binding_array_limits(
+        native.max_binding_array_elements_per_shader_stage,
+        native.max_binding_array_sampler_elements_per_shader_stage,
+    )
 }
 
 /// Maps only downlevel capabilities WGPU explicitly proves. Unknown flag bits suppress
