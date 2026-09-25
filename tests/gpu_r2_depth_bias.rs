@@ -100,14 +100,7 @@ fn fs_main() -> @location(0) vec4<f32> {{
 }}
 // {}
 "#,
-        depths[0],
-        depths[1],
-        depths[2],
-        color[0],
-        color[1],
-        color[2],
-        color[3],
-        key,
+        depths[0], depths[1], depths[2], color[0], color[1], color[2], color[3], key,
     )
 }
 
@@ -170,7 +163,10 @@ fn pipeline(
     .unwrap()
 }
 
-fn color_target(scope: &mut GpuResourceScope, name: &str) -> (GpuTextureHandle, GpuTextureViewHandle) {
+fn color_target(
+    scope: &mut GpuResourceScope,
+    name: &str,
+) -> (GpuTextureHandle, GpuTextureViewHandle) {
     let resource_label = label(name);
     let texture = scope
         .texture(
@@ -184,7 +180,10 @@ fn color_target(scope: &mut GpuResourceScope, name: &str) -> (GpuTextureHandle, 
                 GpuTextureFormat::Rgba8Unorm,
                 GpuTextureUsages::new(
                     &resource_label,
-                    [GpuTextureUsage::ColorAttachment, GpuTextureUsage::CopySource],
+                    [
+                        GpuTextureUsage::ColorAttachment,
+                        GpuTextureUsage::CopySource,
+                    ],
                 )
                 .unwrap(),
                 GpuTextureInitialization::Uninitialized,
@@ -330,8 +329,12 @@ fn biased_render(
     );
     if case.requires_clamp {
         assert!(matches!(
-            pipeline.requirements().get(GpuCapabilityFeature::DepthBiasClamp),
-            Some(GpuCapabilityRequirement::Required(GpuCapabilityFeature::DepthBiasClamp))
+            pipeline
+                .requirements()
+                .get(GpuCapabilityFeature::DepthBiasClamp),
+            Some(GpuCapabilityRequirement::Required(
+                GpuCapabilityFeature::DepthBiasClamp
+            ))
         ));
     } else {
         assert!(
@@ -437,7 +440,10 @@ async fn wait_for_readback(
         }
         progress_yield().await;
     }
-    panic!("{} depth-bias proof exceeded its progress budget", case.name)
+    panic!(
+        "{} depth-bias proof exceeded its progress budget",
+        case.name
+    )
 }
 
 fn pixel_at(bytes: &GpuReadbackBytes, x: u32, y: u32) -> [u8; 4] {
@@ -566,7 +572,10 @@ fn depth_bias_contract_cases_are_distinguishing() {
     let clamp = clamp_case();
     assert!(clamp.requires_clamp);
     assert_ne!(clamp.bias.clamp(), 0.0);
-    assert_eq!(GpuDepthBiasState::new(1, -0.0, -0.0).unwrap().slope_scale(), 0.0);
+    assert_eq!(
+        GpuDepthBiasState::new(1, -0.0, -0.0).unwrap().slope_scale(),
+        0.0
+    );
 }
 
 #[cfg(not(target_arch = "wasm32"))]

@@ -158,10 +158,13 @@ fn stencil_pipeline(write: bool) -> GpuRenderPipelineDescriptor {
     };
     let stencil =
         GpuStencilStateDescriptor::new(face, face, u32::MAX, if write { 0xff } else { 0 });
-    let depth_stencil =
-        GpuDepthStencilStateDescriptor::new(GpuTextureFormat::Stencil8, None, Some(stencil),
-            GpuDepthBiasState::default())
-            .unwrap();
+    let depth_stencil = GpuDepthStencilStateDescriptor::new(
+        GpuTextureFormat::Stencil8,
+        None,
+        Some(stencil),
+        GpuDepthBiasState::default(),
+    )
+    .unwrap();
     let state = GpuRenderPipelineStateDescriptor::new(
         GpuVertexInputStateDescriptor::new([]).unwrap(),
         None,
@@ -361,8 +364,8 @@ fn stencil8_structural_and_attachment_contracts_are_explicit() {
                 GpuCompareFunction::Always
             )),
             None,
-        
-            GpuDepthBiasState::default(),)
+            GpuDepthBiasState::default(),
+        )
         .is_err()
     );
     assert!(
@@ -370,8 +373,8 @@ fn stencil8_structural_and_attachment_contracts_are_explicit() {
             GpuTextureFormat::Depth32Float,
             None,
             Some(GpuStencilStateDescriptor::new(keep, keep, u32::MAX, 0)),
-        
-            GpuDepthBiasState::default(),)
+            GpuDepthBiasState::default(),
+        )
         .is_err()
     );
     assert!(

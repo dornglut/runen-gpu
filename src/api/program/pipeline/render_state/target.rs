@@ -636,8 +636,8 @@ mod tests {
                         GpuCompareFunction::LessEqual
                     )),
                     None,
-                
-                    GpuDepthBiasState::default(),)
+                    GpuDepthBiasState::default(),
+                )
                 .is_ok()
             );
         }
@@ -707,10 +707,13 @@ mod tests {
             GpuStencilOperation::Replace,
         );
         let stencil = GpuStencilStateDescriptor::new(keep, replace, u32::MAX, 0xff);
-        let state =
-            GpuDepthStencilStateDescriptor::new(GpuTextureFormat::Stencil8, None, Some(stencil),
-                GpuDepthBiasState::default())
-                .unwrap();
+        let state = GpuDepthStencilStateDescriptor::new(
+            GpuTextureFormat::Stencil8,
+            None,
+            Some(stencil),
+            GpuDepthBiasState::default(),
+        )
+        .unwrap();
         assert_eq!(state.stencil(), Some(stencil));
         assert!(stencil.may_write());
 
@@ -720,8 +723,8 @@ mod tests {
                 GpuTextureFormat::Depth24PlusStencil8,
                 Some(depth),
                 None,
-            
-                GpuDepthBiasState::default(),)
+                GpuDepthBiasState::default(),
+            )
             .is_ok()
         );
         assert!(
@@ -729,16 +732,16 @@ mod tests {
                 GpuTextureFormat::Depth24PlusStencil8,
                 None,
                 Some(stencil),
-            
-                GpuDepthBiasState::default(),)
+                GpuDepthBiasState::default(),
+            )
             .is_ok()
         );
         let combined = GpuDepthStencilStateDescriptor::new(
             GpuTextureFormat::Depth24PlusStencil8,
             Some(depth),
             Some(stencil),
-        
-            GpuDepthBiasState::default(),)
+            GpuDepthBiasState::default(),
+        )
         .unwrap();
         assert_eq!(combined.depth(), Some(depth));
         assert_eq!(combined.stencil(), Some(stencil));
@@ -750,8 +753,8 @@ mod tests {
                     GpuCompareFunction::Always
                 )),
                 None,
-            
-                GpuDepthBiasState::default(),)
+                GpuDepthBiasState::default(),
+            )
             .is_err()
         );
         assert!(
@@ -759,8 +762,8 @@ mod tests {
                 GpuTextureFormat::Depth32Float,
                 None,
                 Some(stencil),
-            
-                GpuDepthBiasState::default(),)
+                GpuDepthBiasState::default(),
+            )
             .is_err()
         );
     }

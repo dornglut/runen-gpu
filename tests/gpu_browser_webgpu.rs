@@ -30,8 +30,8 @@ mod retained_vertex_packed;
 mod browser {
     use super::{
         retained_bc, retained_blend_state, retained_depth_bias, retained_offscreen_indexed,
-        retained_prefix_scan, retained_sampler_anisotropy, retained_vertex_packed, retained_vertex8,
-        retained_vertex16,
+        retained_prefix_scan, retained_sampler_anisotropy, retained_vertex_packed,
+        retained_vertex8, retained_vertex16,
     };
     use runen_gpu::*;
     use std::cell::RefCell;
@@ -1249,10 +1249,13 @@ fn vs_main(@builtin(vertex_index) index: u32) -> @builtin(position) vec4f {
         };
         let stencil =
             GpuStencilStateDescriptor::new(face, face, u32::MAX, if write { 0xff } else { 0 });
-        let depth_stencil =
-            GpuDepthStencilStateDescriptor::new(GpuTextureFormat::Stencil8, None, Some(stencil),
-                GpuDepthBiasState::default())
-                .unwrap();
+        let depth_stencil = GpuDepthStencilStateDescriptor::new(
+            GpuTextureFormat::Stencil8,
+            None,
+            Some(stencil),
+            GpuDepthBiasState::default(),
+        )
+        .unwrap();
         let state = GpuRenderPipelineStateDescriptor::new(
             GpuVertexInputStateDescriptor::new([]).unwrap(),
             None,
@@ -1635,8 +1638,8 @@ fn cs_main() {
             format,
             Some(GpuDepthStateDescriptor::new(depth_write, depth_compare)),
             Some(stencil),
-        
-            GpuDepthBiasState::default(),)
+            GpuDepthBiasState::default(),
+        )
         .unwrap();
         let state = GpuRenderPipelineStateDescriptor::new(
             GpuVertexInputStateDescriptor::new([]).unwrap(),

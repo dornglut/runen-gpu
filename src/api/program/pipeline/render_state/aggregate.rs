@@ -33,8 +33,7 @@ impl GpuRenderPipelineStateDescriptor {
             ));
         }
 
-        if depth_stencil
-            .is_some_and(|state| !state.bias().is_zero())
+        if depth_stencil.is_some_and(|state| !state.bias().is_zero())
             && !matches!(
                 primitive.topology(),
                 super::primitive::GpuPrimitiveTopology::TriangleList

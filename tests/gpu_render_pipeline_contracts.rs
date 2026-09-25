@@ -1,14 +1,14 @@
 use runen_gpu::{
     GpuAdmittedProgramSource, GpuBindingLayoutRefinement, GpuCapabilityFeature,
     GpuCapabilityRequirement, GpuCapabilityRequirements, GpuColorTargetStateDescriptor,
-    GpuColorWriteMask, GpuCompareFunction, GpuDepthBiasState, GpuDepthStateDescriptor, GpuDepthStencilStateDescriptor,
-    GpuEntryPointName, GpuFragmentOutputStateDescriptor, GpuMultisampleStateDescriptor,
-    GpuPipelineConfiguration, GpuPipelineLayoutDescriptor, GpuPrimitiveStateDescriptor,
-    GpuProgramContractCause, GpuProgramDescriptor, GpuProgramSourceIdentity, GpuProgramSourceKey,
-    GpuProgramSourceOwnerId, GpuProgramSourceProvenance, GpuProgramSourceRegistry,
-    GpuProgramSourceRevision, GpuRenderEntryPoints, GpuRenderPipelineDescriptor,
-    GpuRenderPipelineStateDescriptor, GpuShaderIoScalarClass, GpuTextureFormat,
-    GpuVertexInputStateDescriptor,
+    GpuColorWriteMask, GpuCompareFunction, GpuDepthBiasState, GpuDepthStateDescriptor,
+    GpuDepthStencilStateDescriptor, GpuEntryPointName, GpuFragmentOutputStateDescriptor,
+    GpuMultisampleStateDescriptor, GpuPipelineConfiguration, GpuPipelineLayoutDescriptor,
+    GpuPrimitiveStateDescriptor, GpuProgramContractCause, GpuProgramDescriptor,
+    GpuProgramSourceIdentity, GpuProgramSourceKey, GpuProgramSourceOwnerId,
+    GpuProgramSourceProvenance, GpuProgramSourceRegistry, GpuProgramSourceRevision,
+    GpuRenderEntryPoints, GpuRenderPipelineDescriptor, GpuRenderPipelineStateDescriptor,
+    GpuShaderIoScalarClass, GpuTextureFormat, GpuVertexInputStateDescriptor,
 };
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
@@ -69,8 +69,8 @@ fn depth_state() -> GpuDepthStencilStateDescriptor {
             GpuCompareFunction::LessEqual,
         )),
         None,
-    
-        GpuDepthBiasState::default(),)
+        GpuDepthBiasState::default(),
+    )
     .expect("test depth state should be valid")
 }
 
