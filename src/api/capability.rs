@@ -979,6 +979,20 @@ mod tests {
         assert_eq!(limits.max_texture_array_layers(), 256);
         assert_eq!(limits.max_vertex_attributes(), 16);
         assert_eq!(limits.max_vertex_buffer_array_stride(), 2048);
+        assert_eq!(limits.max_binding_array_elements_per_shader_stage(), 0);
+        assert_eq!(
+            limits.max_binding_array_sampler_elements_per_shader_stage(),
+            0
+        );
+        let binding_arrays = limits.with_binding_array_limits(500_000, 1_000);
+        assert_eq!(
+            binding_arrays.max_binding_array_elements_per_shader_stage(),
+            500_000
+        );
+        assert_eq!(
+            binding_arrays.max_binding_array_sampler_elements_per_shader_stage(),
+            1_000
+        );
         let no_dynamic_buffers = GpuLimits::new(
             1,
             2,
