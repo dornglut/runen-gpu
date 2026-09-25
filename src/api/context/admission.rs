@@ -1185,7 +1185,10 @@ mod tests {
         ] {
             let descriptor = GpuContextDescriptor::new(GpuCapabilityRequirements::new())
                 .require_format_role(format, role);
-            assert!(evaluate_candidate(&descriptor, adapter.clone(), true).is_ok(), "{role:?}");
+            assert!(
+                evaluate_candidate(&descriptor, adapter.clone(), true).is_ok(),
+                "{role:?}"
+            );
         }
         for role in [
             GpuFormatRole::Filterable,
