@@ -1,11 +1,39 @@
 use crate::{
-    GpuColorWriteMask, GpuCompareFunction, GpuCullMode, GpuFrontFace, GpuIndexFormat,
-    GpuPrimitiveTopology, GpuVertexFormat, GpuVertexStepMode,
+    GpuBlendFactor, GpuBlendOperation, GpuColorWriteMask, GpuCompareFunction, GpuCullMode,
+    GpuFrontFace, GpuIndexFormat, GpuPrimitiveTopology, GpuVertexFormat, GpuVertexStepMode,
 };
 use wgpu::{
-    ColorWrites, CompareFunction, Face, FrontFace, IndexFormat, PrimitiveTopology, VertexFormat,
-    VertexStepMode,
+    BlendFactor, BlendOperation, ColorWrites, CompareFunction, Face, FrontFace, IndexFormat,
+    PrimitiveTopology, VertexFormat, VertexStepMode,
 };
+
+pub(super) const fn blend_factor(value: GpuBlendFactor) -> BlendFactor {
+    match value {
+        GpuBlendFactor::Zero => BlendFactor::Zero,
+        GpuBlendFactor::One => BlendFactor::One,
+        GpuBlendFactor::Src => BlendFactor::Src,
+        GpuBlendFactor::OneMinusSrc => BlendFactor::OneMinusSrc,
+        GpuBlendFactor::SrcAlpha => BlendFactor::SrcAlpha,
+        GpuBlendFactor::OneMinusSrcAlpha => BlendFactor::OneMinusSrcAlpha,
+        GpuBlendFactor::Dst => BlendFactor::Dst,
+        GpuBlendFactor::OneMinusDst => BlendFactor::OneMinusDst,
+        GpuBlendFactor::DstAlpha => BlendFactor::DstAlpha,
+        GpuBlendFactor::OneMinusDstAlpha => BlendFactor::OneMinusDstAlpha,
+        GpuBlendFactor::SrcAlphaSaturated => BlendFactor::SrcAlphaSaturated,
+        GpuBlendFactor::Constant => BlendFactor::Constant,
+        GpuBlendFactor::OneMinusConstant => BlendFactor::OneMinusConstant,
+    }
+}
+
+pub(super) const fn blend_operation(value: GpuBlendOperation) -> BlendOperation {
+    match value {
+        GpuBlendOperation::Add => BlendOperation::Add,
+        GpuBlendOperation::Subtract => BlendOperation::Subtract,
+        GpuBlendOperation::ReverseSubtract => BlendOperation::ReverseSubtract,
+        GpuBlendOperation::Min => BlendOperation::Min,
+        GpuBlendOperation::Max => BlendOperation::Max,
+    }
+}
 
 pub(super) fn color_write_mask(mask: GpuColorWriteMask) -> ColorWrites {
     let mut native = ColorWrites::empty();
@@ -232,6 +260,47 @@ mod tests {
             vertex_step_mode(GpuVertexStepMode::Instance),
             VertexStepMode::Instance
         );
+        for (normalized, native) in [
+            (GpuBlendFactor::Zero, BlendFactor::Zero),
+            (GpuBlendFactor::One, BlendFactor::One),
+            (GpuBlendFactor::Src, BlendFactor::Src),
+            (GpuBlendFactor::OneMinusSrc, BlendFactor::OneMinusSrc),
+            (GpuBlendFactor::SrcAlpha, BlendFactor::SrcAlpha),
+            (
+                GpuBlendFactor::OneMinusSrcAlpha,
+                BlendFactor::OneMinusSrcAlpha,
+            ),
+            (GpuBlendFactor::Dst, BlendFactor::Dst),
+            (GpuBlendFactor::OneMinusDst, BlendFactor::OneMinusDst),
+            (GpuBlendFactor::DstAlpha, BlendFactor::DstAlpha),
+            (
+                GpuBlendFactor::OneMinusDstAlpha,
+                BlendFactor::OneMinusDstAlpha,
+            ),
+            (
+                GpuBlendFactor::SrcAlphaSaturated,
+                BlendFactor::SrcAlphaSaturated,
+            ),
+            (GpuBlendFactor::Constant, BlendFactor::Constant),
+            (
+                GpuBlendFactor::OneMinusConstant,
+                BlendFactor::OneMinusConstant,
+            ),
+        ] {
+            assert_eq!(blend_factor(normalized), native);
+        }
+        for (normalized, native) in [
+            (GpuBlendOperation::Add, BlendOperation::Add),
+            (GpuBlendOperation::Subtract, BlendOperation::Subtract),
+            (
+                GpuBlendOperation::ReverseSubtract,
+                BlendOperation::ReverseSubtract,
+            ),
+            (GpuBlendOperation::Min, BlendOperation::Min),
+            (GpuBlendOperation::Max, BlendOperation::Max),
+        ] {
+            assert_eq!(blend_operation(normalized), native);
+        }
         assert_eq!(color_write_mask(GpuColorWriteMask::ALL), ColorWrites::ALL);
     }
 }

@@ -1,5 +1,5 @@
 use runen_gpu::{
-    GpuAdmittedProgramSource, GpuBindingLayoutRefinement, GpuBlendMode, GpuCapabilityFeature,
+    GpuAdmittedProgramSource, GpuBindingLayoutRefinement, GpuCapabilityFeature,
     GpuCapabilityRequirement, GpuCapabilityRequirements, GpuColorTargetStateDescriptor,
     GpuColorWriteMask, GpuCompareFunction, GpuDepthStateDescriptor, GpuDepthStencilStateDescriptor,
     GpuEntryPointName, GpuFragmentOutputStateDescriptor, GpuMultisampleStateDescriptor,
@@ -55,7 +55,7 @@ fn entry_point(value: &str) -> GpuEntryPointName {
 fn color_target() -> GpuColorTargetStateDescriptor {
     GpuColorTargetStateDescriptor::new(
         GpuTextureFormat::Rgba8UnormSrgb,
-        GpuBlendMode::Replace,
+        None,
         GpuColorWriteMask::ALL,
     )
     .expect("test color target should be valid")

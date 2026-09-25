@@ -1,9 +1,9 @@
 use super::super::texture_format_mapping::texture_format;
 use super::render_mapping;
 use crate::{
-    GpuBlendMode, GpuColorTargetStateDescriptor, GpuContext, GpuPipelineRealizationError,
-    GpuPipelineRealizationErrorCategory, GpuPrimitiveStateDescriptor, GpuRenderPipelineDescriptor,
-    GpuTextureFormat,
+    GpuBlendComponent, GpuBlendState, GpuColorTargetStateDescriptor, GpuContext,
+    GpuPipelineRealizationError, GpuPipelineRealizationErrorCategory, GpuPrimitiveStateDescriptor,
+    GpuRenderPipelineDescriptor, GpuTextureFormat,
 };
 use wgpu::{
     BlendState, ColorTargetState, DepthBiasState, DepthStencilState, DownlevelFlags, Features,
@@ -249,11 +249,11 @@ fn validate_attachment_support(
 }
 
 fn validate_color_blend_support(
-    blend: GpuBlendMode,
+    blend: Option<GpuBlendState>,
     blendable: bool,
     request: &str,
 ) -> Result<(), GpuPipelineRealizationError> {
-    if matches!(blend, GpuBlendMode::Alpha) && !blendable {
+    if blend.is_some() && !blendable {
         return Err(incompatible(
             request,
             "the selected color attachment format does not support blending required by the pipeline state",
@@ -265,11 +265,23 @@ fn validate_color_blend_support(
 fn lower_color_target(target: GpuColorTargetStateDescriptor) -> ColorTargetState {
     ColorTargetState {
         format: texture_format(target.format()),
-        blend: match target.blend() {
-            GpuBlendMode::Replace => None,
-            GpuBlendMode::Alpha => Some(BlendState::ALPHA_BLENDING),
-        },
+        blend: target.blend().map(lower_blend_state),
         write_mask: render_mapping::color_write_mask(target.write_mask()),
+    }
+}
+
+fn lower_blend_state(state: GpuBlendState) -> BlendState {
+    BlendState {
+        color: lower_blend_component(state.color()),
+        alpha: lower_blend_component(state.alpha()),
+    }
+}
+
+fn lower_blend_component(component: GpuBlendComponent) -> wgpu::BlendComponent {
+    wgpu::BlendComponent {
+        src_factor: render_mapping::blend_factor(component.src_factor()),
+        dst_factor: render_mapping::blend_factor(component.dst_factor()),
+        operation: render_mapping::blend_operation(component.operation()),
     }
 }
 
@@ -350,10 +362,17 @@ mod tests {
 
     #[test]
     fn alpha_blending_requires_a_blendable_color_format() {
-        assert!(validate_color_blend_support(GpuBlendMode::Replace, false, "test").is_ok());
-        assert!(validate_color_blend_support(GpuBlendMode::Alpha, true, "test").is_ok());
+        let component = GpuBlendComponent::new(
+            crate::GpuBlendFactor::One,
+            crate::GpuBlendFactor::Zero,
+            crate::GpuBlendOperation::Add,
+        )
+        .unwrap();
+        let blend = GpuBlendState::new(component, component);
+        assert!(validate_color_blend_support(None, false, "test").is_ok());
+        assert!(validate_color_blend_support(Some(blend), true, "test").is_ok());
 
-        let error = validate_color_blend_support(GpuBlendMode::Alpha, false, "test")
+        let error = validate_color_blend_support(Some(blend), false, "test")
             .expect_err("alpha blending must reject a non-blendable color format");
         assert_eq!(
             error.category(),

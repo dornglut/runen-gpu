@@ -158,7 +158,7 @@ fn r32float_participates_in_public_texture_and_fragment_output_contracts() {
 
     let target = GpuColorTargetStateDescriptor::new(
         GpuTextureFormat::R32Float,
-        GpuBlendMode::Replace,
+        None,
         GpuColorWriteMask::RED,
     )
     .unwrap();

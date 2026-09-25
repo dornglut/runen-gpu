@@ -100,6 +100,7 @@ const done = arguments[arguments.length - 1];
         typeof wasm.runengpu_browser_packed32_sampled_mask !== "function" ||
         typeof wasm.runengpu_browser_packed32_color_attachment_mask !== "function" ||
         typeof wasm.runengpu_browser_bc_exercised_mask !== "function" ||
+        typeof wasm.runengpu_browser_blend_state_exercised_mask !== "function" ||
         typeof wasm.runengpu_browser_sampler_anisotropy_exercised !== "function" ||
         typeof wasm.runengpu_browser_vertex8_exercised_mask !== "function" ||
         typeof wasm.runengpu_browser_vertex16_exercised_mask !== "function" ||
@@ -131,6 +132,7 @@ const done = arguments[arguments.length - 1];
           packed32SampledMask: wasm.runengpu_browser_packed32_sampled_mask(),
           packed32ColorAttachmentMask: wasm.runengpu_browser_packed32_color_attachment_mask(),
           bcMask: wasm.runengpu_browser_bc_exercised_mask(),
+          blendStateMask: wasm.runengpu_browser_blend_state_exercised_mask(),
           samplerAnisotropyExercised: wasm.runengpu_browser_sampler_anisotropy_exercised(),
           vertex8Mask: wasm.runengpu_browser_vertex8_exercised_mask(),
           vertex16Mask: wasm.runengpu_browser_vertex16_exercised_mask(),
@@ -809,6 +811,25 @@ def main() -> int:
             raise RuntimeError(
                 "RunenGPU actual-browser BC: PARTIAL SUPPORT IS NOT QUALIFIED "
                 f"(mask={bc_mask:#x}, expected 0 or {bc_full_mask:#x})"
+            )
+
+        blend_state_names = ("independent_subtract", "min_max")
+        blend_state_mask = read_exercised_mask(
+            value, "blendStateMask", "BlendState", len(blend_state_names)
+        )
+        blend_state_full_mask = (1 << len(blend_state_names)) - 1
+        for index, case_name in enumerate(blend_state_names):
+            if blend_state_mask & (1 << index):
+                print(
+                    f"RunenGPU actual-browser {case_name} blend: "
+                    "EXERCISED (independent normalized blend state + exact readback)"
+                )
+            else:
+                print(f"RunenGPU actual-browser {case_name} blend: NOT EXERCISED")
+        if blend_state_mask != blend_state_full_mask:
+            raise RuntimeError(
+                "RunenGPU actual-browser BlendState: NOT QUALIFIED "
+                f"(mask={blend_state_mask:#x}, expected={blend_state_full_mask:#x})"
             )
 
         sampler_anisotropy = value.get("samplerAnisotropyExercised")

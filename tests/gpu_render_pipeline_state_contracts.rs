@@ -1,6 +1,6 @@
 use runen_gpu::{
-    GpuBlendMode, GpuColorTargetStateDescriptor, GpuColorWriteMask, GpuCompareFunction,
-    GpuDepthStateDescriptor, GpuDepthStencilStateDescriptor, GpuFragmentOutputStateDescriptor,
+    GpuColorTargetStateDescriptor, GpuColorWriteMask, GpuCompareFunction, GpuDepthStateDescriptor,
+    GpuDepthStencilStateDescriptor, GpuFragmentOutputStateDescriptor,
     GpuMultisampleStateDescriptor, GpuPrimitiveStateDescriptor, GpuProgramContractCause,
     GpuRenderPipelineStateDescriptor, GpuTextureFormat, GpuVertexInputStateDescriptor,
 };
@@ -12,7 +12,7 @@ fn vertex_input() -> GpuVertexInputStateDescriptor {
 }
 
 fn color_target(format: GpuTextureFormat) -> GpuColorTargetStateDescriptor {
-    GpuColorTargetStateDescriptor::new(format, GpuBlendMode::Replace, GpuColorWriteMask::ALL)
+    GpuColorTargetStateDescriptor::new(format, None, GpuColorWriteMask::ALL)
         .expect("test color target should be valid")
 }
 

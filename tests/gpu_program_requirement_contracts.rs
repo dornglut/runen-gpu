@@ -1,13 +1,13 @@
 use runen_gpu::{
-    GpuAdmittedProgramSource, GpuBindingKey, GpuBindingLayoutRefinement, GpuBlendMode,
-    GpuCapabilityFeature, GpuCapabilityRequirement, GpuCapabilityRequirements,
-    GpuColorTargetStateDescriptor, GpuColorWriteMask, GpuComputePipelineDescriptor,
-    GpuEntryPointName, GpuFragmentOutputStateDescriptor, GpuMultisampleStateDescriptor,
-    GpuPipelineConfiguration, GpuPrimitiveStateDescriptor, GpuProgramDescriptor,
-    GpuProgramSourceIdentity, GpuProgramSourceKey, GpuProgramSourceOwnerId,
-    GpuProgramSourceProvenance, GpuProgramSourceRegistry, GpuProgramSourceRevision,
-    GpuRenderEntryPoints, GpuRenderPipelineDescriptor, GpuRenderPipelineStateDescriptor,
-    GpuSamplerClass, GpuTextureFormat, GpuTextureSampleClass, GpuVertexInputStateDescriptor,
+    GpuAdmittedProgramSource, GpuBindingKey, GpuBindingLayoutRefinement, GpuCapabilityFeature,
+    GpuCapabilityRequirement, GpuCapabilityRequirements, GpuColorTargetStateDescriptor,
+    GpuColorWriteMask, GpuComputePipelineDescriptor, GpuEntryPointName,
+    GpuFragmentOutputStateDescriptor, GpuMultisampleStateDescriptor, GpuPipelineConfiguration,
+    GpuPrimitiveStateDescriptor, GpuProgramDescriptor, GpuProgramSourceIdentity,
+    GpuProgramSourceKey, GpuProgramSourceOwnerId, GpuProgramSourceProvenance,
+    GpuProgramSourceRegistry, GpuProgramSourceRevision, GpuRenderEntryPoints,
+    GpuRenderPipelineDescriptor, GpuRenderPipelineStateDescriptor, GpuSamplerClass,
+    GpuTextureFormat, GpuTextureSampleClass, GpuVertexInputStateDescriptor,
 };
 
 const FIXED_ARRAY_WGSL: &str = r#"
@@ -152,7 +152,7 @@ fn render_pipeline_inherits_program_interface_requirements() {
 
     let color_target = GpuColorTargetStateDescriptor::new(
         GpuTextureFormat::Rgba8Unorm,
-        GpuBlendMode::Replace,
+        None,
         GpuColorWriteMask::ALL,
     )
     .unwrap();

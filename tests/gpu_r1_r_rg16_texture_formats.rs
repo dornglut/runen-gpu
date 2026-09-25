@@ -248,12 +248,8 @@ fn assert_fragment_io_and_integer_blending_follow_scalar_class(
     width: u8,
 ) {
     for (format, class) in formats.iter().copied() {
-        let target = GpuColorTargetStateDescriptor::new(
-            format,
-            GpuBlendMode::Replace,
-            GpuColorWriteMask::ALL,
-        )
-        .unwrap();
+        let target =
+            GpuColorTargetStateDescriptor::new(format, None, GpuColorWriteMask::ALL).unwrap();
         let signature = GpuFragmentOutputStateDescriptor::new([target])
             .expected_signature(GpuEntryPointName::new("fragment_main").unwrap())
             .unwrap();
@@ -268,7 +264,20 @@ fn assert_fragment_io_and_integer_blending_follow_scalar_class(
             assert!(
                 GpuColorTargetStateDescriptor::new(
                     format,
-                    GpuBlendMode::Alpha,
+                    Some(GpuBlendState::new(
+                        GpuBlendComponent::new(
+                            GpuBlendFactor::SrcAlpha,
+                            GpuBlendFactor::OneMinusSrcAlpha,
+                            GpuBlendOperation::Add,
+                        )
+                        .unwrap(),
+                        GpuBlendComponent::new(
+                            GpuBlendFactor::One,
+                            GpuBlendFactor::OneMinusSrcAlpha,
+                            GpuBlendOperation::Add,
+                        )
+                        .unwrap(),
+                    )),
                     GpuColorWriteMask::ALL
                 )
                 .is_err()

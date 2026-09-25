@@ -67,7 +67,7 @@ fn main() {
         .expect("vertex input state should construct");
     let color_target = gpu::GpuColorTargetStateDescriptor::new(
         gpu::GpuTextureFormat::Rgba8UnormSrgb,
-        gpu::GpuBlendMode::Replace,
+        None,
         gpu::GpuColorWriteMask::ALL,
     )
     .expect("color target should construct");

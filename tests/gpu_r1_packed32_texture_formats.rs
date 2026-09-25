@@ -69,12 +69,8 @@ fn packed32_public_semantics_and_program_typing_are_exact() {
         assert!(!format.is_stencil());
         assert!(!format.is_srgb());
 
-        let target = GpuColorTargetStateDescriptor::new(
-            format,
-            GpuBlendMode::Replace,
-            GpuColorWriteMask::ALL,
-        )
-        .unwrap();
+        let target =
+            GpuColorTargetStateDescriptor::new(format, None, GpuColorWriteMask::ALL).unwrap();
         let signature = GpuFragmentOutputStateDescriptor::new([target])
             .expected_signature(GpuEntryPointName::new("fragment_main").unwrap())
             .unwrap();
@@ -83,8 +79,24 @@ fn packed32_public_semantics_and_program_typing_are_exact() {
         assert_eq!(output.value_type().vector_width().get(), width);
         assert_eq!(target.has_blendable_alpha_channel(), alpha);
 
-        let alpha_result =
-            GpuColorTargetStateDescriptor::new(format, GpuBlendMode::Alpha, GpuColorWriteMask::ALL);
+        let alpha_result = GpuColorTargetStateDescriptor::new(
+            format,
+            Some(GpuBlendState::new(
+                GpuBlendComponent::new(
+                    GpuBlendFactor::SrcAlpha,
+                    GpuBlendFactor::OneMinusSrcAlpha,
+                    GpuBlendOperation::Add,
+                )
+                .unwrap(),
+                GpuBlendComponent::new(
+                    GpuBlendFactor::One,
+                    GpuBlendFactor::OneMinusSrcAlpha,
+                    GpuBlendOperation::Add,
+                )
+                .unwrap(),
+            )),
+            GpuColorWriteMask::ALL,
+        );
         if class == GpuShaderIoScalarClass::Uint {
             assert!(alpha_result.is_err());
         } else {
