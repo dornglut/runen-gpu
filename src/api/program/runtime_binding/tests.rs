@@ -8,7 +8,8 @@ use crate::{
     GpuBufferInitialization, GpuBufferUsage, GpuBufferUsages, GpuMemoryIntent,
     GpuPipelineLayoutDescriptor, GpuProgramContractCause, GpuReconstruction, GpuResourceAccess,
     GpuResourceCommon, GpuResourceLabel, GpuResourceLifetime, GpuResourceProvenance,
-    GpuShaderStage, GpuShaderStages, GpuStorageBufferAccess, GpuWorkResourceIdAllocator,
+    GpuSamplerClass, GpuShaderStage, GpuShaderStages, GpuStorageBufferAccess,
+    GpuWorkResourceIdAllocator,
 };
 use core::num::{NonZeroU32, NonZeroU64};
 
@@ -50,6 +51,54 @@ fn storage_declaration(binding: u32, array_count: Option<NonZeroU32>) -> GpuBind
     .unwrap()
 }
 
+fn fixed_array_declaration(
+    group: u32,
+    binding: u32,
+    visibility: GpuShaderStages,
+    kind: GpuBindingKind,
+    count: u32,
+) -> GpuBindingDeclaration {
+    GpuBindingDeclaration::new(
+        GpuBindingKey::try_new(u64::from(group), u64::from(binding)).unwrap(),
+        visibility,
+        kind,
+        NonZeroU32::new(count),
+        format!("fixed-array-{group}-{binding}"),
+        GpuBindingProvenance::new("runtime-binding-array-limit-test", None).unwrap(),
+    )
+    .unwrap()
+}
+
+fn storage_array_declaration(
+    group: u32,
+    binding: u32,
+    stage: GpuShaderStage,
+    count: u32,
+) -> GpuBindingDeclaration {
+    fixed_array_declaration(
+        group,
+        binding,
+        GpuShaderStages::one(stage),
+        GpuBindingKind::storage_buffer(GpuStorageBufferAccess::ReadOnly, false, None),
+        count,
+    )
+}
+
+fn sampler_array_declaration(
+    group: u32,
+    binding: u32,
+    stage: GpuShaderStage,
+    count: u32,
+) -> GpuBindingDeclaration {
+    fixed_array_declaration(
+        group,
+        binding,
+        GpuShaderStages::one(stage),
+        GpuBindingKind::sampler(GpuSamplerClass::Filtering),
+        count,
+    )
+}
+
 fn analyzed_storage_declaration(host_minimum: Option<NonZeroU64>) -> GpuBindingDeclaration {
     GpuBindingDeclaration::from_program_analysis(
         GpuBindingKey::try_new(0, 0).unwrap(),
@@ -81,6 +130,24 @@ fn device_facts_with_limits(
         [],
     )
     .with_binding_array_limits(u32::MAX, u32::MAX)
+}
+
+fn device_facts_with_array_limits(
+    max_binding_array_elements: u32,
+    max_binding_array_sampler_elements: u32,
+) -> GpuRuntimeBindingDeviceFacts {
+    GpuRuntimeBindingDeviceFacts::new(
+        NonZeroU64::new(16),
+        NonZeroU64::new(16),
+        4,
+        8,
+        4,
+        [],
+    )
+    .with_binding_array_limits(
+        max_binding_array_elements,
+        max_binding_array_sampler_elements,
+    )
 }
 
 fn runtime_value(dynamic_offset: u64) -> GpuRuntimeBindingValue {
@@ -296,6 +363,90 @@ fn runtime_binding_set_defers_dynamic_storage_limit_to_explicit_device_validatio
         GpuProgramContractCause::RuntimeBindingIncompatible
     );
     assert_eq!(error.label(), "dynamic storage buffers");
+}
+
+#[test]
+fn fixed_array_limits_sum_same_stage_cardinality_across_bind_groups() {
+    let first = GpuBindGroupLayoutDescriptor::new(
+        0,
+        [storage_array_declaration(0, 0, GpuShaderStage::Compute, 3)],
+    )
+    .unwrap();
+    let second = GpuBindGroupLayoutDescriptor::new(
+        1,
+        [storage_array_declaration(1, 0, GpuShaderStage::Compute, 4)],
+    )
+    .unwrap();
+    let layout = GpuPipelineLayoutDescriptor::new([first, second]).unwrap();
+
+    let error = GpuRuntimeBindingSet::validate_pipeline_layout_device_facts(
+        &layout,
+        &device_facts_with_array_limits(6, u32::MAX),
+    )
+    .expect_err("same-stage fixed arrays must sum across bind groups");
+    assert_eq!(error.label(), "binding-array elements");
+
+    GpuRuntimeBindingSet::validate_pipeline_layout_device_facts(
+        &layout,
+        &device_facts_with_array_limits(7, u32::MAX),
+    )
+    .expect("the exact summed same-stage array budget must admit the layout");
+}
+
+#[test]
+fn fixed_array_limits_use_maximum_per_stage_instead_of_global_sum() {
+    let vertex = GpuBindGroupLayoutDescriptor::new(
+        0,
+        [storage_array_declaration(0, 0, GpuShaderStage::Vertex, 5)],
+    )
+    .unwrap();
+    let fragment = GpuBindGroupLayoutDescriptor::new(
+        1,
+        [storage_array_declaration(1, 0, GpuShaderStage::Fragment, 6)],
+    )
+    .unwrap();
+    let layout = GpuPipelineLayoutDescriptor::new([vertex, fragment]).unwrap();
+
+    GpuRuntimeBindingSet::validate_pipeline_layout_device_facts(
+        &layout,
+        &device_facts_with_array_limits(6, u32::MAX),
+    )
+    .expect("different shader stages must be budgeted independently and compared by maximum");
+}
+
+#[test]
+fn sampler_arrays_consume_both_general_and_sampler_array_budgets() {
+    let group = GpuBindGroupLayoutDescriptor::new(
+        0,
+        [sampler_array_declaration(
+            0,
+            0,
+            GpuShaderStage::Compute,
+            4,
+        )],
+    )
+    .unwrap();
+    let layout = GpuPipelineLayoutDescriptor::new([group]).unwrap();
+
+    let general_error = GpuRuntimeBindingSet::validate_pipeline_layout_device_facts(
+        &layout,
+        &device_facts_with_array_limits(3, 4),
+    )
+    .expect_err("sampler arrays must consume the pinned WGPU general array-element counter");
+    assert_eq!(general_error.label(), "binding-array elements");
+
+    let sampler_error = GpuRuntimeBindingSet::validate_pipeline_layout_device_facts(
+        &layout,
+        &device_facts_with_array_limits(4, 3),
+    )
+    .expect_err("sampler arrays must additionally consume the sampler-array counter");
+    assert_eq!(sampler_error.label(), "binding-array sampler elements");
+
+    GpuRuntimeBindingSet::validate_pipeline_layout_device_facts(
+        &layout,
+        &device_facts_with_array_limits(4, 4),
+    )
+    .expect("matching general and sampler budgets must admit the sampler array");
 }
 
 #[test]
