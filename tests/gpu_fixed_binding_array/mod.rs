@@ -226,7 +226,9 @@ pub(crate) async fn run_storage_buffer_array_proof(
     unused_context
         .realize_program(&unused_program)
         .await
-        .expect("whole-module shader realization must succeed after admitting its exact requirements");
+        .expect(
+            "whole-module shader realization must succeed after admitting its exact requirements",
+        );
 
     let (graph, readback_id, layout) = proof_graph();
     assert!(
