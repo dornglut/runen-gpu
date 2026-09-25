@@ -243,16 +243,23 @@ pub(crate) fn analyze_program(
                     detail,
                 )
             })?;
-        let compiler_kind = compiler_binding_kind(&module, &module_info, global.space, base_type)
-            .map_err(|detail| {
-                invalid(
-                    operation,
-                    &format!("binding {key}"),
-                    GpuProgramContractCause::ProgramInterfaceMismatch,
-                    detail,
-                )
-            })?;
-        if array_count.is_some() {
+        let module_array_kind = if array_count.is_some() {
+            Some(
+                compiler_binding_kind(&module, &module_info, global.space, base_type).map_err(
+                    |detail| {
+                        invalid(
+                            operation,
+                            &format!("binding {key}"),
+                            GpuProgramContractCause::ProgramInterfaceMismatch,
+                            detail,
+                        )
+                    },
+                )?,
+            )
+        } else {
+            None
+        };
+        if let Some(compiler_kind) = module_array_kind {
             for feature in fixed_array_capabilities(
                 compiler_kind.class(),
                 FixedArrayRequirementScope::ModuleCompilation,
@@ -273,6 +280,18 @@ pub(crate) fn analyze_program(
             continue;
         }
 
+        let compiler_kind = match module_array_kind {
+            Some(compiler_kind) => compiler_kind,
+            None => compiler_binding_kind(&module, &module_info, global.space, base_type)
+                .map_err(|detail| {
+                    invalid(
+                        operation,
+                        &format!("binding {key}"),
+                        GpuProgramContractCause::ProgramInterfaceMismatch,
+                        detail,
+                    )
+                })?,
+        };
         let observed_visibility = GpuShaderStages::new(used_stages)?;
         let refinement_index = refinements
             .binary_search_by_key(&key, GpuBindingLayoutRefinement::key)
