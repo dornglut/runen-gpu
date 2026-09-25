@@ -1932,9 +1932,13 @@ mod tests {
                 GpuAddressMode::ClampToEdge,
                 GpuAddressMode::ClampToEdge,
                 GpuAddressMode::ClampToEdge,
-                GpuFilterMode::Nearest,
-                GpuFilterMode::Nearest,
-                GpuFilterMode::Nearest,
+                GpuSamplerFilterState::new(
+                    GpuFilterMode::Nearest,
+                    GpuFilterMode::Nearest,
+                    GpuFilterMode::Nearest,
+                    1,
+                )
+                .unwrap(),
                 2.0,
                 1.0,
                 None,
@@ -1957,9 +1961,13 @@ mod tests {
                 GpuAddressMode::ClampToEdge,
                 GpuAddressMode::ClampToEdge,
                 GpuAddressMode::ClampToEdge,
-                GpuFilterMode::Nearest,
-                GpuFilterMode::Nearest,
-                GpuFilterMode::Nearest,
+                GpuSamplerFilterState::new(
+                    GpuFilterMode::Nearest,
+                    GpuFilterMode::Nearest,
+                    GpuFilterMode::Nearest,
+                    1,
+                )
+                .unwrap(),
                 0.0,
                 1.0,
                 None,
