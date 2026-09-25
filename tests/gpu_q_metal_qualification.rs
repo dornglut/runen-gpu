@@ -19,14 +19,14 @@ mod retained_offscreen;
 mod retained_prefix_scan;
 #[path = "gpu_r2_sampler_anisotropy.rs"]
 mod retained_sampler_anisotropy;
+#[path = "gpu_transient_attachment/mod.rs"]
+mod retained_transient_attachment;
 #[path = "gpu_r1_vertex16_formats.rs"]
 mod retained_vertex16;
 #[path = "gpu_r1_vertex8_formats.rs"]
 mod retained_vertex8;
 #[path = "gpu_r1_vertex_packed_formats.rs"]
 mod retained_vertex_packed;
-#[path = "gpu_transient_attachment/mod.rs"]
-mod retained_transient_attachment;
 
 const FEATURES: [GpuCapabilityFeature; 14] = [
     GpuCapabilityFeature::Compute,
@@ -491,7 +491,8 @@ fn metal_qualification_records_exact_public_api_evidence() {
     let depth_bias_mask = pollster::block_on(retained_depth_bias::run_baseline(&context));
     retained_sampler_anisotropy::realize_anisotropic_sampler(&context);
     let (transient_graph, transient_readback_id) = retained_transient_attachment::graph();
-    let transient_prepared = pollster::block_on(context.prepare_submission(transient_graph)).unwrap();
+    let transient_prepared =
+        pollster::block_on(context.prepare_submission(transient_graph)).unwrap();
     let transient_submission = context.submit_prepared(transient_prepared).unwrap();
     let transient_bytes = pollster::block_on(readback_wait::wait_for_readback(
         &context,
@@ -519,8 +520,7 @@ fn metal_qualification_records_exact_public_api_evidence() {
             retained_transient_attachment::stencil_descriptor(GpuBackendFamily::Metal),
         ))
         .expect("advertised Metal Stencil8 depth/stencil role must admit a context");
-        let (stencil_graph, stencil_readback_id) =
-            retained_transient_attachment::stencil_graph();
+        let (stencil_graph, stencil_readback_id) = retained_transient_attachment::stencil_graph();
         let stencil_prepared =
             pollster::block_on(stencil_context.prepare_submission(stencil_graph)).unwrap();
         let stencil_submission = stencil_context.submit_prepared(stencil_prepared).unwrap();
