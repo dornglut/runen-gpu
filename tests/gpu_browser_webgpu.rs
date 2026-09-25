@@ -17,6 +17,9 @@ mod retained_prefix_scan;
 #[path = "gpu_r2_sampler_anisotropy.rs"]
 mod retained_sampler_anisotropy;
 #[cfg(target_arch = "wasm32")]
+#[path = "gpu_r3_shader_f16.rs"]
+mod retained_shader_f16;
+#[cfg(target_arch = "wasm32")]
 #[path = "gpu_r1_vertex16_formats.rs"]
 mod retained_vertex16;
 #[cfg(target_arch = "wasm32")]
@@ -30,8 +33,8 @@ mod retained_vertex_packed;
 mod browser {
     use super::{
         retained_bc, retained_blend_state, retained_depth_bias, retained_offscreen_indexed,
-        retained_prefix_scan, retained_sampler_anisotropy, retained_vertex_packed,
-        retained_vertex8, retained_vertex16,
+        retained_prefix_scan, retained_sampler_anisotropy, retained_shader_f16,
+        retained_vertex_packed, retained_vertex8, retained_vertex16,
     };
     use runen_gpu::*;
     use std::cell::RefCell;
@@ -54,6 +57,7 @@ mod browser {
         static BLEND_STATE_EXERCISED_MASK: RefCell<u32> = RefCell::new(0);
         static DEPTH_BIAS_EXERCISED_MASK: RefCell<u32> = RefCell::new(0);
         static SAMPLER_ANISOTROPY_EXERCISED: RefCell<u32> = RefCell::new(0);
+        static SHADER_F16_EXERCISED_MASK: RefCell<u32> = RefCell::new(0);
         static VERTEX8_EXERCISED_MASK: RefCell<u32> = RefCell::new(0);
         static VERTEX16_EXERCISED_MASK: RefCell<u32> = RefCell::new(0);
         static VERTEX_PACKED_EXERCISED_MASK: RefCell<u32> = RefCell::new(0);
@@ -2155,6 +2159,8 @@ fn cs_main() {
         let sampler_anisotropy =
             retained_sampler_anisotropy::run_browser_sampler_anisotropy().await;
         SAMPLER_ANISOTROPY_EXERCISED.with(|slot| *slot.borrow_mut() = sampler_anisotropy);
+        let shader_f16 = retained_shader_f16::run_browser_shader_f16().await;
+        SHADER_F16_EXERCISED_MASK.with(|slot| *slot.borrow_mut() = shader_f16);
         let vertex8_mask = retained_vertex8::run_browser_vertex8().await;
         VERTEX8_EXERCISED_MASK.with(|slot| *slot.borrow_mut() = vertex8_mask);
         let vertex16_mask = retained_vertex16::run_browser_vertex16().await;
@@ -2259,6 +2265,11 @@ fn cs_main() {
     #[unsafe(no_mangle)]
     pub extern "C" fn runengpu_browser_sampler_anisotropy_exercised() -> u32 {
         SAMPLER_ANISOTROPY_EXERCISED.with(|value| *value.borrow())
+    }
+
+    #[unsafe(no_mangle)]
+    pub extern "C" fn runengpu_browser_shader_f16_exercised_mask() -> u32 {
+        SHADER_F16_EXERCISED_MASK.with(|value| *value.borrow())
     }
 
     #[unsafe(no_mangle)]

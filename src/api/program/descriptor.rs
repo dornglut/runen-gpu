@@ -51,6 +51,9 @@ impl GpuProgramDescriptor {
         });
 
         let mut requirements = GpuCapabilityRequirements::new();
+        for feature in analysis.required_features.iter().copied() {
+            insert_interface_requirement(&mut requirements, &source, feature)?;
+        }
         for binding in analysis.interface.bindings() {
             if binding.kind().class() == GpuBindingClass::StorageTexture {
                 insert_interface_requirement(
