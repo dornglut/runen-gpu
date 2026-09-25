@@ -17,8 +17,9 @@ const CASES: [PackedVertexCase; 2] = [
     PackedVertexCase {
         name: "unorm10_10_10_2",
         format: GpuVertexFormat::Unorm10_10_10_2,
-        bytes: [0xff, 0x57, 0xa5, 0xea],
-        condition: "value.x > 0.99 && value.y > 0.32 && value.y < 0.35 && value.z > 0.65 && value.z < 0.68 && value.w > 0.99",
+        // x = 1023, y = 256, z = 768, w = 2 -> packed u32 0xb00403ff.
+        bytes: [0xff, 0x03, 0x04, 0xb0],
+        condition: "value.x > 0.99 && value.y > 0.24 && value.y < 0.26 && value.z > 0.74 && value.z < 0.76 && value.w > 0.65 && value.w < 0.68",
     },
     PackedVertexCase {
         name: "unorm8x4_bgra",
