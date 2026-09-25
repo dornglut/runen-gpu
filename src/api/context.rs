@@ -135,9 +135,11 @@ impl GpuContext {
             limits.max_bind_groups(),
             limits.max_dynamic_uniform_buffers_per_pipeline_layout(),
             limits.max_dynamic_storage_buffers_per_pipeline_layout(),
+            self.adapter.supported().formats(),
+        )
+        .with_binding_array_limits(
             workload_limits.max_binding_array_elements_per_shader_stage(),
             workload_limits.max_binding_array_sampler_elements_per_shader_stage(),
-            self.adapter.supported().formats(),
         )
     }
 
