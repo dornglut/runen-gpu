@@ -34,13 +34,13 @@ fn min_max_blend() -> GpuBlendState {
     GpuBlendState::new(
         GpuBlendComponent::new(
             GpuBlendFactor::One,
-            GpuBlendFactor::Zero,
+            GpuBlendFactor::One,
             GpuBlendOperation::Min,
         )
         .unwrap(),
         GpuBlendComponent::new(
             GpuBlendFactor::One,
-            GpuBlendFactor::Zero,
+            GpuBlendFactor::One,
             GpuBlendOperation::Max,
         )
         .unwrap(),
@@ -441,7 +441,7 @@ fn blend_state_census_matches_portable_contract() {
     assert!(
         GpuBlendComponent::new(
             GpuBlendFactor::One,
-            GpuBlendFactor::Zero,
+            GpuBlendFactor::One,
             GpuBlendOperation::Max,
         )
         .is_ok()

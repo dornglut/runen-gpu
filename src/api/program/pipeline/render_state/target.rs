@@ -46,13 +46,13 @@ impl GpuBlendComponent {
         operation: GpuBlendOperation,
     ) -> Result<Self, GpuProgramContractError> {
         if matches!(operation, GpuBlendOperation::Min | GpuBlendOperation::Max)
-            && (src_factor != GpuBlendFactor::One || dst_factor != GpuBlendFactor::Zero)
+            && (src_factor != GpuBlendFactor::One || dst_factor != GpuBlendFactor::One)
         {
             return Err(invalid_attachment_state(
                 format!(
                     "blend_operation={operation:?}, src_factor={src_factor:?}, dst_factor={dst_factor:?}"
                 ),
-                "use One/Zero factors for Min and Max blend operations",
+                "use One/One factors for Min and Max blend operations",
             ));
         }
         Ok(Self {
