@@ -171,6 +171,38 @@ fn validate_depth_stencil_access_for_draw(
         return Ok(());
     };
     let pipeline_state = draw.pipeline().state().depth_stencil();
+    if pipeline_state.and_then(|state| state.depth()).is_some() && attachment.depth().is_none() {
+        return Err(GpuWorkOperationError::invalid(
+            "validate GPU render draw depth attachment parity",
+            "pipeline uses depth state but render attachment omits depth state",
+            Some(
+                attachment
+                    .source()
+                    .descriptor()
+                    .texture()
+                    .diagnostic_identity(),
+            ),
+            GpuWorkOperationCause::InvalidAttachment,
+            "configure depth attachment state whenever the render pipeline uses the depth aspect",
+        ));
+    }
+    if pipeline_state.and_then(|state| state.stencil()).is_some()
+        && attachment.stencil().is_none()
+    {
+        return Err(GpuWorkOperationError::invalid(
+            "validate GPU render draw stencil attachment parity",
+            "pipeline uses stencil state but render attachment omits stencil state",
+            Some(
+                attachment
+                    .source()
+                    .descriptor()
+                    .texture()
+                    .diagnostic_identity(),
+            ),
+            GpuWorkOperationCause::InvalidAttachment,
+            "configure stencil attachment state whenever the render pipeline uses the stencil aspect",
+        ));
+    }
     if attachment
         .depth()
         .is_some_and(|state| state.access() == GpuDepthStencilAccess::ReadOnly)

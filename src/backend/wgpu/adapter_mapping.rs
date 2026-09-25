@@ -239,6 +239,10 @@ fn texture_formats() -> [(GpuTextureFormat, TextureFormat); 37] {
         (GpuTextureFormat::Stencil8, TextureFormat::Stencil8),
         (GpuTextureFormat::Depth16Unorm, TextureFormat::Depth16Unorm),
         (GpuTextureFormat::Depth24Plus, TextureFormat::Depth24Plus),
+        (
+            GpuTextureFormat::Depth24PlusStencil8,
+            TextureFormat::Depth24PlusStencil8,
+        ),
         (GpuTextureFormat::Depth32Float, TextureFormat::Depth32Float),
     ]
 }
@@ -529,7 +533,7 @@ mod tests {
 
     #[test]
     fn rgba8_core_format_census_and_optional_roles_follow_backend_facts() {
-        assert_eq!(texture_formats().len(), 37);
+        assert_eq!(texture_formats().len(), 38);
         for (format, native) in [
             (GpuTextureFormat::Rgba8Snorm, TextureFormat::Rgba8Snorm),
             (GpuTextureFormat::Rgba8Uint, TextureFormat::Rgba8Uint),
@@ -574,7 +578,7 @@ mod tests {
 
     #[test]
     fn rgba16_format_census_and_optional_roles_follow_backend_facts() {
-        assert_eq!(texture_formats().len(), 37);
+        assert_eq!(texture_formats().len(), 38);
         for (format, native) in [
             (GpuTextureFormat::Rgba16Uint, TextureFormat::Rgba16Uint),
             (GpuTextureFormat::Rgba16Sint, TextureFormat::Rgba16Sint),
@@ -774,7 +778,7 @@ mod r1_r_rg8_mapping_tests {
     use super::*;
 
     #[test]
-    fn thirty_seven_unique_private_mappings_preserve_closed_presentation() {
+    fn thirty_eight_unique_private_mappings_preserve_closed_presentation() {
         let mappings = texture_formats();
         assert_eq!(mappings.len(), 37);
         let mut normalized = Vec::new();
