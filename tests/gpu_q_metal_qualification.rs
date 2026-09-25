@@ -254,6 +254,102 @@ async fn execute_indirect(
     retained_indirect::assert_rendered_pixels(&bytes);
 }
 
+fn wgpu_characterization(
+    expected_name: &str,
+    expected_vendor: Option<u32>,
+    expected_device: Option<u32>,
+) -> Value {
+    let mut descriptor = wgpu::InstanceDescriptor::new_without_display_handle();
+    descriptor.backends = wgpu::Backends::METAL;
+    let instance = wgpu::Instance::new(descriptor);
+    let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+        power_preference: wgpu::PowerPreference::None,
+        force_fallback_adapter: false,
+        compatible_surface: None,
+        apply_limit_buckets: false,
+    }))
+    .expect("qualification characterization requires a direct WGPU Metal adapter");
+    let info = adapter.get_info();
+    assert_eq!(
+        info.backend,
+        wgpu::Backend::Metal,
+        "direct WGPU characterization must use Metal"
+    );
+    assert_eq!(
+        info.name, expected_name,
+        "direct WGPU characterization must describe the same adapter selected by RunenGPU"
+    );
+    assert_eq!(
+        Some(info.vendor),
+        expected_vendor,
+        "direct WGPU vendor identity must match normalized RunenGPU adapter facts"
+    );
+    assert_eq!(
+        Some(info.device),
+        expected_device,
+        "direct WGPU device identity must match normalized RunenGPU adapter facts"
+    );
+
+    let features = adapter.features();
+    let limits = adapter.limits();
+    json!({
+        "authority": "private_backend_characterization_only",
+        "adapter": {
+            "backend": format!("{:?}", info.backend),
+            "name": info.name,
+            "vendor": info.vendor,
+            "device": info.device,
+            "device_type": format!("{:?}", info.device_type),
+            "transient_saves_memory": info.transient_saves_memory,
+            "subgroup_min_size": info.subgroup_min_size,
+            "subgroup_max_size": info.subgroup_max_size,
+        },
+        "features": {
+            "shader_f16": features.contains(wgpu::Features::SHADER_F16),
+            "timestamp_query": features.contains(wgpu::Features::TIMESTAMP_QUERY),
+            "indirect_first_instance":
+                features.contains(wgpu::Features::INDIRECT_FIRST_INSTANCE),
+            "depth_clip_control": features.contains(wgpu::Features::DEPTH_CLIP_CONTROL),
+            "texture_binding_array": features.contains(wgpu::Features::TEXTURE_BINDING_ARRAY),
+            "buffer_binding_array": features.contains(wgpu::Features::BUFFER_BINDING_ARRAY),
+            "storage_resource_binding_array":
+                features.contains(wgpu::Features::STORAGE_RESOURCE_BINDING_ARRAY),
+            "uniform_buffer_binding_arrays":
+                features.contains(wgpu::Features::UNIFORM_BUFFER_BINDING_ARRAYS),
+            "sampled_texture_and_storage_buffer_array_non_uniform_indexing": features.contains(
+                wgpu::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING
+            ),
+            "storage_texture_array_non_uniform_indexing": features.contains(
+                wgpu::Features::STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING
+            ),
+            "partially_bound_binding_array":
+                features.contains(wgpu::Features::PARTIALLY_BOUND_BINDING_ARRAY),
+            "mappable_primary_buffers":
+                features.contains(wgpu::Features::MAPPABLE_PRIMARY_BUFFERS),
+            "multi_draw_indirect_count":
+                features.contains(wgpu::Features::MULTI_DRAW_INDIRECT_COUNT),
+        },
+        "limits": {
+            "max_sampled_textures_per_shader_stage":
+                limits.max_sampled_textures_per_shader_stage,
+            "max_samplers_per_shader_stage": limits.max_samplers_per_shader_stage,
+            "max_storage_buffers_per_shader_stage":
+                limits.max_storage_buffers_per_shader_stage,
+            "max_storage_textures_per_shader_stage":
+                limits.max_storage_textures_per_shader_stage,
+            "max_uniform_buffers_per_shader_stage":
+                limits.max_uniform_buffers_per_shader_stage,
+            "max_binding_array_elements_per_shader_stage":
+                limits.max_binding_array_elements_per_shader_stage,
+            "max_binding_array_sampler_elements_per_shader_stage":
+                limits.max_binding_array_sampler_elements_per_shader_stage,
+            "max_buffer_size": limits.max_buffer_size,
+            "max_compute_workgroups_per_dimension":
+                limits.max_compute_workgroups_per_dimension,
+        },
+    })
+}
+
 fn limits_report(limits: GpuLimits) -> Value {
     json!({
         "max_uniform_buffer_binding_size": limits.max_uniform_buffer_binding_size(),
@@ -401,7 +497,7 @@ fn metal_qualification_records_exact_public_api_evidence() {
     assert_eq!(stats.pending_readbacks(), 0);
 
     let report = json!({
-        "schema_version": 1,
+        "schema_version": 2,
         "qualification_level": mode.report_name(),
         "revision": revision,
         "environment": {
@@ -422,6 +518,11 @@ fn metal_qualification_records_exact_public_api_evidence() {
             "device": adapter.device(),
         },
         "capabilities": capability_report(&context),
+        "wgpu_characterization": wgpu_characterization(
+            &adapter_name,
+            adapter.vendor(),
+            adapter.device(),
+        ),
         "limits": {
             "adapter": limits_report(adapter.adapter_limits().values()),
             "device": limits_report(context.device_facts().device_limits().values()),
