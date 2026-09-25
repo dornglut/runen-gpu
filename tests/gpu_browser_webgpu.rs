@@ -16,12 +16,15 @@ mod retained_vertex8;
 #[cfg(target_arch = "wasm32")]
 #[path = "gpu_r1_vertex_packed_formats.rs"]
 mod retained_vertex_packed;
+#[cfg(target_arch = "wasm32")]
+#[path = "gpu_r2_sampler_anisotropy.rs"]
+mod retained_sampler_anisotropy;
 
 #[cfg(target_arch = "wasm32")]
 mod browser {
     use super::{
-        retained_bc, retained_offscreen_indexed, retained_prefix_scan, retained_vertex_packed,
-        retained_vertex8, retained_vertex16,
+        retained_bc, retained_offscreen_indexed, retained_prefix_scan, retained_sampler_anisotropy,
+        retained_vertex_packed, retained_vertex8, retained_vertex16,
     };
     use runen_gpu::*;
     use std::cell::RefCell;
@@ -41,6 +44,7 @@ mod browser {
         static PACKED32_SAMPLED_MASK: RefCell<u32> = RefCell::new(0);
         static PACKED32_COLOR_ATTACHMENT_MASK: RefCell<u32> = RefCell::new(0);
         static BC_EXERCISED_MASK: RefCell<u32> = RefCell::new(0);
+        static SAMPLER_ANISOTROPY_EXERCISED: RefCell<u32> = RefCell::new(0);
         static VERTEX8_EXERCISED_MASK: RefCell<u32> = RefCell::new(0);
         static VERTEX16_EXERCISED_MASK: RefCell<u32> = RefCell::new(0);
         static VERTEX_PACKED_EXERCISED_MASK: RefCell<u32> = RefCell::new(0);
@@ -2130,6 +2134,8 @@ fn cs_main() {
         run_browser_packed32().await;
         let bc_mask = retained_bc::run_browser_bc().await;
         BC_EXERCISED_MASK.with(|slot| *slot.borrow_mut() = bc_mask);
+        let sampler_anisotropy = retained_sampler_anisotropy::run_browser_sampler_anisotropy().await;
+        SAMPLER_ANISOTROPY_EXERCISED.with(|slot| *slot.borrow_mut() = sampler_anisotropy);
         let vertex8_mask = retained_vertex8::run_browser_vertex8().await;
         VERTEX8_EXERCISED_MASK.with(|slot| *slot.borrow_mut() = vertex8_mask);
         let vertex16_mask = retained_vertex16::run_browser_vertex16().await;
@@ -2219,6 +2225,11 @@ fn cs_main() {
     #[unsafe(no_mangle)]
     pub extern "C" fn runengpu_browser_bc_exercised_mask() -> u32 {
         BC_EXERCISED_MASK.with(|mask| *mask.borrow())
+    }
+
+    #[unsafe(no_mangle)]
+    pub extern "C" fn runengpu_browser_sampler_anisotropy_exercised() -> u32 {
+        SAMPLER_ANISOTROPY_EXERCISED.with(|value| *value.borrow())
     }
 
     #[unsafe(no_mangle)]

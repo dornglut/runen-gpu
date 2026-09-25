@@ -133,9 +133,13 @@ fn representative_resources_realize_transactionally_or_report_environment_absenc
                 GpuAddressMode::ClampToEdge,
                 GpuAddressMode::ClampToEdge,
                 GpuAddressMode::ClampToEdge,
-                GpuFilterMode::Nearest,
-                GpuFilterMode::Nearest,
-                GpuFilterMode::Nearest,
+                GpuSamplerFilterState::new(
+                    GpuFilterMode::Nearest,
+                    GpuFilterMode::Nearest,
+                    GpuFilterMode::Nearest,
+                    1,
+                )
+                .unwrap(),
                 0.0,
                 16.0,
                 None,

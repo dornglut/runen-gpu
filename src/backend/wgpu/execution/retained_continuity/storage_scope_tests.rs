@@ -28,9 +28,13 @@ fn retained_sampler_does_not_enter_storage_continuity() {
                 GpuAddressMode::ClampToEdge,
                 GpuAddressMode::ClampToEdge,
                 GpuAddressMode::ClampToEdge,
-                GpuFilterMode::Nearest,
-                GpuFilterMode::Nearest,
-                GpuFilterMode::Nearest,
+                GpuSamplerFilterState::new(
+                    GpuFilterMode::Nearest,
+                    GpuFilterMode::Nearest,
+                    GpuFilterMode::Nearest,
+                    1,
+                )
+                .unwrap(),
                 0.0,
                 1.0,
                 None,

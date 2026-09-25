@@ -100,6 +100,7 @@ const done = arguments[arguments.length - 1];
         typeof wasm.runengpu_browser_packed32_sampled_mask !== "function" ||
         typeof wasm.runengpu_browser_packed32_color_attachment_mask !== "function" ||
         typeof wasm.runengpu_browser_bc_exercised_mask !== "function" ||
+        typeof wasm.runengpu_browser_sampler_anisotropy_exercised !== "function" ||
         typeof wasm.runengpu_browser_vertex8_exercised_mask !== "function" ||
         typeof wasm.runengpu_browser_vertex16_exercised_mask !== "function" ||
         typeof wasm.runengpu_browser_vertex_packed_exercised_mask !== "function" ||
@@ -130,6 +131,7 @@ const done = arguments[arguments.length - 1];
           packed32SampledMask: wasm.runengpu_browser_packed32_sampled_mask(),
           packed32ColorAttachmentMask: wasm.runengpu_browser_packed32_color_attachment_mask(),
           bcMask: wasm.runengpu_browser_bc_exercised_mask(),
+          samplerAnisotropyExercised: wasm.runengpu_browser_sampler_anisotropy_exercised(),
           vertex8Mask: wasm.runengpu_browser_vertex8_exercised_mask(),
           vertex16Mask: wasm.runengpu_browser_vertex16_exercised_mask(),
           vertexPackedMask: wasm.runengpu_browser_vertex_packed_exercised_mask(),
@@ -808,6 +810,17 @@ def main() -> int:
                 "RunenGPU actual-browser BC: PARTIAL SUPPORT IS NOT QUALIFIED "
                 f"(mask={bc_mask:#x}, expected 0 or {bc_full_mask:#x})"
             )
+
+        sampler_anisotropy = value.get("samplerAnisotropyExercised")
+        if type(sampler_anisotropy) is not int or sampler_anisotropy != 1:
+            raise RuntimeError(
+                "RunenGPU actual-browser sampler anisotropy: NOT QUALIFIED "
+                f"(value={sampler_anisotropy!r}, expected=1)"
+            )
+        print(
+            "RunenGPU actual-browser sampler anisotropy: "
+            "EXERCISED (requested max=8 through public sampler realization)"
+        )
 
         vertex8_names = (
             "Uint8",
