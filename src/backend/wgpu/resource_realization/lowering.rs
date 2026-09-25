@@ -580,6 +580,11 @@ mod tests {
             map_texture_usage(GpuTextureUsage::TransientAttachment),
             TextureUsages::TRANSIENT_ATTACHMENT
         );
+        assert_eq!(
+            map_texture_usage(GpuTextureUsage::ColorAttachment)
+                | map_texture_usage(GpuTextureUsage::TransientAttachment),
+            TextureUsages::RENDER_ATTACHMENT | TextureUsages::TRANSIENT_ATTACHMENT
+        );
         for (normalized, native) in [
             (GpuTextureFormat::Rgba8Snorm, TextureFormat::Rgba8Snorm),
             (GpuTextureFormat::Rgba8Uint, TextureFormat::Rgba8Uint),

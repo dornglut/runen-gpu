@@ -2210,6 +2210,137 @@ mod tests {
     }
 
     #[test]
+    fn transient_attachment_descriptor_rejects_nonportable_shape_ownership_and_initialization() {
+        let transient_label = label("restricted transient attachment");
+        let usages = || {
+            GpuTextureUsages::new(
+                &transient_label,
+                [
+                    GpuTextureUsage::ColorAttachment,
+                    GpuTextureUsage::TransientAttachment,
+                ],
+            )
+            .unwrap()
+        };
+        let extent =
+            GpuTextureExtent::new(&transient_label, GpuTextureDimension::D2, 8, 8, 1).unwrap();
+
+        let imported = GpuResourceCommon::imported(
+            transient_label.clone(),
+            GpuResourceLifetime::Transient,
+            provenance("restricted transient attachment"),
+        );
+        assert_eq!(
+            GpuTextureDescriptor::new(
+                imported,
+                GpuTextureDimension::D2,
+                extent,
+                1,
+                1,
+                GpuTextureFormat::Rgba8Unorm,
+                usages(),
+                GpuTextureInitialization::Uninitialized,
+            )
+            .unwrap_err()
+            .cause(),
+            GpuResourceDescriptorCause::InvalidOwnership
+        );
+
+        let layered_extent =
+            GpuTextureExtent::new(&transient_label, GpuTextureDimension::D2, 8, 8, 2).unwrap();
+        assert_eq!(
+            GpuTextureDescriptor::new(
+                common("restricted transient attachment"),
+                GpuTextureDimension::D2,
+                layered_extent,
+                1,
+                1,
+                GpuTextureFormat::Rgba8Unorm,
+                usages(),
+                GpuTextureInitialization::Uninitialized,
+            )
+            .unwrap_err()
+            .cause(),
+            GpuResourceDescriptorCause::InvalidExtent
+        );
+
+        let d3_extent =
+            GpuTextureExtent::new(&transient_label, GpuTextureDimension::D3, 8, 8, 2).unwrap();
+        assert_eq!(
+            GpuTextureDescriptor::new(
+                common("restricted transient attachment"),
+                GpuTextureDimension::D3,
+                d3_extent,
+                1,
+                1,
+                GpuTextureFormat::Rgba8Unorm,
+                usages(),
+                GpuTextureInitialization::Uninitialized,
+            )
+            .unwrap_err()
+            .cause(),
+            GpuResourceDescriptorCause::InvalidExtent
+        );
+
+        assert_eq!(
+            GpuTextureDescriptor::new(
+                common("restricted transient attachment"),
+                GpuTextureDimension::D2,
+                extent,
+                2,
+                1,
+                GpuTextureFormat::Rgba8Unorm,
+                usages(),
+                GpuTextureInitialization::Uninitialized,
+            )
+            .unwrap_err()
+            .cause(),
+            GpuResourceDescriptorCause::InvalidMipCount
+        );
+
+        assert_eq!(
+            GpuTextureDescriptor::new(
+                common("restricted transient attachment"),
+                GpuTextureDimension::D2,
+                extent,
+                1,
+                1,
+                GpuTextureFormat::Rgba8Unorm,
+                usages(),
+                GpuTextureInitialization::Zeroed,
+            )
+            .unwrap_err()
+            .cause(),
+            GpuResourceDescriptorCause::InvalidInitialization
+        );
+
+        let prepared = GpuPreparedTextureData::new(
+            &transient_label,
+            transfer_data("restricted transient bytes", 256),
+            GpuTextureFormat::Rgba8Unorm,
+            extent,
+            32,
+            0,
+        )
+        .unwrap();
+        assert_eq!(
+            GpuTextureDescriptor::new(
+                common("restricted transient attachment"),
+                GpuTextureDimension::D2,
+                extent,
+                1,
+                1,
+                GpuTextureFormat::Rgba8Unorm,
+                usages(),
+                GpuTextureInitialization::Prepared(prepared),
+            )
+            .unwrap_err()
+            .cause(),
+            GpuResourceDescriptorCause::InvalidInitialization
+        );
+    }
+
+    #[test]
     fn transient_attachment_views_are_exact_and_non_reinterpreting() {
         let mut allocator = GpuWorkResourceIdAllocator::new();
         let texture_label = label("transient view texture");
