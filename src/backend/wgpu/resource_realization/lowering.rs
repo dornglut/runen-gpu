@@ -457,13 +457,13 @@ fn validate_texture_roles(
             GpuTextureUsage::CopySource => Some(GpuFormatRole::CopySource),
             GpuTextureUsage::CopyDestination => Some(GpuFormatRole::CopyDestination),
         };
-        if let Some(role) = role
-            && !admitted_roles.contains(&(format, role))
-        {
-            return Err(incompatible(
-                identity,
-                "texture format role was not admitted by the context request",
-            ));
+        if let Some(role) = role {
+            if !admitted_roles.contains(&(format, role)) {
+                return Err(incompatible(
+                    identity,
+                    "texture format role was not admitted by the context request",
+                ));
+            }
         }
         match usage {
             GpuTextureUsage::StorageRead | GpuTextureUsage::StorageWrite => {

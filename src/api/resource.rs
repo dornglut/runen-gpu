@@ -1106,7 +1106,8 @@ impl GpuTextureViewDescriptor {
                 && subresources.mip_level_count() == 1
                 && subresources.base_array_layer() == 0
                 && subresources.array_layer_count() == 1
-                && subresources.aspect() == texture_format::whole_aspect(parent.format());
+                && texture_format::canonical_aspect(parent.format(), subresources.aspect())
+                    == Some(texture_format::whole_aspect(parent.format()));
             if !exact_parent_format || !exact_subresource {
                 return Err(GpuResourceDescriptorError::invalid(
                     "construct GPU texture-view descriptor",
@@ -2277,13 +2278,18 @@ mod tests {
         )
         .unwrap();
         assert!(GpuTextureViewDescriptor::new(
-            common("transient broad aspect"),
+            common("transient canonical all aspect"),
             &texture,
             None,
             GpuTextureViewDimension::D2,
             all_aspect,
         )
-        .is_err());
+        .is_ok());
+        assert!(GpuTextureViewDescriptor::ordinary_full_owned(
+            "transient ordinary full view",
+            &texture,
+        )
+        .is_ok());
     }
 
     #[test]
