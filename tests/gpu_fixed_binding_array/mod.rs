@@ -1051,6 +1051,88 @@ pub(crate) async fn run_storage_texture_array_proof(
     true
 }
 
+pub(crate) fn assert_contract_suite_authors_all_resource_families() {
+    let unused = unused_storage_array_program();
+    assert_eq!(unused.interface().bindings().count(), 0);
+    assert!(matches!(
+        unused
+            .requirements()
+            .get(GpuCapabilityFeature::BufferBindingArray),
+        Some(GpuCapabilityRequirement::Required(
+            GpuCapabilityFeature::BufferBindingArray
+        ))
+    ));
+    assert!(matches!(
+        unused
+            .requirements()
+            .get(GpuCapabilityFeature::StorageResourceBindingArray),
+        Some(GpuCapabilityRequirement::Required(
+            GpuCapabilityFeature::StorageResourceBindingArray
+        ))
+    ));
+
+    let (storage_graph, _, _) = storage_buffer_proof_graph();
+    assert!(matches!(
+        storage_graph
+            .requirements()
+            .get(GpuCapabilityFeature::BufferBindingArray),
+        Some(GpuCapabilityRequirement::Required(
+            GpuCapabilityFeature::BufferBindingArray
+        ))
+    ));
+    assert!(matches!(
+        storage_graph
+            .requirements()
+            .get(GpuCapabilityFeature::StorageResourceBindingArray),
+        Some(GpuCapabilityRequirement::Required(
+            GpuCapabilityFeature::StorageResourceBindingArray
+        ))
+    ));
+
+    let (uniform_graph, _) = uniform_buffer_proof_graph();
+    for feature in [
+        GpuCapabilityFeature::BufferBindingArray,
+        GpuCapabilityFeature::UniformBufferBindingArray,
+    ] {
+        assert!(matches!(
+            uniform_graph.requirements().get(feature),
+            Some(GpuCapabilityRequirement::Required(required)) if *required == feature
+        ));
+    }
+
+    let (sampled_graph, _) = sampled_texture_proof_graph();
+    assert!(matches!(
+        sampled_graph
+            .requirements()
+            .get(GpuCapabilityFeature::TextureBindingArray),
+        Some(GpuCapabilityRequirement::Required(
+            GpuCapabilityFeature::TextureBindingArray
+        ))
+    ));
+
+    let (sampler_graph, _) = sampler_proof_graph();
+    assert!(matches!(
+        sampler_graph
+            .requirements()
+            .get(GpuCapabilityFeature::TextureBindingArray),
+        Some(GpuCapabilityRequirement::Required(
+            GpuCapabilityFeature::TextureBindingArray
+        ))
+    ));
+
+    let (storage_texture_graph, _) = storage_texture_proof_graph();
+    for feature in [
+        GpuCapabilityFeature::TextureBindingArray,
+        GpuCapabilityFeature::StorageResourceBindingArray,
+        GpuCapabilityFeature::StorageTexture,
+    ] {
+        assert!(matches!(
+            storage_texture_graph.requirements().get(feature),
+            Some(GpuCapabilityRequirement::Required(required)) if *required == feature
+        ));
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct FixedBindingArrayProof {
     pub(crate) storage_buffer: bool,
