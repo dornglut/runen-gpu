@@ -2,10 +2,10 @@ use super::contract_diagnostics::{GpuProgramContractCause, GpuProgramContractErr
 use super::entry_point::{GpuEntryPointDescriptor, GpuEntryPointName};
 use super::fixed_array::fixed_array_compilation_capabilities;
 use super::interface::{
-    GpuBindingClass, GpuBindingDeclaration, GpuBindingKey, GpuBindingKind, GpuBindingLayoutRefinement,
-    GpuBindingProvenance, GpuProgramInterfaceDescriptor, GpuSamplerClass, GpuShaderStage,
-    GpuShaderStages, GpuStorageBufferAccess, GpuStorageTextureAccess, GpuTextureSampleClass,
-    GpuTextureViewDimension,
+    GpuBindingClass, GpuBindingDeclaration, GpuBindingKey, GpuBindingKind,
+    GpuBindingLayoutRefinement, GpuBindingProvenance, GpuProgramInterfaceDescriptor,
+    GpuSamplerClass, GpuShaderStage, GpuShaderStages, GpuStorageBufferAccess,
+    GpuStorageTextureAccess, GpuTextureSampleClass, GpuTextureViewDimension,
 };
 use super::source::GpuAdmittedProgramSource;
 use super::stage_io::{
@@ -133,7 +133,10 @@ pub(crate) fn analyze_program(
             binding_array_type(&module, global.ty).map_err(|detail| {
                 invalid(
                     operation,
-                    &format!("module binding @group({}) @binding({})", binding.group, binding.binding),
+                    &format!(
+                        "module binding @group({}) @binding({})",
+                        binding.group, binding.binding
+                    ),
                     GpuProgramContractCause::ProgramInterfaceMismatch,
                     detail,
                 )
@@ -143,13 +146,16 @@ pub(crate) fn analyze_program(
         }
         let compiler_kind = compiler_binding_kind(&module, &module_info, global.space, base_type)
             .map_err(|detail| {
-                invalid(
-                    operation,
-                    &format!("module binding @group({}) @binding({})", binding.group, binding.binding),
-                    GpuProgramContractCause::ProgramInterfaceMismatch,
-                    detail,
-                )
-            })?;
+            invalid(
+                operation,
+                &format!(
+                    "module binding @group({}) @binding({})",
+                    binding.group, binding.binding
+                ),
+                GpuProgramContractCause::ProgramInterfaceMismatch,
+                detail,
+            )
+        })?;
         for feature in fixed_array_compilation_capabilities(compiler_kind.class()) {
             if !required_features.contains(feature) {
                 required_features.push(*feature);
