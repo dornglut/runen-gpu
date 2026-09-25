@@ -281,7 +281,10 @@ fn bc_copy_regions_enforce_blocks_and_terminal_mips_use_physical_rounding() {
         &mut scope,
         GpuTextureFormat::Bc1RgbaUnorm,
         "BC copy region",
-        [GpuTextureUsage::CopySource, GpuTextureUsage::CopyDestination],
+        [
+            GpuTextureUsage::CopySource,
+            GpuTextureUsage::CopyDestination,
+        ],
     );
     assert!(
         GpuTextureCopyRegion::new(
@@ -294,20 +297,26 @@ fn bc_copy_regions_enforce_blocks_and_terminal_mips_use_physical_rounding() {
         .is_ok()
     );
     for (origin, extent) in [
-        (GpuTextureOrigin::new(2, 0, 0), GpuCopyExtent::new(4, 4, 1).unwrap()),
-        (GpuTextureOrigin::new(0, 2, 0), GpuCopyExtent::new(4, 4, 1).unwrap()),
-        (GpuTextureOrigin::new(0, 0, 0), GpuCopyExtent::new(2, 4, 1).unwrap()),
-        (GpuTextureOrigin::new(0, 0, 0), GpuCopyExtent::new(4, 2, 1).unwrap()),
+        (
+            GpuTextureOrigin::new(2, 0, 0),
+            GpuCopyExtent::new(4, 4, 1).unwrap(),
+        ),
+        (
+            GpuTextureOrigin::new(0, 2, 0),
+            GpuCopyExtent::new(4, 4, 1).unwrap(),
+        ),
+        (
+            GpuTextureOrigin::new(0, 0, 0),
+            GpuCopyExtent::new(2, 4, 1).unwrap(),
+        ),
+        (
+            GpuTextureOrigin::new(0, 0, 0),
+            GpuCopyExtent::new(4, 2, 1).unwrap(),
+        ),
     ] {
         assert!(
-            GpuTextureCopyRegion::new(
-                &texture,
-                0,
-                origin,
-                GpuTextureAspect::Color,
-                extent,
-            )
-            .is_err()
+            GpuTextureCopyRegion::new(&texture, 0, origin, GpuTextureAspect::Color, extent,)
+                .is_err()
         );
     }
     assert!(
@@ -336,8 +345,16 @@ fn bc_copy_regions_enforce_blocks_and_terminal_mips_use_physical_rounding() {
 #[test]
 fn bc_buffer_copy_offsets_follow_copy_block_bytes() {
     for case in [
-        BcCase { format: GpuTextureFormat::Bc1RgbaUnorm, block_bytes: 8, srgb: false },
-        BcCase { format: GpuTextureFormat::Bc2RgbaUnorm, block_bytes: 16, srgb: false },
+        BcCase {
+            format: GpuTextureFormat::Bc1RgbaUnorm,
+            block_bytes: 8,
+            srgb: false,
+        },
+        BcCase {
+            format: GpuTextureFormat::Bc2RgbaUnorm,
+            block_bytes: 16,
+            srgb: false,
+        },
     ] {
         let mut scope = GpuResourceScope::new();
         let texture = copy_texture(
@@ -368,13 +385,9 @@ fn bc_buffer_copy_offsets_follow_copy_block_bytes() {
         )
         .unwrap();
         assert!(GpuCopyOperation::buffer_to_texture(invalid, region.clone()).is_err());
-        let valid = GpuBufferTextureLayout::new(
-            &buffer,
-            u64::from(case.block_bytes),
-            case.block_bytes,
-            0,
-        )
-        .unwrap();
+        let valid =
+            GpuBufferTextureLayout::new(&buffer, u64::from(case.block_bytes), case.block_bytes, 0)
+                .unwrap();
         assert!(GpuCopyOperation::buffer_to_texture(valid, region).is_ok());
     }
 }
@@ -424,11 +437,7 @@ fn expected_bytes(case_index: usize, block_bytes: u32, block_count: u32, salt: u
         .collect()
 }
 
-fn runtime_texture(
-    scope: &mut GpuResourceScope,
-    case: BcCase,
-    name: &str,
-) -> GpuTextureHandle {
+fn runtime_texture(scope: &mut GpuResourceScope, case: BcCase, name: &str) -> GpuTextureHandle {
     let resource_label = label(name);
     scope
         .texture(
@@ -461,8 +470,11 @@ fn runtime_graph(
 ) -> (GpuPreparedWorkGraph, [(GpuReadbackId, Vec<u8>); 2]) {
     let mut scope = GpuResourceScope::new();
     let source = runtime_texture(&mut scope, case, &format!("{:?} BC source", case.format));
-    let destination =
-        runtime_texture(&mut scope, case, &format!("{:?} BC destination", case.format));
+    let destination = runtime_texture(
+        &mut scope,
+        case,
+        &format!("{:?} BC destination", case.format),
+    );
     let base_extent = GpuCopyExtent::new(8, 8, 2).unwrap();
     let terminal_extent = GpuCopyExtent::new(4, 4, 2).unwrap();
     let region = |texture: &GpuTextureHandle, mip_level, extent| {
@@ -504,7 +516,8 @@ fn runtime_graph(
     let base_copy =
         GpuCopyOperation::texture_to_texture(source_base, destination_base.clone()).unwrap();
     let terminal_copy =
-        GpuCopyOperation::texture_to_texture(source_terminal, destination_terminal.clone()).unwrap();
+        GpuCopyOperation::texture_to_texture(source_terminal, destination_terminal.clone())
+            .unwrap();
     let base_id = GpuReadbackId::allocate().unwrap();
     let terminal_id = GpuReadbackId::allocate().unwrap();
     let base_readback = GpuReadbackOperation::new(destination_base.into(), base_id).unwrap();
@@ -596,8 +609,16 @@ async fn run_suite(context: &GpuContext) -> u32 {
         assert!(facts.copy_source, "{:?}", case.format);
         assert!(facts.copy_destination, "{:?}", case.format);
         assert!(!facts.filterable, "{:?}", case.format);
-        assert!(!facts.storage_read && !facts.storage_write, "{:?}", case.format);
-        assert!(!facts.color_attachment && !facts.depth_stencil, "{:?}", case.format);
+        assert!(
+            !facts.storage_read && !facts.storage_write,
+            "{:?}",
+            case.format
+        );
+        assert!(
+            !facts.color_attachment && !facts.depth_stencil,
+            "{:?}",
+            case.format
+        );
         let (graph, readbacks) = runtime_graph(case_index, case);
         let prepared = context.prepare_submission(graph).await.unwrap();
         let submission = context.submit_prepared(prepared).unwrap();

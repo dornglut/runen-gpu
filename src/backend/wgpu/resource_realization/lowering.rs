@@ -1,3 +1,4 @@
+use super::super::texture_format_mapping::texture_format as map_texture_format;
 use super::{TextureRealizationRecord, WgpuContextState};
 use crate::api::texture_format;
 use crate::{
@@ -312,68 +313,6 @@ pub(super) fn validate_query_set(
         ));
     }
     Ok(())
-}
-
-pub(super) const fn map_texture_format(format: GpuTextureFormat) -> TextureFormat {
-    match format {
-        GpuTextureFormat::R8Unorm => TextureFormat::R8Unorm,
-        GpuTextureFormat::R8Snorm => TextureFormat::R8Snorm,
-        GpuTextureFormat::R8Uint => TextureFormat::R8Uint,
-        GpuTextureFormat::R8Sint => TextureFormat::R8Sint,
-        GpuTextureFormat::Rg8Unorm => TextureFormat::Rg8Unorm,
-        GpuTextureFormat::Rg8Snorm => TextureFormat::Rg8Snorm,
-        GpuTextureFormat::Rg8Uint => TextureFormat::Rg8Uint,
-        GpuTextureFormat::Rg8Sint => TextureFormat::Rg8Sint,
-        GpuTextureFormat::R16Uint => TextureFormat::R16Uint,
-        GpuTextureFormat::R16Sint => TextureFormat::R16Sint,
-        GpuTextureFormat::R16Float => TextureFormat::R16Float,
-        GpuTextureFormat::Rg16Uint => TextureFormat::Rg16Uint,
-        GpuTextureFormat::Rg16Sint => TextureFormat::Rg16Sint,
-        GpuTextureFormat::Rg16Float => TextureFormat::Rg16Float,
-        GpuTextureFormat::Rgba8Unorm => TextureFormat::Rgba8Unorm,
-        GpuTextureFormat::Rgba8UnormSrgb => TextureFormat::Rgba8UnormSrgb,
-        GpuTextureFormat::Rgba8Snorm => TextureFormat::Rgba8Snorm,
-        GpuTextureFormat::Rgba8Uint => TextureFormat::Rgba8Uint,
-        GpuTextureFormat::Rgba8Sint => TextureFormat::Rgba8Sint,
-        GpuTextureFormat::Bgra8Unorm => TextureFormat::Bgra8Unorm,
-        GpuTextureFormat::Bgra8UnormSrgb => TextureFormat::Bgra8UnormSrgb,
-        GpuTextureFormat::Rgb9e5Ufloat => TextureFormat::Rgb9e5Ufloat,
-        GpuTextureFormat::Rgb10a2Uint => TextureFormat::Rgb10a2Uint,
-        GpuTextureFormat::Rgb10a2Unorm => TextureFormat::Rgb10a2Unorm,
-        GpuTextureFormat::Rg11b10Ufloat => TextureFormat::Rg11b10Ufloat,
-        GpuTextureFormat::R32Uint => TextureFormat::R32Uint,
-        GpuTextureFormat::R32Sint => TextureFormat::R32Sint,
-        GpuTextureFormat::R32Float => TextureFormat::R32Float,
-        GpuTextureFormat::Rg32Uint => TextureFormat::Rg32Uint,
-        GpuTextureFormat::Rg32Sint => TextureFormat::Rg32Sint,
-        GpuTextureFormat::Rg32Float => TextureFormat::Rg32Float,
-        GpuTextureFormat::Rgba32Uint => TextureFormat::Rgba32Uint,
-        GpuTextureFormat::Rgba32Sint => TextureFormat::Rgba32Sint,
-        GpuTextureFormat::Rgba32Float => TextureFormat::Rgba32Float,
-        GpuTextureFormat::Rgba16Uint => TextureFormat::Rgba16Uint,
-        GpuTextureFormat::Rgba16Sint => TextureFormat::Rgba16Sint,
-        GpuTextureFormat::Rgba16Float => TextureFormat::Rgba16Float,
-        (GpuTextureFormat::Bc1RgbaUnorm, TextureFormat::Bc1RgbaUnorm),
-        (GpuTextureFormat::Bc1RgbaUnormSrgb, TextureFormat::Bc1RgbaUnormSrgb),
-        (GpuTextureFormat::Bc2RgbaUnorm, TextureFormat::Bc2RgbaUnorm),
-        (GpuTextureFormat::Bc2RgbaUnormSrgb, TextureFormat::Bc2RgbaUnormSrgb),
-        (GpuTextureFormat::Bc3RgbaUnorm, TextureFormat::Bc3RgbaUnorm),
-        (GpuTextureFormat::Bc3RgbaUnormSrgb, TextureFormat::Bc3RgbaUnormSrgb),
-        (GpuTextureFormat::Bc4RUnorm, TextureFormat::Bc4RUnorm),
-        (GpuTextureFormat::Bc4RSnorm, TextureFormat::Bc4RSnorm),
-        (GpuTextureFormat::Bc5RgUnorm, TextureFormat::Bc5RgUnorm),
-        (GpuTextureFormat::Bc5RgSnorm, TextureFormat::Bc5RgSnorm),
-        (GpuTextureFormat::Bc6hRgbUfloat, TextureFormat::Bc6hRgbUfloat),
-        (GpuTextureFormat::Bc6hRgbFloat, TextureFormat::Bc6hRgbFloat),
-        (GpuTextureFormat::Bc7RgbaUnorm, TextureFormat::Bc7RgbaUnorm),
-        (GpuTextureFormat::Bc7RgbaUnormSrgb, TextureFormat::Bc7RgbaUnormSrgb),
-        GpuTextureFormat::Stencil8 => TextureFormat::Stencil8,
-        GpuTextureFormat::Depth16Unorm => TextureFormat::Depth16Unorm,
-        GpuTextureFormat::Depth24Plus => TextureFormat::Depth24Plus,
-        GpuTextureFormat::Depth24PlusStencil8 => TextureFormat::Depth24PlusStencil8,
-        GpuTextureFormat::Depth32Float => TextureFormat::Depth32Float,
-        GpuTextureFormat::Depth32FloatStencil8 => TextureFormat::Depth32FloatStencil8,
-    }
 }
 
 pub(super) const fn map_texture_dimension(dimension: GpuTextureDimension) -> TextureDimension {

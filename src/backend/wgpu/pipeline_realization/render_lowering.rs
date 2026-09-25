@@ -1,3 +1,4 @@
+use super::super::texture_format_mapping::texture_format;
 use super::render_mapping;
 use crate::{
     GpuBlendMode, GpuColorTargetStateDescriptor, GpuContext, GpuPipelineRealizationError,
@@ -227,7 +228,7 @@ fn validate_attachment_support(
     sample_count: u32,
     request: &str,
 ) -> Result<TextureFormatFeatures, GpuPipelineRealizationError> {
-    let native_format = render_mapping::texture_format(format);
+    let native_format = texture_format(format);
     let features = device_format_features(&context.backend, native_format);
     if !features
         .allowed_usages
@@ -263,7 +264,7 @@ fn validate_color_blend_support(
 
 fn lower_color_target(target: GpuColorTargetStateDescriptor) -> ColorTargetState {
     ColorTargetState {
-        format: render_mapping::texture_format(target.format()),
+        format: texture_format(target.format()),
         blend: match target.blend() {
             GpuBlendMode::Replace => None,
             GpuBlendMode::Alpha => Some(BlendState::ALPHA_BLENDING),
@@ -276,7 +277,7 @@ fn lower_depth_stencil(state: crate::GpuDepthStencilStateDescriptor) -> DepthSte
     let depth = state.depth();
     let stencil = state.stencil();
     DepthStencilState {
-        format: render_mapping::texture_format(state.format()),
+        format: texture_format(state.format()),
         depth_write_enabled: depth.map(crate::GpuDepthStateDescriptor::write_enabled),
         depth_compare: depth
             .map(crate::GpuDepthStateDescriptor::compare)
