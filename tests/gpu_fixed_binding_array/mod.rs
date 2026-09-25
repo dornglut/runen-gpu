@@ -223,10 +223,7 @@ pub(crate) async fn run_storage_buffer_array_proof(
     )
     .await;
     assert_eq!(bytes.as_bytes().len(), 4);
-    assert_eq!(
-        u32::from_le_bytes(bytes.as_bytes().try_into().unwrap()),
-        42
-    );
+    assert_eq!(u32::from_le_bytes(bytes.as_bytes().try_into().unwrap()), 42);
     println!("Fixed binding arrays: EXERCISED (storage-buffer array + exact readback)");
     true
 }
