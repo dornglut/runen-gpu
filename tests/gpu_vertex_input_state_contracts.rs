@@ -320,3 +320,178 @@ fn compact_vertex_attribute_offsets_use_per_format_alignment_while_stride_stays_
         "compact attributes do not relax the four-byte vertex stride alignment"
     );
 }
+
+#[test]
+fn vertex16_formats_derive_exact_size_alignment_and_shader_io() {
+    let cases = [
+        (
+            GpuVertexFormat::Uint16,
+            2,
+            2,
+            GpuShaderIoScalarClass::Uint,
+            1,
+        ),
+        (
+            GpuVertexFormat::Uint16x2,
+            4,
+            4,
+            GpuShaderIoScalarClass::Uint,
+            2,
+        ),
+        (
+            GpuVertexFormat::Uint16x4,
+            8,
+            4,
+            GpuShaderIoScalarClass::Uint,
+            4,
+        ),
+        (
+            GpuVertexFormat::Sint16,
+            2,
+            2,
+            GpuShaderIoScalarClass::Sint,
+            1,
+        ),
+        (
+            GpuVertexFormat::Sint16x2,
+            4,
+            4,
+            GpuShaderIoScalarClass::Sint,
+            2,
+        ),
+        (
+            GpuVertexFormat::Sint16x4,
+            8,
+            4,
+            GpuShaderIoScalarClass::Sint,
+            4,
+        ),
+        (
+            GpuVertexFormat::Unorm16,
+            2,
+            2,
+            GpuShaderIoScalarClass::Float,
+            1,
+        ),
+        (
+            GpuVertexFormat::Unorm16x2,
+            4,
+            4,
+            GpuShaderIoScalarClass::Float,
+            2,
+        ),
+        (
+            GpuVertexFormat::Unorm16x4,
+            8,
+            4,
+            GpuShaderIoScalarClass::Float,
+            4,
+        ),
+        (
+            GpuVertexFormat::Snorm16,
+            2,
+            2,
+            GpuShaderIoScalarClass::Float,
+            1,
+        ),
+        (
+            GpuVertexFormat::Snorm16x2,
+            4,
+            4,
+            GpuShaderIoScalarClass::Float,
+            2,
+        ),
+        (
+            GpuVertexFormat::Snorm16x4,
+            8,
+            4,
+            GpuShaderIoScalarClass::Float,
+            4,
+        ),
+        (
+            GpuVertexFormat::Float16,
+            2,
+            2,
+            GpuShaderIoScalarClass::Float,
+            1,
+        ),
+        (
+            GpuVertexFormat::Float16x2,
+            4,
+            4,
+            GpuShaderIoScalarClass::Float,
+            2,
+        ),
+        (
+            GpuVertexFormat::Float16x4,
+            8,
+            4,
+            GpuShaderIoScalarClass::Float,
+            4,
+        ),
+    ];
+    assert_eq!(cases.len(), 15);
+    for (format, size, alignment, class, width) in cases {
+        assert_eq!(format.size_bytes(), size, "{format:?}");
+        assert_eq!(format.attribute_alignment_bytes(), alignment, "{format:?}");
+        let value_type = format.shader_io_type();
+        assert_eq!(value_type.scalar_class(), class, "{format:?}");
+        assert_eq!(value_type.vector_width().get(), width, "{format:?}");
+    }
+}
+
+#[test]
+fn vertex16_compact_scalar_offsets_use_two_byte_alignment_while_stride_stays_four_byte_aligned() {
+    for format in [
+        GpuVertexFormat::Uint16,
+        GpuVertexFormat::Sint16,
+        GpuVertexFormat::Unorm16,
+        GpuVertexFormat::Snorm16,
+        GpuVertexFormat::Float16,
+    ] {
+        GpuVertexBufferLayoutDescriptor::new(
+            0,
+            4,
+            GpuVertexStepMode::Vertex,
+            [GpuVertexAttribute::new(0, 2, format)],
+        )
+        .unwrap_or_else(|error| panic!("{format:?} offset 2 should be valid: {error:?}"));
+
+        assert!(
+            GpuVertexBufferLayoutDescriptor::new(
+                0,
+                4,
+                GpuVertexStepMode::Vertex,
+                [GpuVertexAttribute::new(0, 1, format)],
+            )
+            .is_err(),
+            "{format:?} odd-byte offset must fail"
+        );
+    }
+
+    for format in [
+        GpuVertexFormat::Uint16x2,
+        GpuVertexFormat::Sint16x2,
+        GpuVertexFormat::Unorm16x2,
+        GpuVertexFormat::Snorm16x2,
+        GpuVertexFormat::Float16x2,
+        GpuVertexFormat::Uint16x4,
+        GpuVertexFormat::Sint16x4,
+        GpuVertexFormat::Unorm16x4,
+        GpuVertexFormat::Snorm16x4,
+        GpuVertexFormat::Float16x4,
+    ] {
+        assert_eq!(format.attribute_alignment_bytes(), 4);
+    }
+
+    assert!(
+        GpuVertexBufferLayoutDescriptor::new(
+            0,
+            2,
+            GpuVertexStepMode::Vertex,
+            [GpuVertexAttribute::new(0, 0, GpuVertexFormat::Uint16)],
+        )
+        .is_err(),
+        "16-bit attributes do not relax four-byte vertex stride alignment"
+    );
+}

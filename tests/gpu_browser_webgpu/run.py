@@ -100,6 +100,7 @@ const done = arguments[arguments.length - 1];
         typeof wasm.runengpu_browser_packed32_sampled_mask !== "function" ||
         typeof wasm.runengpu_browser_packed32_color_attachment_mask !== "function" ||
         typeof wasm.runengpu_browser_vertex8_exercised_mask !== "function" ||
+        typeof wasm.runengpu_browser_vertex16_exercised_mask !== "function" ||
         typeof wasm.runengpu_browser_depth_sampled_exercised_mask !== "function" ||
         typeof wasm.runengpu_browser_depth_attachment_exercised_mask !== "function" ||
         typeof wasm.runengpu_browser_depth_copy_exercised_mask !== "function" ||
@@ -127,6 +128,7 @@ const done = arguments[arguments.length - 1];
           packed32SampledMask: wasm.runengpu_browser_packed32_sampled_mask(),
           packed32ColorAttachmentMask: wasm.runengpu_browser_packed32_color_attachment_mask(),
           vertex8Mask: wasm.runengpu_browser_vertex8_exercised_mask(),
+          vertex16Mask: wasm.runengpu_browser_vertex16_exercised_mask(),
           depthSampledMask: wasm.runengpu_browser_depth_sampled_exercised_mask(),
           depthAttachmentMask: wasm.runengpu_browser_depth_attachment_exercised_mask(),
           depthCopyMask: wasm.runengpu_browser_depth_copy_exercised_mask(),
@@ -800,6 +802,43 @@ def main() -> int:
             raise RuntimeError(
                 "RunenGPU actual-browser Vertex8: NOT QUALIFIED "
                 f"(mask={vertex8_mask:#x}, expected={vertex8_full_mask:#x})"
+            )
+
+        vertex16_names = (
+            "Uint16",
+            "Uint16x2",
+            "Uint16x4",
+            "Sint16",
+            "Sint16x2",
+            "Sint16x4",
+            "Unorm16",
+            "Unorm16x2",
+            "Unorm16x4",
+            "Snorm16",
+            "Snorm16x2",
+            "Snorm16x4",
+            "Float16",
+            "Float16x2",
+            "Float16x4",
+        )
+        vertex16_mask = read_exercised_mask(
+            value, "vertex16Mask", "Vertex16", len(vertex16_names)
+        )
+        vertex16_full_mask = (1 << len(vertex16_names)) - 1
+        for index, format_name in enumerate(vertex16_names):
+            if vertex16_mask & (1 << index):
+                print(
+                    f"RunenGPU actual-browser {format_name} vertex: "
+                    "EXERCISED (16-bit compact-offset vertex draw + exact readback)"
+                )
+            else:
+                print(
+                    f"RunenGPU actual-browser {format_name} vertex: NOT EXERCISED"
+                )
+        if vertex16_mask != vertex16_full_mask:
+            raise RuntimeError(
+                "RunenGPU actual-browser Vertex16: NOT QUALIFIED "
+                f"(mask={vertex16_mask:#x}, expected={vertex16_full_mask:#x})"
             )
 
         report_depth_proofs(value)
