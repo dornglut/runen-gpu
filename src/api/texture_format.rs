@@ -1058,9 +1058,10 @@ mod tests {
 
         assert_eq!(cases.len(), 37);
         for (format, bytes, depth, srgb, pair, class, components, alpha) in cases {
+            let stencil = matches!(format, GpuTextureFormat::Stencil8);
             let explicit_aspect = if depth {
                 GpuTextureAspect::DepthOnly
-            } else if format.is_stencil() {
+            } else if stencil {
                 GpuTextureAspect::StencilOnly
             } else {
                 GpuTextureAspect::Color
@@ -1075,15 +1076,22 @@ mod tests {
             );
             assert_eq!(format.copy_block_size(GpuTextureAspect::All), bytes);
             assert_eq!(is_depth(format), depth);
+            assert_eq!(is_stencil(format), stencil);
             assert_eq!(is_srgb(format), srgb);
             assert_eq!(paired_view_format(format), pair);
             assert_eq!(scalar_class(format), class);
             assert_eq!(component_count(format), components);
             assert_eq!(has_alpha(format), alpha);
             assert!(supports_aspect(format, GpuTextureAspect::All));
-            assert_eq!(supports_aspect(format, GpuTextureAspect::Color), !depth);
+            assert_eq!(
+                supports_aspect(format, GpuTextureAspect::Color),
+                !depth && !stencil
+            );
             assert_eq!(supports_aspect(format, GpuTextureAspect::DepthOnly), depth);
-            assert!(!supports_aspect(format, GpuTextureAspect::StencilOnly));
+            assert_eq!(
+                supports_aspect(format, GpuTextureAspect::StencilOnly),
+                stencil
+            );
             assert_eq!(
                 canonical_copy_aspect(format, GpuTextureAspect::All),
                 Some(explicit_aspect)
