@@ -527,6 +527,174 @@ const fn semantics(format: GpuTextureFormat) -> GpuTextureFormatSemantics {
             component_count: 4,
             has_alpha: true,
         },
+        GpuTextureFormat::Bc1RgbaUnorm => GpuTextureFormatSemantics {
+            aspect_class: GpuTextureAspectClass::Color,
+            block_dimensions: (4, 4),
+            color_copy_block_size: Some(8),
+            depth_copy_block_size: None,
+            stencil_copy_block_size: None,
+            srgb: false,
+            paired_view_format: Some(GpuTextureFormat::Bc1RgbaUnormSrgb),
+            color_scalar_class: Some(GpuTextureScalarClass::Float),
+            component_count: 4,
+            has_alpha: true,
+        },
+        GpuTextureFormat::Bc1RgbaUnormSrgb => GpuTextureFormatSemantics {
+            aspect_class: GpuTextureAspectClass::Color,
+            block_dimensions: (4, 4),
+            color_copy_block_size: Some(8),
+            depth_copy_block_size: None,
+            stencil_copy_block_size: None,
+            srgb: true,
+            paired_view_format: Some(GpuTextureFormat::Bc1RgbaUnorm),
+            color_scalar_class: Some(GpuTextureScalarClass::Float),
+            component_count: 4,
+            has_alpha: true,
+        },
+        GpuTextureFormat::Bc2RgbaUnorm => GpuTextureFormatSemantics {
+            aspect_class: GpuTextureAspectClass::Color,
+            block_dimensions: (4, 4),
+            color_copy_block_size: Some(16),
+            depth_copy_block_size: None,
+            stencil_copy_block_size: None,
+            srgb: false,
+            paired_view_format: Some(GpuTextureFormat::Bc2RgbaUnormSrgb),
+            color_scalar_class: Some(GpuTextureScalarClass::Float),
+            component_count: 4,
+            has_alpha: true,
+        },
+        GpuTextureFormat::Bc2RgbaUnormSrgb => GpuTextureFormatSemantics {
+            aspect_class: GpuTextureAspectClass::Color,
+            block_dimensions: (4, 4),
+            color_copy_block_size: Some(16),
+            depth_copy_block_size: None,
+            stencil_copy_block_size: None,
+            srgb: true,
+            paired_view_format: Some(GpuTextureFormat::Bc2RgbaUnorm),
+            color_scalar_class: Some(GpuTextureScalarClass::Float),
+            component_count: 4,
+            has_alpha: true,
+        },
+        GpuTextureFormat::Bc3RgbaUnorm => GpuTextureFormatSemantics {
+            aspect_class: GpuTextureAspectClass::Color,
+            block_dimensions: (4, 4),
+            color_copy_block_size: Some(16),
+            depth_copy_block_size: None,
+            stencil_copy_block_size: None,
+            srgb: false,
+            paired_view_format: Some(GpuTextureFormat::Bc3RgbaUnormSrgb),
+            color_scalar_class: Some(GpuTextureScalarClass::Float),
+            component_count: 4,
+            has_alpha: true,
+        },
+        GpuTextureFormat::Bc3RgbaUnormSrgb => GpuTextureFormatSemantics {
+            aspect_class: GpuTextureAspectClass::Color,
+            block_dimensions: (4, 4),
+            color_copy_block_size: Some(16),
+            depth_copy_block_size: None,
+            stencil_copy_block_size: None,
+            srgb: true,
+            paired_view_format: Some(GpuTextureFormat::Bc3RgbaUnorm),
+            color_scalar_class: Some(GpuTextureScalarClass::Float),
+            component_count: 4,
+            has_alpha: true,
+        },
+        GpuTextureFormat::Bc4RUnorm => GpuTextureFormatSemantics {
+            aspect_class: GpuTextureAspectClass::Color,
+            block_dimensions: (4, 4),
+            color_copy_block_size: Some(8),
+            depth_copy_block_size: None,
+            stencil_copy_block_size: None,
+            srgb: false,
+            paired_view_format: None,
+            color_scalar_class: Some(GpuTextureScalarClass::Float),
+            component_count: 1,
+            has_alpha: false,
+        },
+        GpuTextureFormat::Bc4RSnorm => GpuTextureFormatSemantics {
+            aspect_class: GpuTextureAspectClass::Color,
+            block_dimensions: (4, 4),
+            color_copy_block_size: Some(8),
+            depth_copy_block_size: None,
+            stencil_copy_block_size: None,
+            srgb: false,
+            paired_view_format: None,
+            color_scalar_class: Some(GpuTextureScalarClass::Float),
+            component_count: 1,
+            has_alpha: false,
+        },
+        GpuTextureFormat::Bc5RgUnorm => GpuTextureFormatSemantics {
+            aspect_class: GpuTextureAspectClass::Color,
+            block_dimensions: (4, 4),
+            color_copy_block_size: Some(16),
+            depth_copy_block_size: None,
+            stencil_copy_block_size: None,
+            srgb: false,
+            paired_view_format: None,
+            color_scalar_class: Some(GpuTextureScalarClass::Float),
+            component_count: 2,
+            has_alpha: false,
+        },
+        GpuTextureFormat::Bc5RgSnorm => GpuTextureFormatSemantics {
+            aspect_class: GpuTextureAspectClass::Color,
+            block_dimensions: (4, 4),
+            color_copy_block_size: Some(16),
+            depth_copy_block_size: None,
+            stencil_copy_block_size: None,
+            srgb: false,
+            paired_view_format: None,
+            color_scalar_class: Some(GpuTextureScalarClass::Float),
+            component_count: 2,
+            has_alpha: false,
+        },
+        GpuTextureFormat::Bc6hRgbUfloat => GpuTextureFormatSemantics {
+            aspect_class: GpuTextureAspectClass::Color,
+            block_dimensions: (4, 4),
+            color_copy_block_size: Some(16),
+            depth_copy_block_size: None,
+            stencil_copy_block_size: None,
+            srgb: false,
+            paired_view_format: None,
+            color_scalar_class: Some(GpuTextureScalarClass::Float),
+            component_count: 3,
+            has_alpha: false,
+        },
+        GpuTextureFormat::Bc6hRgbFloat => GpuTextureFormatSemantics {
+            aspect_class: GpuTextureAspectClass::Color,
+            block_dimensions: (4, 4),
+            color_copy_block_size: Some(16),
+            depth_copy_block_size: None,
+            stencil_copy_block_size: None,
+            srgb: false,
+            paired_view_format: None,
+            color_scalar_class: Some(GpuTextureScalarClass::Float),
+            component_count: 3,
+            has_alpha: false,
+        },
+        GpuTextureFormat::Bc7RgbaUnorm => GpuTextureFormatSemantics {
+            aspect_class: GpuTextureAspectClass::Color,
+            block_dimensions: (4, 4),
+            color_copy_block_size: Some(16),
+            depth_copy_block_size: None,
+            stencil_copy_block_size: None,
+            srgb: false,
+            paired_view_format: Some(GpuTextureFormat::Bc7RgbaUnormSrgb),
+            color_scalar_class: Some(GpuTextureScalarClass::Float),
+            component_count: 4,
+            has_alpha: true,
+        },
+        GpuTextureFormat::Bc7RgbaUnormSrgb => GpuTextureFormatSemantics {
+            aspect_class: GpuTextureAspectClass::Color,
+            block_dimensions: (4, 4),
+            color_copy_block_size: Some(16),
+            depth_copy_block_size: None,
+            stencil_copy_block_size: None,
+            srgb: true,
+            paired_view_format: Some(GpuTextureFormat::Bc7RgbaUnorm),
+            color_scalar_class: Some(GpuTextureScalarClass::Float),
+            component_count: 4,
+            has_alpha: true,
+        },
         GpuTextureFormat::Stencil8 => GpuTextureFormatSemantics {
             aspect_class: GpuTextureAspectClass::Stencil,
             block_dimensions: (1, 1),
@@ -600,6 +768,38 @@ const fn semantics(format: GpuTextureFormat) -> GpuTextureFormatSemantics {
             has_alpha: false,
         },
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum GpuTextureCompressionFamily {
+    Bc,
+}
+
+pub(crate) const fn compression_family(
+    format: GpuTextureFormat,
+) -> Option<GpuTextureCompressionFamily> {
+    match format {
+        GpuTextureFormat::Bc1RgbaUnorm
+        | GpuTextureFormat::Bc1RgbaUnormSrgb
+        | GpuTextureFormat::Bc2RgbaUnorm
+        | GpuTextureFormat::Bc2RgbaUnormSrgb
+        | GpuTextureFormat::Bc3RgbaUnorm
+        | GpuTextureFormat::Bc3RgbaUnormSrgb
+        | GpuTextureFormat::Bc4RUnorm
+        | GpuTextureFormat::Bc4RSnorm
+        | GpuTextureFormat::Bc5RgUnorm
+        | GpuTextureFormat::Bc5RgSnorm
+        | GpuTextureFormat::Bc6hRgbUfloat
+        | GpuTextureFormat::Bc6hRgbFloat
+        | GpuTextureFormat::Bc7RgbaUnorm
+        | GpuTextureFormat::Bc7RgbaUnormSrgb => Some(GpuTextureCompressionFamily::Bc),
+        _ => None,
+    }
+}
+
+pub(crate) const fn is_block_compressed(format: GpuTextureFormat) -> bool {
+    let (block_width, block_height) = block_dimensions(format);
+    block_width != 1 || block_height != 1
 }
 
 pub(crate) const fn is_depth(format: GpuTextureFormat) -> bool {
@@ -1591,6 +1791,40 @@ mod tests {
             GpuTextureAspect::StencilOnly
         ));
         assert_eq!(color_scalar_class(format), None);
+    }
+
+    #[test]
+    fn bc_family_has_exact_block_shader_and_view_semantics() {
+        let cases = [
+            (GpuTextureFormat::Bc1RgbaUnorm, 8, false, Some(GpuTextureFormat::Bc1RgbaUnormSrgb), 4, true),
+            (GpuTextureFormat::Bc1RgbaUnormSrgb, 8, true, Some(GpuTextureFormat::Bc1RgbaUnorm), 4, true),
+            (GpuTextureFormat::Bc2RgbaUnorm, 16, false, Some(GpuTextureFormat::Bc2RgbaUnormSrgb), 4, true),
+            (GpuTextureFormat::Bc2RgbaUnormSrgb, 16, true, Some(GpuTextureFormat::Bc2RgbaUnorm), 4, true),
+            (GpuTextureFormat::Bc3RgbaUnorm, 16, false, Some(GpuTextureFormat::Bc3RgbaUnormSrgb), 4, true),
+            (GpuTextureFormat::Bc3RgbaUnormSrgb, 16, true, Some(GpuTextureFormat::Bc3RgbaUnorm), 4, true),
+            (GpuTextureFormat::Bc4RUnorm, 8, false, None, 1, false),
+            (GpuTextureFormat::Bc4RSnorm, 8, false, None, 1, false),
+            (GpuTextureFormat::Bc5RgUnorm, 16, false, None, 2, false),
+            (GpuTextureFormat::Bc5RgSnorm, 16, false, None, 2, false),
+            (GpuTextureFormat::Bc6hRgbUfloat, 16, false, None, 3, false),
+            (GpuTextureFormat::Bc6hRgbFloat, 16, false, None, 3, false),
+            (GpuTextureFormat::Bc7RgbaUnorm, 16, false, Some(GpuTextureFormat::Bc7RgbaUnormSrgb), 4, true),
+            (GpuTextureFormat::Bc7RgbaUnormSrgb, 16, true, Some(GpuTextureFormat::Bc7RgbaUnorm), 4, true),
+        ];
+        assert_eq!(cases.len(), 14);
+        for (format, block_bytes, srgb, pair, components, alpha) in cases {
+            assert_eq!(compression_family(format), Some(GpuTextureCompressionFamily::Bc));
+            assert!(is_block_compressed(format));
+            assert_eq!(block_dimensions(format), (4, 4), "{format:?}");
+            assert_eq!(copy_block_size(format, GpuTextureAspect::Color), Some(block_bytes), "{format:?}");
+            assert_eq!(copy_block_size(format, GpuTextureAspect::All), Some(block_bytes), "{format:?}");
+            assert_eq!(copy_block_size(format, GpuTextureAspect::DepthOnly), None, "{format:?}");
+            assert_eq!(is_srgb(format), srgb, "{format:?}");
+            assert_eq!(paired_view_format(format), pair, "{format:?}");
+            assert_eq!(color_scalar_class(format), Some(GpuTextureScalarClass::Float), "{format:?}");
+            assert_eq!(component_count(format), components, "{format:?}");
+            assert_eq!(has_alpha(format), alpha, "{format:?}");
+        }
     }
 
     #[test]

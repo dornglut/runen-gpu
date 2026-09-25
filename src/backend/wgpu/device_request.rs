@@ -1,4 +1,5 @@
 use super::adapter_mapping::adapter_facts;
+use crate::api::texture_format;
 use super::{
     PipelineRealizationState, ProgramBindingRealizationState, ResourceRealizationState,
     WgpuContextState, WgpuDeviceHealth, WgpuErrorAttributionGate, WgpuExecutionState,
@@ -400,6 +401,12 @@ fn requested_features(candidate: &crate::GpuCandidateAdmissionReport) -> Feature
             features | wgpu_features_for(feature)
         });
     for (format, role) in candidate.contract().format_roles() {
+        if matches!(
+            texture_format::compression_family(format),
+            Some(texture_format::GpuTextureCompressionFamily::Bc)
+        ) {
+            features |= Features::TEXTURE_COMPRESSION_BC;
+        }
         match (format, role) {
             (GpuTextureFormat::Depth32FloatStencil8, _) => {
                 features |= Features::DEPTH32FLOAT_STENCIL8;
@@ -875,6 +882,76 @@ mod tests {
             wgpu_features_for(GpuCapabilityFeature::UniformBufferBindingArray),
             Features::UNIFORM_BUFFER_BINDING_ARRAYS
         );
+    }
+
+    fn candidate_with_bc_role(
+        format: GpuTextureFormat,
+        role: GpuFormatRole,
+    ) -> crate::GpuCandidateAdmissionReport {
+        let limits = test_gpu_limits();
+        let mut facts_for_format = GpuTextureFormatCapabilities::none();
+        match role {
+            GpuFormatRole::Sampled => facts_for_format.sampled = true,
+            GpuFormatRole::CopySource => facts_for_format.copy_source = true,
+            GpuFormatRole::CopyDestination => facts_for_format.copy_destination = true,
+            other => panic!("unsupported focused BC role: {other:?}"),
+        }
+        let facts = GpuAdapterFacts::new(
+            GpuBackendFamily::Vulkan,
+            GpuAdapterClass::Discrete,
+            GpuSoftwareStatus::Hardware,
+            GpuFallbackStatus::ConfirmedNotFallback,
+            GpuCapabilities::from_normalized_facts([], limits, [(format, facts_for_format)]),
+            GpuAdapterLimits::new(limits),
+            GpuAlignmentFacts {
+                uniform_dynamic_offset: Some(256),
+                storage_dynamic_offset: Some(256),
+                copy_buffer_offset: Some(4),
+                bytes_per_row: Some(256),
+                query_resolve_destination: Some(256),
+            },
+        );
+        select_candidate_with_host_evidence(
+            &GpuContextDescriptor::new(GpuCapabilityRequirements::new())
+                .require_format_role(format, role),
+            [(facts, GpuCandidateEnvironmentEvidence::headless())],
+        )
+        .unwrap()
+        .candidate
+    }
+
+    #[test]
+    fn bc_format_roles_request_the_private_compression_feature_without_public_duplication() {
+        assert!(!requested_features(&candidate()).contains(Features::TEXTURE_COMPRESSION_BC));
+        let formats = [
+            GpuTextureFormat::Bc1RgbaUnorm,
+            GpuTextureFormat::Bc1RgbaUnormSrgb,
+            GpuTextureFormat::Bc2RgbaUnorm,
+            GpuTextureFormat::Bc2RgbaUnormSrgb,
+            GpuTextureFormat::Bc3RgbaUnorm,
+            GpuTextureFormat::Bc3RgbaUnormSrgb,
+            GpuTextureFormat::Bc4RUnorm,
+            GpuTextureFormat::Bc4RSnorm,
+            GpuTextureFormat::Bc5RgUnorm,
+            GpuTextureFormat::Bc5RgSnorm,
+            GpuTextureFormat::Bc6hRgbUfloat,
+            GpuTextureFormat::Bc6hRgbFloat,
+            GpuTextureFormat::Bc7RgbaUnorm,
+            GpuTextureFormat::Bc7RgbaUnormSrgb,
+        ];
+        for format in formats {
+            for role in [
+                GpuFormatRole::Sampled,
+                GpuFormatRole::CopySource,
+                GpuFormatRole::CopyDestination,
+            ] {
+                assert!(
+                    requested_features(&candidate_with_bc_role(format, role))
+                        .contains(Features::TEXTURE_COMPRESSION_BC),
+                    "{format:?} {role:?}"
+                );
+            }
+        }
     }
 
     #[cfg(not(target_arch = "wasm32"))]

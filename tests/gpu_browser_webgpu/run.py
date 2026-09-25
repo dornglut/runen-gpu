@@ -99,6 +99,7 @@ const done = arguments[arguments.length - 1];
         typeof wasm.runengpu_browser_packed32_exercised_mask !== "function" ||
         typeof wasm.runengpu_browser_packed32_sampled_mask !== "function" ||
         typeof wasm.runengpu_browser_packed32_color_attachment_mask !== "function" ||
+        typeof wasm.runengpu_browser_bc_exercised_mask !== "function" ||
         typeof wasm.runengpu_browser_vertex8_exercised_mask !== "function" ||
         typeof wasm.runengpu_browser_vertex16_exercised_mask !== "function" ||
         typeof wasm.runengpu_browser_vertex_packed_exercised_mask !== "function" ||
@@ -128,6 +129,7 @@ const done = arguments[arguments.length - 1];
           packed32Mask: wasm.runengpu_browser_packed32_exercised_mask(),
           packed32SampledMask: wasm.runengpu_browser_packed32_sampled_mask(),
           packed32ColorAttachmentMask: wasm.runengpu_browser_packed32_color_attachment_mask(),
+          bcMask: wasm.runengpu_browser_bc_exercised_mask(),
           vertex8Mask: wasm.runengpu_browser_vertex8_exercised_mask(),
           vertex16Mask: wasm.runengpu_browser_vertex16_exercised_mask(),
           vertexPackedMask: wasm.runengpu_browser_vertex_packed_exercised_mask(),
@@ -772,6 +774,41 @@ def main() -> int:
             "ColorAttachment",
             "submitted color-attachment clear render pass with admitted role",
         )
+        bc_names = (
+            "Bc1RgbaUnorm",
+            "Bc1RgbaUnormSrgb",
+            "Bc2RgbaUnorm",
+            "Bc2RgbaUnormSrgb",
+            "Bc3RgbaUnorm",
+            "Bc3RgbaUnormSrgb",
+            "Bc4RUnorm",
+            "Bc4RSnorm",
+            "Bc5RgUnorm",
+            "Bc5RgSnorm",
+            "Bc6hRgbUfloat",
+            "Bc6hRgbFloat",
+            "Bc7RgbaUnorm",
+            "Bc7RgbaUnormSrgb",
+        )
+        bc_mask = read_exercised_mask(value, "bcMask", "BC", len(bc_names))
+        bc_full_mask = (1 << len(bc_names)) - 1
+        if bc_mask == 0:
+            print(
+                "RunenGPU actual-browser BC texture family: "
+                "UNSUPPORTED (adapter does not expose portable BC roles)"
+            )
+        elif bc_mask == bc_full_mask:
+            for format_name in bc_names:
+                print(
+                    f"RunenGPU actual-browser {format_name}: "
+                    "EXERCISED (compressed upload + copy + exact readback)"
+                )
+        else:
+            raise RuntimeError(
+                "RunenGPU actual-browser BC: PARTIAL SUPPORT IS NOT QUALIFIED "
+                f"(mask={bc_mask:#x}, expected 0 or {bc_full_mask:#x})"
+            )
+
         vertex8_names = (
             "Uint8",
             "Uint8x2",
