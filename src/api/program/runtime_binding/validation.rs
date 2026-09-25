@@ -615,5 +615,30 @@ mod plain_color_sampled_class_tests {
             GpuTextureAspect::All,
             GpuTextureSampleClass::Depth,
         ));
+        assert!(sampled_texture_class_matches(
+            GpuTextureFormat::Depth24PlusStencil8,
+            GpuTextureAspect::DepthOnly,
+            GpuTextureSampleClass::Depth,
+        ));
+        assert!(sampled_texture_class_matches(
+            GpuTextureFormat::Depth24PlusStencil8,
+            GpuTextureAspect::StencilOnly,
+            GpuTextureSampleClass::Uint,
+        ));
+        assert!(!sampled_texture_class_matches(
+            GpuTextureFormat::Depth24PlusStencil8,
+            GpuTextureAspect::DepthOnly,
+            GpuTextureSampleClass::Uint,
+        ));
+        assert!(!sampled_texture_class_matches(
+            GpuTextureFormat::Depth24PlusStencil8,
+            GpuTextureAspect::StencilOnly,
+            GpuTextureSampleClass::Depth,
+        ));
+        assert!(!sampled_texture_class_matches(
+            GpuTextureFormat::Depth24PlusStencil8,
+            GpuTextureAspect::All,
+            GpuTextureSampleClass::Depth,
+        ));
     }
 }
