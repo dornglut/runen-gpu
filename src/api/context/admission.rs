@@ -310,7 +310,7 @@ pub(crate) fn evaluate_validated_candidate(
         }
     }
 
-    let workload_budget = effective_workload_budget(descriptor)?;
+    let workload_budget = effective_workload_budget(descriptor, &enabled_features)?;
     for kind in ALL_LIMIT_KINDS {
         let observed = limit_value(adapter.adapter_limits().values(), kind);
         let required_minimum = limit_value(workload_budget.limits(), kind);
@@ -429,12 +429,14 @@ pub(crate) fn admitted_device_facts(
     ))
 }
 
-const ALL_LIMIT_KINDS: [GpuLimitKind; 17] = [
+const ALL_LIMIT_KINDS: [GpuLimitKind; 19] = [
     GpuLimitKind::MaxUniformBufferBindingSize,
     GpuLimitKind::MaxStorageBufferBindingSize,
     GpuLimitKind::MaxColorAttachments,
     GpuLimitKind::MaxVertexBuffers,
     GpuLimitKind::MaxBindingsPerGroup,
+    GpuLimitKind::MaxBindingArrayElementsPerShaderStage,
+    GpuLimitKind::MaxBindingArraySamplerElementsPerShaderStage,
     GpuLimitKind::MaxTextureDimension2d,
     GpuLimitKind::MaxBindGroups,
     GpuLimitKind::MaxBindGroupsPlusVertexBuffers,
@@ -464,6 +466,8 @@ pub(crate) const fn normalized_limit_baseline() -> GpuLimits {
         1,
         8,
         16,
+        0,
+        0,
         8192,
         4,
         24,
@@ -479,10 +483,29 @@ pub(crate) const fn normalized_limit_baseline() -> GpuLimits {
     )
 }
 
+const BINDING_ARRAY_ELEMENT_BASELINE: u32 = 500_000;
+const BINDING_ARRAY_SAMPLER_ELEMENT_BASELINE: u32 = 1_000;
+
 fn effective_workload_budget(
     descriptor: &GpuContextDescriptor,
+    enabled_features: &BTreeSet<GpuCapabilityFeature>,
 ) -> Result<GpuWorkloadBudget, GpuContextRequestError> {
-    let baseline = normalized_limit_baseline();
+    let has_general_binding_arrays = enabled_features.contains(&GpuCapabilityFeature::TextureBindingArray)
+        || enabled_features.contains(&GpuCapabilityFeature::BufferBindingArray);
+    let has_sampler_binding_arrays =
+        enabled_features.contains(&GpuCapabilityFeature::TextureBindingArray);
+    let baseline = normalized_limit_baseline().with_binding_array_limits(
+        if has_general_binding_arrays {
+            BINDING_ARRAY_ELEMENT_BASELINE
+        } else {
+            0
+        },
+        if has_sampler_binding_arrays {
+            BINDING_ARRAY_SAMPLER_ELEMENT_BASELINE
+        } else {
+            0
+        },
+    );
     let value = |kind| {
         descriptor
             .limits
@@ -511,6 +534,8 @@ fn effective_workload_budget(
             u32_value(GpuLimitKind::MaxColorAttachments)?,
             u32_value(GpuLimitKind::MaxVertexBuffers)?,
             u32_value(GpuLimitKind::MaxBindingsPerGroup)?,
+            u32_value(GpuLimitKind::MaxBindingArrayElementsPerShaderStage)?,
+            u32_value(GpuLimitKind::MaxBindingArraySamplerElementsPerShaderStage)?,
             u32_value(GpuLimitKind::MaxTextureDimension2d)?,
             u32_value(GpuLimitKind::MaxBindGroups)?,
             u32_value(GpuLimitKind::MaxBindGroupsPlusVertexBuffers)?,
@@ -535,6 +560,12 @@ pub(crate) const fn limit_value(limits: GpuLimits, kind: GpuLimitKind) -> u64 {
         GpuLimitKind::MaxColorAttachments => limits.max_color_attachments() as u64,
         GpuLimitKind::MaxVertexBuffers => limits.max_vertex_buffers() as u64,
         GpuLimitKind::MaxBindingsPerGroup => limits.max_bindings_per_group() as u64,
+        GpuLimitKind::MaxBindingArrayElementsPerShaderStage => {
+            limits.max_binding_array_elements_per_shader_stage() as u64
+        }
+        GpuLimitKind::MaxBindingArraySamplerElementsPerShaderStage => {
+            limits.max_binding_array_sampler_elements_per_shader_stage() as u64
+        }
         GpuLimitKind::MaxTextureDimension2d => limits.max_texture_dimension_2d() as u64,
         GpuLimitKind::MaxBindGroups => limits.max_bind_groups() as u64,
         GpuLimitKind::MaxBindGroupsPlusVertexBuffers => {
