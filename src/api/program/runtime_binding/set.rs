@@ -525,6 +525,36 @@ mod binding_array_limit_tests {
             "different shader stages must use the per-stage maximum rather than a global sum"
         );
         assert!(validate_pipeline_binding_limits(&cross_stage, &facts(6, 0)).is_err());
+
+        let multi_stage_visibility =
+            GpuShaderStages::new([GpuShaderStage::Vertex, GpuShaderStage::Fragment]).unwrap();
+        let multi_stage = GpuPipelineLayoutDescriptor::new([
+            GpuBindGroupLayoutDescriptor::new(
+                0,
+                [storage_array(0, 0, multi_stage_visibility, 6)],
+            )
+            .unwrap(),
+            GpuBindGroupLayoutDescriptor::new(
+                1,
+                [storage_array(
+                    1,
+                    0,
+                    GpuShaderStages::one(GpuShaderStage::Fragment),
+                    1,
+                )],
+            )
+            .unwrap(),
+        ])
+        .unwrap();
+
+        assert!(
+            validate_pipeline_binding_limits(&multi_stage, &facts(7, 0)).is_ok(),
+            "one multi-stage array must debit every visible stage independently"
+        );
+        assert!(
+            validate_pipeline_binding_limits(&multi_stage, &facts(6, 0)).is_err(),
+            "fragment demand must include both the multi-stage and fragment-only arrays"
+        );
     }
 
     #[test]
