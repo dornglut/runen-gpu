@@ -697,6 +697,7 @@ pub enum GpuResourceDescriptorCause {
     IncompatibleViewFormat,
     IncompatibleViewDimension,
     InvalidLodRange,
+    InvalidSamplerFilterState,
     InvalidQueryCount,
 }
 

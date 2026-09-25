@@ -1130,15 +1130,63 @@ fn validate_aspect(
     Ok(())
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct GpuSamplerFilterState {
+    mag_filter: GpuFilterMode,
+    min_filter: GpuFilterMode,
+    mipmap_filter: GpuFilterMode,
+    max_anisotropy: u16,
+}
+
+impl GpuSamplerFilterState {
+    pub fn new(
+        mag_filter: GpuFilterMode,
+        min_filter: GpuFilterMode,
+        mipmap_filter: GpuFilterMode,
+        max_anisotropy: u16,
+    ) -> Result<Self, GpuResourceDescriptorError> {
+        let anisotropic = max_anisotropy > 1;
+        let all_linear = [mag_filter, min_filter, mipmap_filter]
+            .into_iter()
+            .all(|filter| filter == GpuFilterMode::Linear);
+        if max_anisotropy == 0 || (anisotropic && !all_linear) {
+            return Err(GpuResourceDescriptorError::invalid(
+                "construct GPU sampler filter state",
+                "sampler filtering",
+                GpuResourceDescriptorCause::InvalidSamplerFilterState,
+                "use max anisotropy of at least one and linear mag/min/mipmap filters whenever anisotropy exceeds one",
+            ));
+        }
+        Ok(Self {
+            mag_filter,
+            min_filter,
+            mipmap_filter,
+            max_anisotropy,
+        })
+    }
+
+    pub const fn filters(self) -> (GpuFilterMode, GpuFilterMode, GpuFilterMode) {
+        (self.mag_filter, self.min_filter, self.mipmap_filter)
+    }
+
+    pub const fn max_anisotropy(self) -> u16 {
+        self.max_anisotropy
+    }
+
+    pub const fn is_filtering(self) -> bool {
+        matches!(self.mag_filter, GpuFilterMode::Linear)
+            || matches!(self.min_filter, GpuFilterMode::Linear)
+            || matches!(self.mipmap_filter, GpuFilterMode::Linear)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct GpuSamplerDescriptor {
     common: GpuResourceCommon,
     address_u: GpuAddressMode,
     address_v: GpuAddressMode,
     address_w: GpuAddressMode,
-    mag_filter: GpuFilterMode,
-    min_filter: GpuFilterMode,
-    mipmap_filter: GpuFilterMode,
+    filter_state: GpuSamplerFilterState,
     lod_min: f32,
     lod_max: f32,
     compare: Option<GpuCompareFunction>,
@@ -1155,9 +1203,7 @@ impl GpuSamplerDescriptor {
         address_u: GpuAddressMode,
         address_v: GpuAddressMode,
         address_w: GpuAddressMode,
-        mag_filter: GpuFilterMode,
-        min_filter: GpuFilterMode,
-        mipmap_filter: GpuFilterMode,
+        filter_state: GpuSamplerFilterState,
         lod_min: f32,
         lod_max: f32,
         compare: Option<GpuCompareFunction>,
@@ -1191,9 +1237,7 @@ impl GpuSamplerDescriptor {
             address_u,
             address_v,
             address_w,
-            mag_filter,
-            min_filter,
-            mipmap_filter,
+            filter_state,
             lod_min,
             lod_max,
             compare,
@@ -1209,8 +1253,8 @@ impl GpuSamplerDescriptor {
     pub const fn address_modes(&self) -> (GpuAddressMode, GpuAddressMode, GpuAddressMode) {
         (self.address_u, self.address_v, self.address_w)
     }
-    pub const fn filters(&self) -> (GpuFilterMode, GpuFilterMode, GpuFilterMode) {
-        (self.mag_filter, self.min_filter, self.mipmap_filter)
+    pub const fn filter_state(&self) -> GpuSamplerFilterState {
+        self.filter_state
     }
     pub const fn compare(&self) -> Option<GpuCompareFunction> {
         self.compare
@@ -1889,9 +1933,13 @@ mod tests {
                 GpuAddressMode::ClampToEdge,
                 GpuAddressMode::ClampToEdge,
                 GpuAddressMode::ClampToEdge,
-                GpuFilterMode::Nearest,
-                GpuFilterMode::Nearest,
-                GpuFilterMode::Nearest,
+                GpuSamplerFilterState::new(
+                    GpuFilterMode::Nearest,
+                    GpuFilterMode::Nearest,
+                    GpuFilterMode::Nearest,
+                    1,
+                )
+                .unwrap(),
                 2.0,
                 1.0,
                 None,
@@ -1914,9 +1962,13 @@ mod tests {
                 GpuAddressMode::ClampToEdge,
                 GpuAddressMode::ClampToEdge,
                 GpuAddressMode::ClampToEdge,
-                GpuFilterMode::Nearest,
-                GpuFilterMode::Nearest,
-                GpuFilterMode::Nearest,
+                GpuSamplerFilterState::new(
+                    GpuFilterMode::Nearest,
+                    GpuFilterMode::Nearest,
+                    GpuFilterMode::Nearest,
+                    1,
+                )
+                .unwrap(),
                 0.0,
                 1.0,
                 None,

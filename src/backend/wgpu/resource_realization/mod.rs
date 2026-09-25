@@ -375,7 +375,8 @@ impl GpuContext {
         registries.ensure_capacity(identity, self.backend.resource_realization.policy)?;
 
         let (address_u, address_v, address_w) = descriptor.address_modes();
-        let (mag_filter, min_filter, mipmap_filter) = descriptor.filters();
+        let (mag_filter, min_filter, mipmap_filter, anisotropy_clamp) =
+            lowering::map_sampler_filter_state(descriptor.filter_state());
         let (lod_min_clamp, lod_max_clamp) = descriptor.lod_range();
         let object = self.backend.resource_realization.create_backend_object(
             identity,
@@ -386,13 +387,13 @@ impl GpuContext {
                     address_mode_u: lowering::map_address_mode(address_u),
                     address_mode_v: lowering::map_address_mode(address_v),
                     address_mode_w: lowering::map_address_mode(address_w),
-                    mag_filter: lowering::map_filter_mode(mag_filter),
-                    min_filter: lowering::map_filter_mode(min_filter),
-                    mipmap_filter: lowering::map_mipmap_filter_mode(mipmap_filter),
+                    mag_filter,
+                    min_filter,
+                    mipmap_filter,
                     lod_min_clamp,
                     lod_max_clamp,
                     compare: descriptor.compare().map(lowering::map_compare_function),
-                    anisotropy_clamp: 1,
+                    anisotropy_clamp,
                     border_color: None,
                 })
             },

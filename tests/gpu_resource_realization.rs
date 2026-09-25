@@ -5,10 +5,10 @@ use runen_gpu::{
     GpuMemoryIntent, GpuQueryKind, GpuQuerySetDescriptor, GpuRealizationPolicies,
     GpuReconstruction, GpuResourceCommon, GpuResourceLabel, GpuResourceLifetime,
     GpuResourceOwnership, GpuResourceProvenance, GpuResourceRealizationErrorCategory,
-    GpuResourceRealizationPolicy, GpuSamplerDescriptor, GpuTextureDescriptor, GpuTextureDimension,
-    GpuTextureExtent, GpuTextureFormat, GpuTextureInitialization, GpuTextureSubresourceRange,
-    GpuTextureUsage, GpuTextureUsages, GpuTextureViewDescriptor, GpuTextureViewDimension,
-    GpuWorkResourceIdAllocator,
+    GpuResourceRealizationPolicy, GpuSamplerDescriptor, GpuSamplerFilterState,
+    GpuTextureDescriptor, GpuTextureDimension, GpuTextureExtent, GpuTextureFormat,
+    GpuTextureInitialization, GpuTextureSubresourceRange, GpuTextureUsage, GpuTextureUsages,
+    GpuTextureViewDescriptor, GpuTextureViewDimension, GpuWorkResourceIdAllocator,
 };
 use std::num::NonZeroUsize;
 
@@ -133,9 +133,13 @@ fn representative_resources_realize_transactionally_or_report_environment_absenc
                 GpuAddressMode::ClampToEdge,
                 GpuAddressMode::ClampToEdge,
                 GpuAddressMode::ClampToEdge,
-                GpuFilterMode::Nearest,
-                GpuFilterMode::Nearest,
-                GpuFilterMode::Nearest,
+                GpuSamplerFilterState::new(
+                    GpuFilterMode::Nearest,
+                    GpuFilterMode::Nearest,
+                    GpuFilterMode::Nearest,
+                    1,
+                )
+                .unwrap(),
                 0.0,
                 16.0,
                 None,

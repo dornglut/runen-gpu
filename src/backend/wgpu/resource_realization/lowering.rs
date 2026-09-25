@@ -5,8 +5,8 @@ use crate::{
     GpuAddressMode, GpuBufferDescriptor, GpuBufferUsage, GpuCapabilityFeature, GpuCompareFunction,
     GpuContext, GpuFilterMode, GpuFormatRole, GpuMemoryIntent, GpuQueryKind, GpuQuerySetDescriptor,
     GpuResourceCommon, GpuResourceOwnership, GpuResourceRealizationError,
-    GpuResourceRealizationErrorCategory, GpuSamplerDescriptor, GpuTextureAspect,
-    GpuTextureDescriptor, GpuTextureDimension, GpuTextureFormat, GpuTextureUsage,
+    GpuResourceRealizationErrorCategory, GpuSamplerDescriptor, GpuSamplerFilterState,
+    GpuTextureAspect, GpuTextureDescriptor, GpuTextureDimension, GpuTextureFormat, GpuTextureUsage,
     GpuTextureViewDescriptor, GpuTextureViewDimension, GpuWorkResourceId,
 };
 use wgpu::{
@@ -366,6 +366,18 @@ pub(super) const fn map_mipmap_filter_mode(mode: GpuFilterMode) -> MipmapFilterM
     }
 }
 
+pub(super) const fn map_sampler_filter_state(
+    state: GpuSamplerFilterState,
+) -> (FilterMode, FilterMode, MipmapFilterMode, u16) {
+    let (mag_filter, min_filter, mipmap_filter) = state.filters();
+    (
+        map_filter_mode(mag_filter),
+        map_filter_mode(min_filter),
+        map_mipmap_filter_mode(mipmap_filter),
+        state.max_anisotropy(),
+    )
+}
+
 pub(super) const fn map_compare_function(function: GpuCompareFunction) -> CompareFunction {
     match function {
         GpuCompareFunction::Never => CompareFunction::Never,
@@ -614,6 +626,22 @@ mod tests {
         assert_eq!(
             map_address_mode(GpuAddressMode::MirrorRepeat),
             AddressMode::MirrorRepeat
+        );
+        let anisotropic = GpuSamplerFilterState::new(
+            GpuFilterMode::Linear,
+            GpuFilterMode::Linear,
+            GpuFilterMode::Linear,
+            8,
+        )
+        .unwrap();
+        assert_eq!(
+            map_sampler_filter_state(anisotropic),
+            (
+                FilterMode::Linear,
+                FilterMode::Linear,
+                MipmapFilterMode::Linear,
+                8
+            )
         );
         assert_eq!(
             map_compare_function(GpuCompareFunction::LessEqual),

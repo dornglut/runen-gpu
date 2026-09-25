@@ -9,7 +9,7 @@ use super::{
     GpuRuntimeBufferBinding, GpuRuntimeTextureViewBinding,
 };
 use crate::api::texture_format::{self, GpuTextureScalarClass};
-use crate::{GpuBufferUsage, GpuFilterMode, GpuTextureAspect, GpuTextureFormat, GpuTextureUsage};
+use crate::{GpuBufferUsage, GpuTextureAspect, GpuTextureFormat, GpuTextureUsage};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GpuValidatedBindGroupBindings {
@@ -439,10 +439,7 @@ fn validate_sampler(
 ) -> Result<(), GpuProgramContractError> {
     let descriptor = handle.descriptor();
     let comparison = descriptor.compare().is_some();
-    let (mag_filter, min_filter, mipmap_filter) = descriptor.filters();
-    let filtering = [mag_filter, min_filter, mipmap_filter]
-        .into_iter()
-        .any(|filter| filter == GpuFilterMode::Linear);
+    let filtering = descriptor.filter_state().is_filtering();
     let class = declaration
         .kind()
         .sampler_class()
