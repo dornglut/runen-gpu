@@ -415,7 +415,6 @@ fn device_incompatible(
     )
 }
 
-
 #[cfg(test)]
 mod binding_array_limit_tests {
     use super::*;
@@ -522,13 +521,11 @@ mod binding_array_limit_tests {
 
     #[test]
     fn sampler_arrays_consume_both_general_and_sampler_array_counters() {
-        let layout = layout([
-            GpuBindGroupLayoutDescriptor::new(
-                0,
-                [sampler_array(0, 0, [GpuShaderStage::Fragment], 3)],
-            )
-            .unwrap(),
-        ]);
+        let layout = layout([GpuBindGroupLayoutDescriptor::new(
+            0,
+            [sampler_array(0, 0, [GpuShaderStage::Fragment], 3)],
+        )
+        .unwrap()]);
 
         assert!(
             validate_pipeline_binding_limits(&layout, &facts(2, 3)).is_err(),
