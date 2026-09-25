@@ -1,7 +1,7 @@
 use super::super::{
     GpuAttachmentLoadKind, GpuAttachmentStore, GpuDepthStencilAccess, GpuTextureAccess,
     GpuTextureAccessKind, GpuTextureAccessResource, GpuTextureAspect, GpuTextureFormat,
-    GpuTextureSubresourceRange, GpuTextureViewDimension, GpuTextureViewHandle,
+    GpuTextureSubresourceRange, GpuTextureUsage, GpuTextureViewDimension, GpuTextureViewHandle,
     GpuWorkOperationCause, GpuWorkOperationError,
 };
 use super::mip_extent;
