@@ -388,7 +388,8 @@ fn required_bind_group_slots(layout: &GpuPipelineLayoutDescriptor) -> u64 {
 mod binding_array_limit_tests {
     use super::*;
     use crate::{
-        GpuBindGroupLayoutDescriptor, GpuBindingKind, GpuBindingProvenance, GpuSamplerClass,
+        GpuBindGroupLayoutDescriptor, GpuBindingKey, GpuBindingKind, GpuBindingProvenance,
+        GpuSamplerClass, GpuShaderStages,
     };
     use core::num::NonZeroU32;
 
