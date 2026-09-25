@@ -211,7 +211,121 @@ fn exercise_role_realization(
     .expect("advertised packed role must admit a Vulkan fallback context");
     let mut allocator = GpuWorkResourceIdAllocator::new();
     let texture = texture(&mut allocator, format, label_text, 4, [usage]);
-    let _realized = context.realize_texture(&texture).unwrap();
+    let realized_texture = context.realize_texture(&texture).unwrap();
+    let subresources = GpuTextureSubresourceRange::new(
+        texture.descriptor().common().label(),
+        0,
+        1,
+        0,
+        1,
+        GpuTextureAspect::Color,
+    )
+    .unwrap();
+    let view = allocator
+        .allocate_texture_view_handle(
+            GpuTextureViewDescriptor::new(
+                common(&format!("{label_text} view")),
+                &texture,
+                None,
+                GpuTextureViewDimension::D2,
+                subresources,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+    let realized_view = context
+        .realize_texture_view(&view, &realized_texture)
+        .expect("admitted packed texture view must realize");
+
+    match role {
+        GpuFormatRole::Sampled => {
+            let sample_class = if format == GpuTextureFormat::Rgb10a2Uint {
+                GpuTextureSampleClass::Uint
+            } else {
+                GpuTextureSampleClass::FloatUnfilterable
+            };
+            let binding_key = GpuBindingKey::try_new(0, 0).unwrap();
+            let binding = GpuBindingDeclaration::new(
+                binding_key,
+                GpuShaderStages::one(GpuShaderStage::Compute),
+                GpuBindingKind::sampled_texture(
+                    sample_class,
+                    GpuTextureViewDimension::D2,
+                    false,
+                )
+                .unwrap(),
+                None,
+                "packed_texture",
+                GpuBindingProvenance::new("packed sampled binding qualification", None).unwrap(),
+            )
+            .unwrap();
+            let layout = GpuBindGroupLayoutDescriptor::new(0, [binding]).unwrap();
+            let realized_layout = pollster::block_on(context.realize_bind_group_layout(&layout))
+                .expect("packed sampled layout must realize");
+            let binding_value = GpuRuntimeBindingValue::new(
+                binding_key,
+                [GpuRuntimeBindingResource::TextureView(
+                    GpuRuntimeTextureViewBinding::new(view.clone()),
+                )],
+            )
+            .unwrap();
+            let _realized_bind_group = pollster::block_on(
+                context.realize_bind_group(&realized_layout, [binding_value]),
+            )
+            .expect("packed sampled binding must realize");
+        }
+        GpuFormatRole::ColorAttachment => {
+            let attachment = GpuRenderColorAttachment::new(
+                view.clone(),
+                GpuColorAttachmentLoad::Clear(
+                    GpuColorClearValue::new(0.0, 0.0, 0.0, 0.0).unwrap(),
+                ),
+                GpuAttachmentStore::Store,
+                None,
+            )
+            .unwrap();
+            let render = GpuRenderOperation::new([attachment], None, [], None).unwrap();
+            let mut builder =
+                GpuWorkFragmentBuilder::new(label(label_text), provenance(label_text));
+            builder.declare_resource(texture.clone().into()).unwrap();
+            builder.declare_resource(view.clone().into()).unwrap();
+            builder
+                .add_node(
+                    label("packed color attachment clear"),
+                    GpuWorkOperation::Render(render),
+                    [],
+                    GpuCapabilityRequirements::new(),
+                    GpuExecutionPreference::GraphicsRequired,
+                    provenance("packed color attachment clear"),
+                )
+                .unwrap();
+            let graph =
+                GpuPreparedWorkGraph::prepare(label(label_text), [builder.finish().unwrap()])
+                    .unwrap();
+            let prepared = pollster::block_on(context.prepare_submission(graph)).unwrap();
+            let submission = context.submit_prepared(prepared).unwrap();
+            let deadline = Instant::now() + Duration::from_secs(15);
+            loop {
+                context.progress();
+                match submission.status() {
+                    GpuSubmissionStatus::Completed => break,
+                    GpuSubmissionStatus::Failed(error) => {
+                        panic!("{label_text} render-target qualification failed: {error:?}")
+                    }
+                    GpuSubmissionStatus::Accepted => {}
+                }
+                assert!(
+                    Instant::now() < deadline,
+                    "{label_text} render-target qualification timed out"
+                );
+                std::thread::yield_now();
+            }
+        }
+        other => panic!("unsupported packed qualification role: {other:?}"),
+    }
+
+    drop(realized_view);
+    drop(realized_texture);
 }
 
 fn run_native_packed32() -> usize {
@@ -238,7 +352,7 @@ fn run_native_packed32() -> usize {
                 GpuTextureUsage::Sampled,
                 &format!("{format:?} native sampled realization"),
             );
-            println!("{format:?} Sampled: EXERCISED");
+            println!("{format:?} Sampled: EXERCISED (sampled texture-view binding realized)");
         } else {
             println!("{format:?} Sampled: SKIPPED (role not advertised)");
         }
@@ -250,7 +364,7 @@ fn run_native_packed32() -> usize {
                 GpuTextureUsage::ColorAttachment,
                 &format!("{format:?} native color-attachment realization"),
             );
-            println!("{format:?} ColorAttachment: EXERCISED");
+            println!("{format:?} ColorAttachment: EXERCISED (clear render pass submitted)");
         } else {
             println!("{format:?} ColorAttachment: SKIPPED (role not advertised)");
         }
