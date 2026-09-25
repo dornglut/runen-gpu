@@ -5,9 +5,9 @@ use super::{
 use crate::{
     GpuBindGroupLayoutDescriptor, GpuBindingClass, GpuBindingDeclaration, GpuBufferAccess,
     GpuBufferAccessKind, GpuBufferRange, GpuPipelineLayoutDescriptor, GpuProgramContractCause,
-    GpuProgramContractError,
-    GpuResourceAccess, GpuSamplerUse, GpuShaderStage, GpuStorageBufferAccess,
-    GpuStorageTextureAccess, GpuTextureAccess, GpuTextureAccessKind, GpuTextureAccessResource,
+    GpuProgramContractError, GpuResourceAccess, GpuSamplerUse, GpuShaderStage,
+    GpuStorageBufferAccess, GpuStorageTextureAccess, GpuTextureAccess, GpuTextureAccessKind,
+    GpuTextureAccessResource,
 };
 use core::hash::{Hash, Hasher};
 use std::collections::BTreeMap;
