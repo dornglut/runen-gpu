@@ -1,5 +1,8 @@
 use runen_gpu::*;
 
+#[path = "support/readback_wait.rs"]
+mod readback_wait;
+
 #[derive(Clone, Copy)]
 struct BcCase {
     format: GpuTextureFormat,
@@ -582,62 +585,6 @@ fn bc_terminal_physical_block_initializes_logical_terminal_mip_for_following_wor
     assert_eq!(readbacks.len(), 2);
 }
 
-#[cfg(target_arch = "wasm32")]
-struct YieldOnce(bool);
-
-#[cfg(target_arch = "wasm32")]
-impl std::future::Future for YieldOnce {
-    type Output = ();
-
-    fn poll(
-        mut self: std::pin::Pin<&mut Self>,
-        _context: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Self::Output> {
-        if self.0 {
-            std::task::Poll::Ready(())
-        } else {
-            self.0 = true;
-            std::task::Poll::Pending
-        }
-    }
-}
-
-async fn progress_yield() {
-    #[cfg(target_arch = "wasm32")]
-    YieldOnce(false).await;
-    #[cfg(not(target_arch = "wasm32"))]
-    std::thread::yield_now();
-}
-
-async fn wait_for_readback(
-    context: &GpuContext,
-    submission: &GpuSubmission,
-    id: GpuReadbackId,
-    format: GpuTextureFormat,
-) -> GpuReadbackBytes {
-    const MAX_PROGRESS_TICKS: usize = 4_000;
-    let readback = submission.readback(id).unwrap().clone();
-    for _ in 0..MAX_PROGRESS_TICKS {
-        context.progress();
-        match readback.status() {
-            GpuReadbackStatus::Ready(bytes)
-                if matches!(submission.status(), GpuSubmissionStatus::Completed) =>
-            {
-                return bytes;
-            }
-            GpuReadbackStatus::Ready(_) | GpuReadbackStatus::Pending => {}
-            GpuReadbackStatus::Failed(error) => {
-                panic!("{format:?} BC readback failed: {error:?}")
-            }
-        }
-        if let GpuSubmissionStatus::Failed(error) = submission.status() {
-            panic!("{format:?} BC submission failed: {error:?}");
-        }
-        progress_yield().await;
-    }
-    panic!("{format:?} BC proof exceeded its bounded progress budget")
-}
-
 async fn run_suite(context: &GpuContext) -> u32 {
     let full_mask = (1_u32 << BC_CASES.len()) - 1;
     let mut mask = 0_u32;
@@ -665,7 +612,13 @@ async fn run_suite(context: &GpuContext) -> u32 {
         let prepared = context.prepare_submission(graph).await.unwrap();
         let submission = context.submit_prepared(prepared).unwrap();
         for (id, expected) in readbacks {
-            let bytes = wait_for_readback(context, &submission, id, case.format).await;
+            let bytes = readback_wait::wait_for_readback(
+                context,
+                &submission,
+                id,
+                format!("{:?} BC", case.format),
+            )
+            .await;
             assert_eq!(bytes.as_bytes(), expected.as_slice(), "{:?}", case.format);
             assert_eq!(bytes.texture_format(), Some(case.format));
         }

@@ -1,5 +1,8 @@
 use runen_gpu::*;
 
+#[path = "support/readback_wait.rs"]
+mod readback_wait;
+
 const WIDTH: u32 = 8;
 const HEIGHT: u32 = 8;
 const CLEAR_PIXEL: [u8; 4] = [0, 0, 0, 255];
@@ -269,65 +272,6 @@ fn graph(case: PackedVertexCase) -> (GpuPreparedWorkGraph, GpuReadbackId) {
     )
 }
 
-#[cfg(target_arch = "wasm32")]
-struct YieldOnce(bool);
-
-#[cfg(target_arch = "wasm32")]
-impl std::future::Future for YieldOnce {
-    type Output = ();
-
-    fn poll(
-        mut self: std::pin::Pin<&mut Self>,
-        _context: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Self::Output> {
-        if self.0 {
-            std::task::Poll::Ready(())
-        } else {
-            self.0 = true;
-            std::task::Poll::Pending
-        }
-    }
-}
-
-async fn progress_yield() {
-    #[cfg(target_arch = "wasm32")]
-    YieldOnce(false).await;
-    #[cfg(not(target_arch = "wasm32"))]
-    std::thread::yield_now();
-}
-
-async fn wait_for_readback(
-    context: &GpuContext,
-    submission: &GpuSubmission,
-    id: GpuReadbackId,
-    case: PackedVertexCase,
-) -> GpuReadbackBytes {
-    const MAX_PROGRESS_TICKS: usize = 4_000;
-    let readback = submission.readback(id).unwrap().clone();
-    for _ in 0..MAX_PROGRESS_TICKS {
-        context.progress();
-        match readback.status() {
-            GpuReadbackStatus::Ready(bytes)
-                if matches!(submission.status(), GpuSubmissionStatus::Completed) =>
-            {
-                return bytes;
-            }
-            GpuReadbackStatus::Ready(_) | GpuReadbackStatus::Pending => {}
-            GpuReadbackStatus::Failed(error) => {
-                panic!("{} packed vertex readback failed: {error:?}", case.name)
-            }
-        }
-        if let GpuSubmissionStatus::Failed(error) = submission.status() {
-            panic!("{} packed vertex submission failed: {error:?}", case.name);
-        }
-        progress_yield().await;
-    }
-    panic!(
-        "{} packed vertex proof exceeded its bounded progress budget",
-        case.name
-    )
-}
-
 fn pixel_at(bytes: &GpuReadbackBytes, x: u32, y: u32) -> [u8; 4] {
     let offset = usize::try_from((y * WIDTH + x) * 4).unwrap();
     bytes.as_bytes()[offset..offset + 4].try_into().unwrap()
@@ -339,7 +283,13 @@ async fn run_suite(context: &GpuContext) -> u32 {
         let (graph, readback_id) = graph(case);
         let prepared = context.prepare_submission(graph).await.unwrap();
         let submission = context.submit_prepared(prepared).unwrap();
-        let bytes = wait_for_readback(context, &submission, readback_id, case).await;
+        let bytes = readback_wait::wait_for_readback(
+            context,
+            &submission,
+            readback_id,
+            format!("{} packed vertex", case.name),
+        )
+        .await;
         assert_eq!(bytes.texture_format(), Some(GpuTextureFormat::Rgba8Unorm));
         assert_eq!(pixel_at(&bytes, WIDTH / 2, HEIGHT / 2), DRAW_PIXEL);
         assert_eq!(pixel_at(&bytes, 0, 0), CLEAR_PIXEL);
