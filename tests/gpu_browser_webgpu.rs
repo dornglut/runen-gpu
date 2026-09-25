@@ -5,6 +5,9 @@ mod retained_bc;
 #[path = "gpu_r2_blend_state.rs"]
 mod retained_blend_state;
 #[cfg(target_arch = "wasm32")]
+#[path = "gpu_r2_depth_bias.rs"]
+mod retained_depth_bias;
+#[cfg(target_arch = "wasm32")]
 #[path = "gpu_offscreen_indexed_native.rs"]
 mod retained_offscreen_indexed;
 #[cfg(target_arch = "wasm32")]
@@ -26,8 +29,9 @@ mod retained_vertex_packed;
 #[cfg(target_arch = "wasm32")]
 mod browser {
     use super::{
-        retained_bc, retained_blend_state, retained_offscreen_indexed, retained_prefix_scan,
-        retained_sampler_anisotropy, retained_vertex_packed, retained_vertex8, retained_vertex16,
+        retained_bc, retained_blend_state, retained_depth_bias, retained_offscreen_indexed,
+        retained_prefix_scan, retained_sampler_anisotropy, retained_vertex_packed, retained_vertex8,
+        retained_vertex16,
     };
     use runen_gpu::*;
     use std::cell::RefCell;
@@ -48,6 +52,7 @@ mod browser {
         static PACKED32_COLOR_ATTACHMENT_MASK: RefCell<u32> = RefCell::new(0);
         static BC_EXERCISED_MASK: RefCell<u32> = RefCell::new(0);
         static BLEND_STATE_EXERCISED_MASK: RefCell<u32> = RefCell::new(0);
+        static DEPTH_BIAS_EXERCISED_MASK: RefCell<u32> = RefCell::new(0);
         static SAMPLER_ANISOTROPY_EXERCISED: RefCell<u32> = RefCell::new(0);
         static VERTEX8_EXERCISED_MASK: RefCell<u32> = RefCell::new(0);
         static VERTEX16_EXERCISED_MASK: RefCell<u32> = RefCell::new(0);
@@ -2142,6 +2147,8 @@ fn cs_main() {
         BC_EXERCISED_MASK.with(|slot| *slot.borrow_mut() = bc_mask);
         let blend_state_mask = retained_blend_state::run_browser_blend_state().await;
         BLEND_STATE_EXERCISED_MASK.with(|slot| *slot.borrow_mut() = blend_state_mask);
+        let depth_bias_mask = retained_depth_bias::run_browser_depth_bias().await;
+        DEPTH_BIAS_EXERCISED_MASK.with(|slot| *slot.borrow_mut() = depth_bias_mask);
         let sampler_anisotropy =
             retained_sampler_anisotropy::run_browser_sampler_anisotropy().await;
         SAMPLER_ANISOTROPY_EXERCISED.with(|slot| *slot.borrow_mut() = sampler_anisotropy);
@@ -2239,6 +2246,11 @@ fn cs_main() {
     #[unsafe(no_mangle)]
     pub extern "C" fn runengpu_browser_blend_state_exercised_mask() -> u32 {
         BLEND_STATE_EXERCISED_MASK.with(|mask| *mask.borrow())
+    }
+
+    #[unsafe(no_mangle)]
+    pub extern "C" fn runengpu_browser_depth_bias_exercised_mask() -> u32 {
+        DEPTH_BIAS_EXERCISED_MASK.with(|mask| *mask.borrow())
     }
 
     #[unsafe(no_mangle)]

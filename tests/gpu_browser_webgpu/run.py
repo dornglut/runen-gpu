@@ -101,6 +101,7 @@ const done = arguments[arguments.length - 1];
         typeof wasm.runengpu_browser_packed32_color_attachment_mask !== "function" ||
         typeof wasm.runengpu_browser_bc_exercised_mask !== "function" ||
         typeof wasm.runengpu_browser_blend_state_exercised_mask !== "function" ||
+        typeof wasm.runengpu_browser_depth_bias_exercised_mask !== "function" ||
         typeof wasm.runengpu_browser_sampler_anisotropy_exercised !== "function" ||
         typeof wasm.runengpu_browser_vertex8_exercised_mask !== "function" ||
         typeof wasm.runengpu_browser_vertex16_exercised_mask !== "function" ||
@@ -133,6 +134,7 @@ const done = arguments[arguments.length - 1];
           packed32ColorAttachmentMask: wasm.runengpu_browser_packed32_color_attachment_mask(),
           bcMask: wasm.runengpu_browser_bc_exercised_mask(),
           blendStateMask: wasm.runengpu_browser_blend_state_exercised_mask(),
+          depthBiasMask: wasm.runengpu_browser_depth_bias_exercised_mask(),
           samplerAnisotropyExercised: wasm.runengpu_browser_sampler_anisotropy_exercised(),
           vertex8Mask: wasm.runengpu_browser_vertex8_exercised_mask(),
           vertex16Mask: wasm.runengpu_browser_vertex16_exercised_mask(),
@@ -830,6 +832,44 @@ def main() -> int:
             raise RuntimeError(
                 "RunenGPU actual-browser BlendState: NOT QUALIFIED "
                 f"(mask={blend_state_mask:#x}, expected={blend_state_full_mask:#x})"
+            )
+
+        depth_bias_mask = value.get("depthBiasMask")
+        if type(depth_bias_mask) is not int or depth_bias_mask < 0:
+            raise RuntimeError(
+                f"RunenGPU actual-browser DepthBias: invalid mask {depth_bias_mask!r}"
+            )
+        depth_bias_baseline = 0b0111
+        depth_bias_clamp = 1 << 3
+        depth_bias_clamp_supported = 1 << 8
+        if depth_bias_mask & depth_bias_baseline != depth_bias_baseline:
+            raise RuntimeError(
+                "RunenGPU actual-browser DepthBias baseline: NOT QUALIFIED "
+                f"(mask={depth_bias_mask:#x}, required={depth_bias_baseline:#x})"
+            )
+        for index, case_name in enumerate(("neutral", "constant", "slope_scale")):
+            if depth_bias_mask & (1 << index):
+                print(
+                    f"RunenGPU actual-browser {case_name} depth bias: "
+                    "EXERCISED (exact color readback)"
+                )
+        if depth_bias_mask & depth_bias_clamp_supported:
+            if not depth_bias_mask & depth_bias_clamp:
+                raise RuntimeError(
+                    "RunenGPU actual-browser DepthBiasClamp advertised but not exercised"
+                )
+            print(
+                "RunenGPU actual-browser clamp depth bias: "
+                "EXERCISED (normalized capability + exact color readback)"
+            )
+        else:
+            if depth_bias_mask & depth_bias_clamp:
+                raise RuntimeError(
+                    "RunenGPU actual-browser DepthBiasClamp exercised without support marker"
+                )
+            print(
+                "RunenGPU actual-browser clamp depth bias: "
+                "UNSUPPORTED (normalized capability absent)"
             )
 
         sampler_anisotropy = value.get("samplerAnisotropyExercised")
