@@ -255,17 +255,31 @@ fn run_native_texture_copy(format: GpuTextureFormat) {
 
     let extent = GpuCopyExtent::new(32, 16, 1).unwrap();
     let source_region = GpuTextureCopyRegion::new(
-        &source, 0, GpuTextureOrigin::new(0, 0, 0), GpuTextureAspect::DepthOnly, extent,
-    ).unwrap();
+        &source,
+        0,
+        GpuTextureOrigin::new(0, 0, 0),
+        GpuTextureAspect::DepthOnly,
+        extent,
+    )
+    .unwrap();
     let destination_region = GpuTextureCopyRegion::new(
-        &destination, 0, GpuTextureOrigin::new(0, 0, 0), GpuTextureAspect::DepthOnly, extent,
-    ).unwrap();
+        &destination,
+        0,
+        GpuTextureOrigin::new(0, 0, 0),
+        GpuTextureAspect::DepthOnly,
+        extent,
+    )
+    .unwrap();
     let copy = GpuCopyOperation::texture_to_texture(source_region, destination_region).unwrap();
 
     let mut builder = GpuWorkFragmentBuilder::new(label(&name), provenance(&name));
     builder.declare_resource(source.into()).unwrap();
     builder.declare_resource(destination.into()).unwrap();
-    add_node(&mut builder, &format!("{name} copy"), GpuWorkOperation::Copy(copy));
+    add_node(
+        &mut builder,
+        &format!("{name} copy"),
+        GpuWorkOperation::Copy(copy),
+    );
     let graph = GpuPreparedWorkGraph::prepare(label(&name), [builder.finish().unwrap()]).unwrap();
     let prepared = pollster::block_on(context.prepare_submission(graph)).unwrap();
     let submission = context.submit_prepared(prepared).unwrap();
@@ -283,15 +297,25 @@ fn run_depth16_linear_roundtrip(width: u32) {
         .collect::<Vec<_>>();
     let mut allocator = GpuWorkResourceIdAllocator::new();
     let source = depth_texture(
-        &mut allocator, &format!("{name} source"), format,
-        [GpuTextureUsage::CopySource, GpuTextureUsage::CopyDestination],
+        &mut allocator,
+        &format!("{name} source"),
+        format,
+        [
+            GpuTextureUsage::CopySource,
+            GpuTextureUsage::CopyDestination,
+        ],
         GpuTextureInitialization::Uninitialized,
         width,
         height,
     );
     let destination = depth_texture(
-        &mut allocator, &format!("{name} destination"), format,
-        [GpuTextureUsage::CopySource, GpuTextureUsage::CopyDestination],
+        &mut allocator,
+        &format!("{name} destination"),
+        format,
+        [
+            GpuTextureUsage::CopySource,
+            GpuTextureUsage::CopyDestination,
+        ],
         GpuTextureInitialization::Uninitialized,
         width,
         height,
@@ -306,19 +330,36 @@ fn run_depth16_linear_roundtrip(width: u32) {
     let upload = GpuUploadOperation::new(
         source_region.clone().into(),
         PreparedGpuData::<TransferData>::from_pod_transfer(
-            &name, expected.as_slice(), provenance(&name)
-        ).unwrap(),
-    ).unwrap();
-    let copy = GpuCopyOperation::texture_to_texture(source_region, destination_region.clone()).unwrap();
+            &name,
+            expected.as_slice(),
+            provenance(&name),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    let copy =
+        GpuCopyOperation::texture_to_texture(source_region, destination_region.clone()).unwrap();
     let readback_id = GpuReadbackId::allocate().unwrap();
     let readback = GpuReadbackOperation::new(destination_region.into(), readback_id).unwrap();
 
     let mut builder = GpuWorkFragmentBuilder::new(label(&name), provenance(&name));
     builder.declare_resource(source.into()).unwrap();
     builder.declare_resource(destination.into()).unwrap();
-    add_node(&mut builder, &format!("{name} upload"), GpuWorkOperation::Upload(upload));
-    add_node(&mut builder, &format!("{name} copy"), GpuWorkOperation::Copy(copy));
-    add_node(&mut builder, &format!("{name} readback"), GpuWorkOperation::Readback(readback));
+    add_node(
+        &mut builder,
+        &format!("{name} upload"),
+        GpuWorkOperation::Upload(upload),
+    );
+    add_node(
+        &mut builder,
+        &format!("{name} copy"),
+        GpuWorkOperation::Copy(copy),
+    );
+    add_node(
+        &mut builder,
+        &format!("{name} readback"),
+        GpuWorkOperation::Readback(readback),
+    );
     let graph = GpuPreparedWorkGraph::prepare(label(&name), [builder.finish().unwrap()]).unwrap();
     let prepared = pollster::block_on(context.prepare_submission(graph)).unwrap();
     let submission = context.submit_prepared(prepared).unwrap();
@@ -382,9 +423,7 @@ fn native_baseline_depth_formats_execute_attachment_and_copy_contracts() {
         if facts.copy_source && facts.copy_destination {
             run_native_texture_copy(format);
         } else {
-            println!(
-                "{format:?} Copy: SKIPPED (CopySource + CopyDestination not both advertised)"
-            );
+            println!("{format:?} Copy: SKIPPED (CopySource + CopyDestination not both advertised)");
         }
     }
     assert!(
