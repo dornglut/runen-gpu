@@ -36,6 +36,29 @@ fn cs_main() {
 }
 "#;
 
+const UNIFORM_BUFFER_ARRAY_WGSL: &str = r#"
+enable wgpu_binding_array;
+
+struct UniformValue {
+    value: vec4<u32>,
+}
+
+struct OutputValue {
+    value: u32,
+}
+
+@group(0) @binding(0)
+var<uniform> inputs: binding_array<UniformValue, 2>;
+
+@group(0) @binding(1)
+var<storage, read_write> output: OutputValue;
+
+@compute @workgroup_size(1)
+fn cs_main() {
+    output.value = inputs[0].value.x + inputs[1].value.x;
+}
+"#;
+
 const SAMPLED_TEXTURE_ARRAY_WGSL: &str = r#"
 enable wgpu_binding_array;
 
@@ -256,6 +279,31 @@ fn prepared_u32_buffer(
         .unwrap()
 }
 
+fn prepared_uniform_buffer(
+    resources: &mut GpuResourceScope,
+    name: &str,
+    value: u32,
+) -> GpuBufferHandle {
+    let data = PreparedGpuData::<TransferData>::ordinary_pod_transfer(
+        name,
+        &[value, 0_u32, 0_u32, 0_u32],
+    )
+    .unwrap();
+    resources
+        .buffer(
+            GpuBufferDescriptor::ordinary_owned(
+                name,
+                GpuResourceLifetime::Transient,
+                GpuReconstruction::SourceBacked,
+                data.layout().byte_len(),
+                [GpuBufferUsage::Uniform, GpuBufferUsage::CopyDestination],
+                GpuBufferInitialization::Prepared(data),
+            )
+            .unwrap(),
+        )
+        .unwrap()
+}
+
 fn unused_storage_array_program() -> GpuProgramDescriptor {
     let [source] = admit_static_wgsl_sources([(
         "proof.fixed-binding-array.unused-storage",
@@ -304,6 +352,14 @@ fn storage_buffer_pipeline() -> GpuComputePipelineDescriptor {
     GpuComputePipelineDescriptor::new(program, entry, GpuPipelineConfiguration::default()).unwrap()
 }
 
+fn uniform_buffer_array_pipeline() -> GpuComputePipelineDescriptor {
+    compute_pipeline(
+        "proof.fixed-binding-array.uniform-buffer",
+        UNIFORM_BUFFER_ARRAY_WGSL,
+        std::iter::empty::<GpuBindingLayoutRefinement>(),
+    )
+}
+
 fn compute_pipeline(
     key: &str,
     wgsl: &str,
@@ -345,6 +401,16 @@ fn storage_texture_array_pipeline() -> GpuComputePipelineDescriptor {
 }
 
 fn array_binding(inputs: [&GpuBufferHandle; 2]) -> GpuRuntimeBindingValue {
+    GpuRuntimeBindingValue::new(
+        GpuBindingKey::try_new(0, 0).unwrap(),
+        inputs.into_iter().map(|buffer| {
+            GpuRuntimeBindingResource::Buffer(GpuRuntimeBufferBinding::whole(buffer))
+        }),
+    )
+    .unwrap()
+}
+
+fn uniform_array_binding(inputs: [&GpuBufferHandle; 2]) -> GpuRuntimeBindingValue {
     GpuRuntimeBindingValue::new(
         GpuBindingKey::try_new(0, 0).unwrap(),
         inputs.into_iter().map(|buffer| {
@@ -428,6 +494,44 @@ fn storage_buffer_proof_graph() -> (
             .unwrap(),
         readback_id,
         layout,
+    )
+}
+
+fn uniform_buffer_proof_graph() -> (GpuPreparedWorkGraph, GpuReadbackId) {
+    let mut resources = GpuResourceScope::new();
+    let left = prepared_uniform_buffer(&mut resources, "fixed-array uniform left", 17);
+    let right = prepared_uniform_buffer(&mut resources, "fixed-array uniform right", 25);
+    let output = prepared_u32_buffer(&mut resources, "fixed-array uniform output", 0, true);
+
+    let pipeline = uniform_buffer_array_pipeline();
+    let bindings = GpuRuntimeBindingSet::new(
+        pipeline.layout().clone(),
+        [
+            uniform_array_binding([&left, &right]),
+            GpuRuntimeBindingValue::whole_buffer(0, 1, &output),
+        ],
+    )
+    .unwrap();
+    let compute = GpuComputeOperation::new(
+        pipeline,
+        bindings,
+        GpuDispatchIntent::direct(GpuDispatchSize::new(1, 1, 1)),
+    )
+    .unwrap();
+    let output_region =
+        GpuBufferRegion::new(&output, GpuBufferRange::whole(&output).unwrap()).unwrap();
+    let readback_id = GpuReadbackId::allocate().unwrap();
+    let readback = GpuReadbackOperation::new(output_region.into(), readback_id).unwrap();
+    let fragment = GpuWorkFragment::build("fixed uniform-buffer array proof", |work| {
+        work.operation("sum fixed uniform-buffer array", compute)?;
+        work.operation("read uniform-array output", readback)?;
+        Ok(())
+    })
+    .unwrap();
+    (
+        GpuPreparedWorkGraph::prepare(label("fixed uniform-buffer array graph"), [fragment])
+            .unwrap(),
+        readback_id,
     )
 }
 
@@ -724,6 +828,52 @@ pub(crate) async fn run_storage_buffer_array_proof(
     true
 }
 
+pub(crate) async fn run_uniform_buffer_array_proof(
+    backend: GpuBackendFamily,
+    fallback: Option<GpuSoftwareFallbackPolicy>,
+) -> bool {
+    let baseline = GpuContext::request(context_descriptor(
+        backend,
+        fallback,
+        GpuCapabilityProfile::ComputeBaseline.requirements(),
+    ))
+    .await
+    .expect("retained fixed-array proof requires the requested baseline context");
+    if !baseline
+        .adapter_facts()
+        .supported()
+        .supports(GpuCapabilityFeature::BufferBindingArray)
+        || !baseline
+            .adapter_facts()
+            .supported()
+            .supports(GpuCapabilityFeature::UniformBufferBindingArray)
+    {
+        println!("Fixed binding arrays: UNSUPPORTED (uniform-buffer array capability absent)");
+        return false;
+    }
+
+    let (graph, readback_id) = uniform_buffer_proof_graph();
+    let context = GpuContext::request(context_descriptor(
+        backend,
+        fallback,
+        graph.requirements().clone(),
+    ))
+    .await
+    .expect("uniform-buffer fixed-array requirements must admit the capability-bearing context");
+    assert_eq!(
+        execute_u32_buffer_graph(
+            &context,
+            graph,
+            readback_id,
+            "fixed binding-array uniform-buffer execution",
+        )
+        .await,
+        42
+    );
+    println!("Fixed binding arrays: EXERCISED (uniform-buffer array + exact readback)");
+    true
+}
+
 pub(crate) async fn run_sampled_texture_array_proof(
     backend: GpuBackendFamily,
     fallback: Option<GpuSoftwareFallbackPolicy>,
@@ -848,6 +998,10 @@ pub(crate) async fn run_storage_texture_array_proof(
             .adapter_facts()
             .supported()
             .supports(GpuCapabilityFeature::StorageResourceBindingArray)
+        || !baseline
+            .adapter_facts()
+            .supported()
+            .supports(GpuCapabilityFeature::StorageTexture)
         || baseline
             .adapter_facts()
             .supported()
@@ -902,6 +1056,7 @@ pub(crate) async fn run_storage_texture_array_proof(
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct FixedBindingArrayProof {
     pub(crate) storage_buffer: bool,
+    pub(crate) uniform_buffer: bool,
     pub(crate) sampled_texture: bool,
     pub(crate) sampler: bool,
     pub(crate) storage_texture: bool,
@@ -913,6 +1068,7 @@ pub(crate) async fn run_suite(
 ) -> FixedBindingArrayProof {
     FixedBindingArrayProof {
         storage_buffer: run_storage_buffer_array_proof(backend, fallback).await,
+        uniform_buffer: run_uniform_buffer_array_proof(backend, fallback).await,
         sampled_texture: run_sampled_texture_array_proof(backend, fallback).await,
         sampler: run_sampler_array_proof(backend, fallback).await,
         storage_texture: run_storage_texture_array_proof(backend, fallback).await,
