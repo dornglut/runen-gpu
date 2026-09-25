@@ -435,6 +435,7 @@ pub enum GpuProgramBindingRealizationErrorCategory {
     WgslParseOrValidationFailed,
     ShaderValidationPathMismatch,
     ProgramInterfaceMismatch,
+    RequirementNotAdmitted,
     ObservedStageIoInvalid,
     UnknownLayout,
     LayoutDescriptorInvalid,
@@ -472,6 +473,9 @@ impl GpuProgramBindingRealizationErrorCategory {
             }
             Self::ProgramInterfaceMismatch => {
                 "make explicit program declarations agree with normalized WGSL evidence"
+            }
+            Self::RequirementNotAdmitted => {
+                "admit every required program capability when requesting the GPU context"
             }
             Self::ObservedStageIoInvalid => {
                 "use supported, unambiguous vertex-input and fragment-output WGSL signatures"
