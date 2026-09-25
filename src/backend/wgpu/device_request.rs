@@ -593,7 +593,20 @@ mod tests {
         enabled_features: impl IntoIterator<Item = GpuCapabilityFeature>,
     ) -> crate::GpuCandidateAdmissionReport {
         let enabled_features = enabled_features.into_iter().collect::<Vec<_>>();
-        let limits = test_gpu_limits();
+        let limits = test_gpu_limits().with_binding_array_limits(
+            if enabled_features.contains(&GpuCapabilityFeature::TextureBindingArray)
+                || enabled_features.contains(&GpuCapabilityFeature::BufferBindingArray)
+            {
+                500_000
+            } else {
+                0
+            },
+            if enabled_features.contains(&GpuCapabilityFeature::TextureBindingArray) {
+                1_000
+            } else {
+                0
+            },
+        );
         let facts = GpuAdapterFacts::new(
             GpuBackendFamily::Vulkan,
             GpuAdapterClass::Discrete,
@@ -704,6 +717,11 @@ mod tests {
             requested.max_vertex_buffer_array_stride,
             budget.max_vertex_buffer_array_stride()
         );
+        assert_eq!(requested.max_binding_array_elements_per_shader_stage, 0);
+        assert_eq!(
+            requested.max_binding_array_sampler_elements_per_shader_stage,
+            0
+        );
         assert_eq!(requested.min_uniform_buffer_offset_alignment, 256);
         assert_eq!(requested.min_storage_buffer_offset_alignment, 256);
     }
@@ -719,6 +737,8 @@ mod tests {
         native.max_texture_array_layers = 128;
         native.max_vertex_attributes = 12;
         native.max_vertex_buffer_array_stride = 1024;
+        native.max_binding_array_elements_per_shader_stage = 123_456;
+        native.max_binding_array_sampler_elements_per_shader_stage = 789;
         native.min_uniform_buffer_offset_alignment = 512;
         let facts = map_device_limits(&native);
         assert_eq!(facts.values().max_vertex_buffers(), 12);
@@ -729,6 +749,18 @@ mod tests {
         assert_eq!(facts.values().max_texture_array_layers(), 128);
         assert_eq!(facts.values().max_vertex_attributes(), 12);
         assert_eq!(facts.values().max_vertex_buffer_array_stride(), 1024);
+        assert_eq!(
+            facts
+                .values()
+                .max_binding_array_elements_per_shader_stage(),
+            123_456
+        );
+        assert_eq!(
+            facts
+                .values()
+                .max_binding_array_sampler_elements_per_shader_stage(),
+            789
+        );
         assert_eq!(facts.alignments().uniform_dynamic_offset, Some(512));
     }
 
@@ -905,6 +937,15 @@ mod tests {
             Features::TEXTURE_BINDING_ARRAY
                 | Features::BUFFER_BINDING_ARRAY
                 | Features::STORAGE_RESOURCE_BINDING_ARRAY
+        );
+        let requested = requested_limits(&candidate).unwrap();
+        assert_eq!(
+            requested.max_binding_array_elements_per_shader_stage,
+            500_000
+        );
+        assert_eq!(
+            requested.max_binding_array_sampler_elements_per_shader_stage,
+            1_000
         );
         assert_eq!(
             wgpu_features_for(GpuCapabilityFeature::UniformBufferBindingArray),
