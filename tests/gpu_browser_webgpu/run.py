@@ -756,7 +756,7 @@ def main() -> int:
             "Packed32",
             packed_names,
             "Sampled",
-            "sampled-usage resource realization",
+            "sampled texture-view and bind-group realization",
         )
         report_optional_format_roles(
             value,
@@ -764,7 +764,7 @@ def main() -> int:
             "Packed32",
             packed_names,
             "ColorAttachment",
-            "color-attachment resource realization with admitted role",
+            "submitted color-attachment clear render pass with admitted role",
         )
         report_depth_proofs(value)
         report_stencil8_proof(value)
