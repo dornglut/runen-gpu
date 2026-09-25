@@ -1100,7 +1100,8 @@ impl GpuTextureViewDescriptor {
             .usages()
             .contains(GpuTextureUsage::TransientAttachment)
         {
-            let exact_parent_format = format.is_none_or(|view_format| view_format == parent.format());
+            let exact_parent_format =
+                format.is_none_or(|view_format| view_format == parent.format());
             let exact_subresource = dimension == GpuTextureViewDimension::D2
                 && subresources.base_mip_level() == 0
                 && subresources.mip_level_count() == 1
