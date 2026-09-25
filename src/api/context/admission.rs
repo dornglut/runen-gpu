@@ -493,13 +493,12 @@ fn effective_workload_budget(
     } else {
         0
     };
-    let sampler_binding_array_baseline = if enabled_features
-        .contains(&GpuCapabilityFeature::TextureBindingArray)
-    {
-        1_000
-    } else {
-        0
-    };
+    let sampler_binding_array_baseline =
+        if enabled_features.contains(&GpuCapabilityFeature::TextureBindingArray) {
+            1_000
+        } else {
+            0
+        };
     let baseline = normalized_limit_baseline().with_binding_array_limits(
         general_binding_array_baseline,
         sampler_binding_array_baseline,
