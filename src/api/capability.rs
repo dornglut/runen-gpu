@@ -346,6 +346,8 @@ pub struct GpuLimits {
     max_texture_array_layers: u32,
     max_vertex_attributes: u32,
     max_vertex_buffer_array_stride: u32,
+    max_binding_array_elements_per_shader_stage: u32,
+    max_binding_array_sampler_elements_per_shader_stage: u32,
 }
 
 impl GpuLimits {
@@ -413,6 +415,8 @@ impl GpuLimits {
             max_texture_array_layers,
             max_vertex_attributes,
             max_vertex_buffer_array_stride,
+            max_binding_array_elements_per_shader_stage: 0,
+            max_binding_array_sampler_elements_per_shader_stage: 0,
         })
     }
 
@@ -468,6 +472,29 @@ impl GpuLimits {
         self.max_vertex_buffer_array_stride
     }
 
+    pub const fn max_binding_array_elements_per_shader_stage(self) -> u32 {
+        self.max_binding_array_elements_per_shader_stage
+    }
+
+    pub const fn max_binding_array_sampler_elements_per_shader_stage(self) -> u32 {
+        self.max_binding_array_sampler_elements_per_shader_stage
+    }
+
+    /// Enriches normalized limits with fixed binding-array element budgets.
+    ///
+    /// Zero is a truthful value for contexts/backends where fixed binding arrays are not admitted.
+    pub const fn with_binding_array_limits(
+        mut self,
+        max_binding_array_elements_per_shader_stage: u32,
+        max_binding_array_sampler_elements_per_shader_stage: u32,
+    ) -> Self {
+        self.max_binding_array_elements_per_shader_stage =
+            max_binding_array_elements_per_shader_stage;
+        self.max_binding_array_sampler_elements_per_shader_stage =
+            max_binding_array_sampler_elements_per_shader_stage;
+        self
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub(crate) const fn from_validated_adapter_facts(
         max_uniform_buffer_binding_size: u64,
@@ -506,6 +533,8 @@ impl GpuLimits {
             max_texture_array_layers,
             max_vertex_attributes,
             max_vertex_buffer_array_stride,
+            max_binding_array_elements_per_shader_stage: 0,
+            max_binding_array_sampler_elements_per_shader_stage: 0,
         }
     }
 }
