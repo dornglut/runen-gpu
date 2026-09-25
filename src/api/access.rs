@@ -299,7 +299,7 @@ fn canonical_aspect(value: GpuTextureAspect, parent: GpuTextureAspect) -> GpuTex
     }
 }
 
-fn intersect_aspects(
+pub(crate) fn intersect_aspects(
     left: GpuTextureAspect,
     right: GpuTextureAspect,
     parent: GpuTextureAspect,

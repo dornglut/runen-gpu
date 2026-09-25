@@ -597,12 +597,16 @@ impl GpuInitialCoverage {
                     "keep initialized mip, layer, and aspect coverage inside the texture view",
                 ));
             }
-            let aspect = canonical_texture_aspect(checked.aspect(), parent_aspect);
-            for mip in checked.base_mip_level()..checked.mip_end() {
-                by_mip
-                    .entry((mip, aspect))
-                    .or_default()
-                    .push((checked.base_array_layer(), checked.layer_end()));
+            for aspect in atomic_texture_aspects(checked.aspect(), parent_aspect)
+                .into_iter()
+                .flatten()
+            {
+                for mip in checked.base_mip_level()..checked.mip_end() {
+                    by_mip
+                        .entry((mip, aspect))
+                        .or_default()
+                        .push((checked.base_array_layer(), checked.layer_end()));
+                }
             }
         }
         if by_mip.is_empty() {
@@ -797,6 +801,21 @@ pub(super) fn canonical_texture_aspect(
         parent
     } else {
         aspect
+    }
+}
+
+pub(super) fn atomic_texture_aspects(
+    aspect: GpuTextureAspect,
+    parent: GpuTextureAspect,
+) -> [Option<GpuTextureAspect>; 2] {
+    let canonical = canonical_texture_aspect(aspect, parent);
+    if canonical == GpuTextureAspect::All {
+        [
+            Some(GpuTextureAspect::DepthOnly),
+            Some(GpuTextureAspect::StencilOnly),
+        ]
+    } else {
+        [Some(canonical), None]
     }
 }
 

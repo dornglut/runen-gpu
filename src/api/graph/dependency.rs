@@ -1,7 +1,8 @@
 use super::super::{
     GpuBufferRange, GpuQueryRange, GpuResourceAccess, GpuTextureSubresourceRange, GpuWorkResourceId,
 };
-use super::coverage::{canonical_texture_aspect, texture_aspect};
+use super::coverage::texture_aspect;
+use crate::api::access::intersect_aspects;
 use super::identity::GpuPreparedWorkNodeId;
 use core::fmt;
 
@@ -102,8 +103,8 @@ pub(super) fn access_intersection(
             let right_range = right.normalized_subresources();
             let texture = left.normalized_texture();
             let parent_aspect = texture_aspect(texture);
-            let left_aspect = canonical_texture_aspect(left_range.aspect(), parent_aspect);
-            let right_aspect = canonical_texture_aspect(right_range.aspect(), parent_aspect);
+            let aspect =
+                intersect_aspects(left_range.aspect(), right_range.aspect(), parent_aspect)?;
             let mip_start = left_range
                 .base_mip_level()
                 .max(right_range.base_mip_level());
@@ -112,7 +113,7 @@ pub(super) fn access_intersection(
                 .base_array_layer()
                 .max(right_range.base_array_layer());
             let layer_end = left_range.layer_end().min(right_range.layer_end());
-            if mip_start >= mip_end || layer_start >= layer_end || left_aspect != right_aspect {
+            if mip_start >= mip_end || layer_start >= layer_end {
                 return None;
             }
             GpuDependencyRegion::Texture(
@@ -122,7 +123,7 @@ pub(super) fn access_intersection(
                     mip_end - mip_start,
                     layer_start,
                     layer_end - layer_start,
-                    left_aspect,
+                    aspect,
                 )
                 .ok()?,
             )

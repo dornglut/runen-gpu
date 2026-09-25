@@ -12,7 +12,7 @@ use super::{
     composition::ImportBindings,
     coverage::{
         GpuInitialCoverage, GpuInitialCoverageData, buffer_coverage_contains,
-        canonical_storage_resource, canonical_texture_aspect, coverage_source_error,
+        atomic_texture_aspects, canonical_storage_resource, coverage_source_error,
         intersect_buffer_coverage, normalize_buffer_coverage, normalize_u32_intervals,
         storage_identity, texture_aspect,
     },
@@ -182,16 +182,20 @@ fn coverage_for_access(access: &GpuResourceAccess) -> InitializedCoverage {
         },
         GpuResourceAccess::Texture(access) => {
             let range = access.normalized_subresources();
-            let aspect = canonical_texture_aspect(
+            let mut subresources = BTreeMap::new();
+            for aspect in atomic_texture_aspects(
                 range.aspect(),
                 texture_aspect(access.normalized_texture()),
-            );
-            let mut subresources = BTreeMap::new();
-            for mip in range.base_mip_level()..range.mip_end() {
-                subresources.insert(
-                    (mip, aspect),
-                    vec![(range.base_array_layer(), range.layer_end())],
-                );
+            )
+            .into_iter()
+            .flatten()
+            {
+                for mip in range.base_mip_level()..range.mip_end() {
+                    subresources.insert(
+                        (mip, aspect),
+                        vec![(range.base_array_layer(), range.layer_end())],
+                    );
+                }
             }
             InitializedCoverage::Texture(subresources)
         }
@@ -243,8 +247,13 @@ fn descriptor_texture_coverage(texture: &GpuTextureHandle) -> InitializedCoverag
         GpuTextureDimension::D1 | GpuTextureDimension::D3 => 1,
     };
     let mut ranges = BTreeMap::new();
-    for mip in 0..mip_count {
-        ranges.insert((mip, texture_aspect(texture)), vec![(0, layers)]);
+    for aspect in atomic_texture_aspects(GpuTextureAspect::All, texture_aspect(texture))
+        .into_iter()
+        .flatten()
+    {
+        for mip in 0..mip_count {
+            ranges.insert((mip, aspect), vec![(0, layers)]);
+        }
     }
     InitializedCoverage::Texture(ranges)
 }
@@ -265,7 +274,12 @@ fn prepared_initial_content_coverage(candidate: &GpuPreparedInitialContent) -> I
                 GpuTextureDimension::D1 | GpuTextureDimension::D3 => 1,
             };
             let mut ranges = BTreeMap::new();
-            ranges.insert((0, texture_aspect(texture)), vec![(0, layers)]);
+            for aspect in atomic_texture_aspects(GpuTextureAspect::All, texture_aspect(texture))
+                .into_iter()
+                .flatten()
+            {
+                ranges.insert((0, aspect), vec![(0, layers)]);
+            }
             InitializedCoverage::Texture(ranges)
         }
     }
@@ -375,13 +389,17 @@ fn texture_range_coverage(
     texture: &GpuTextureHandle,
     range: GpuTextureSubresourceRange,
 ) -> InitializedCoverage {
-    let aspect = canonical_texture_aspect(range.aspect(), texture_aspect(texture));
     let mut ranges = BTreeMap::new();
-    for mip in range.base_mip_level()..range.mip_end() {
-        ranges.insert(
-            (mip, aspect),
-            vec![(range.base_array_layer(), range.layer_end())],
-        );
+    for aspect in atomic_texture_aspects(range.aspect(), texture_aspect(texture))
+        .into_iter()
+        .flatten()
+    {
+        for mip in range.base_mip_level()..range.mip_end() {
+            ranges.insert(
+                (mip, aspect),
+                vec![(range.base_array_layer(), range.layer_end())],
+            );
+        }
     }
     InitializedCoverage::Texture(ranges)
 }
@@ -811,8 +829,13 @@ fn whole_texture_coverage(
         GpuTextureDimension::D1 | GpuTextureDimension::D3 => 1,
     };
     let mut ranges = BTreeMap::new();
-    for mip in 0..descriptor.mip_level_count() {
-        ranges.insert((mip, texture_aspect(texture)), vec![(0, layers)]);
+    for aspect in atomic_texture_aspects(GpuTextureAspect::All, texture_aspect(texture))
+        .into_iter()
+        .flatten()
+    {
+        for mip in 0..descriptor.mip_level_count() {
+            ranges.insert((mip, aspect), vec![(0, layers)]);
+        }
     }
     InitializedCoverage::Texture(ranges)
 }
