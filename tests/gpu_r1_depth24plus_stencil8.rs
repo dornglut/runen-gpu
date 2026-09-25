@@ -68,8 +68,25 @@ fn requirements() -> GpuCapabilityRequirements {
     requirements
 }
 
-fn combined_context() -> GpuContext {
-    let descriptor = GpuContextDescriptor::new(requirements())
+fn combined_context() -> (GpuContext, bool) {
+    let census = pollster::block_on(GpuContext::request(
+        GpuContextDescriptor::new(requirements())
+            .with_fallback_policy(GpuSoftwareFallbackPolicy::Require)
+            .with_allowed_backends([GpuBackendFamily::Vulkan])
+            .with_label("R1 native Depth24PlusStencil8 census"),
+    ))
+    .expect("native conformance must provide the declared Vulkan fallback environment");
+    let facts = census
+        .adapter_facts()
+        .supported()
+        .format(GpuTextureFormat::Depth24PlusStencil8)
+        .expect("Depth24PlusStencil8 must remain in the normalized format census");
+    assert!(
+        facts.depth_stencil && facts.copy_source && facts.copy_destination,
+        "native conformance must provide baseline Depth24PlusStencil8 attachment and copy roles"
+    );
+
+    let mut descriptor = GpuContextDescriptor::new(requirements())
         .require_format_role(
             GpuTextureFormat::Depth24PlusStencil8,
             GpuFormatRole::DepthStencil,
@@ -81,13 +98,21 @@ fn combined_context() -> GpuContext {
         .require_format_role(
             GpuTextureFormat::Depth24PlusStencil8,
             GpuFormatRole::CopyDestination,
-        )
-        .with_fallback_policy(GpuSoftwareFallbackPolicy::Require)
-        .with_allowed_backends([GpuBackendFamily::Vulkan])
-        .with_label("R1 native Depth24PlusStencil8 proof");
-    pollster::block_on(GpuContext::request(descriptor)).expect(
-        "native conformance must provide baseline Depth24PlusStencil8 attachment and copy roles",
-    )
+        );
+    if facts.sampled {
+        descriptor = descriptor.require_format_role(
+            GpuTextureFormat::Depth24PlusStencil8,
+            GpuFormatRole::Sampled,
+        );
+    }
+    let context = pollster::block_on(GpuContext::request(
+        descriptor
+            .with_fallback_policy(GpuSoftwareFallbackPolicy::Require)
+            .with_allowed_backends([GpuBackendFamily::Vulkan])
+            .with_label("R1 native Depth24PlusStencil8 execution proof"),
+    ))
+    .expect("advertised native combined roles must admit an execution context");
+    (context, facts.sampled)
 }
 
 fn combined_texture(
@@ -381,13 +406,7 @@ fn wait_for_readback(
 }
 
 fn run_native_combined(width: u32) {
-    let context = combined_context();
-    let sampled = context
-        .adapter_facts()
-        .supported()
-        .format(GpuTextureFormat::Depth24PlusStencil8)
-        .expect("combined format must remain in the admitted census")
-        .sampled;
+    let (context, sampled) = combined_context();
     let mut allocator = GpuWorkResourceIdAllocator::new();
     let (source, source_view) = combined_texture(
         &mut allocator,
