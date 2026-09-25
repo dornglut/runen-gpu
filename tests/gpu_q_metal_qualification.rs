@@ -1,3 +1,5 @@
+#![allow(clippy::duplicate_mod)] // Reuses retained standalone proof modules that each own the shared readback helper.
+
 use runen_gpu::*;
 use serde_json::{Map, Value, json};
 use std::path::{Path, PathBuf};
