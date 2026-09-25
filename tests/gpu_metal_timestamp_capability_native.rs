@@ -17,8 +17,9 @@ fn apple_metal_preferred_timestamp_request_disables_instrumentation_without_losi
         .with_allowed_backends([GpuBackendFamily::Metal])
         .with_label("Apple Metal timestamp capability truth proof");
 
-    let context = pollster::block_on(GpuContext::request(descriptor))
-        .expect("Apple Metal context must remain creatable when timestamp instrumentation degrades");
+    let context = pollster::block_on(GpuContext::request(descriptor)).expect(
+        "Apple Metal context must remain creatable when timestamp instrumentation degrades",
+    );
 
     assert_eq!(context.adapter_facts().backend(), GpuBackendFamily::Metal);
     assert!(
