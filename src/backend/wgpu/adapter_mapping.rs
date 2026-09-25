@@ -95,6 +95,8 @@ fn normalized_limits(native: &wgpu::Limits) -> GpuLimits {
         native.max_color_attachments,
         native.max_vertex_buffers,
         native.max_bindings_per_bind_group,
+        native.max_binding_array_elements_per_shader_stage,
+        native.max_binding_array_sampler_elements_per_shader_stage,
         native.max_texture_dimension_2d,
         native.max_bind_groups,
         native.max_bind_groups_plus_vertex_buffers,
