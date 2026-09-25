@@ -66,7 +66,8 @@ Metal qualification lane on GitHub-hosted Apple-Silicon macOS. The workflow
 does not treat the runner label as support evidence: the retained test requires
 an actual normalized `GpuBackendFamily::Metal` context, records the exact Git
 revision plus macOS/architecture/hardware, sanitized adapter facts, normalized
-adapter/device limits, and normalized capability support/enabled facts, executes
+adapter/device limits, normalized capability support/enabled facts, and a bounded
+private-WGPU feature/limit characterization correlated to the same Metal adapter, executes
 the exact 4097-element prefix-scan oracle in both modes, executes indexed and
 compute-generated-indirect offscreen exact-readback oracles, reuses the retained
 8-bit/16-bit/packed vertex suites, blend and baseline depth-bias suites, realizes
@@ -81,8 +82,9 @@ scripts/qualify-m3.sh
 ```
 
 That harness requires a clean exact checkout on macOS arm64, reuses the same
-public-API qualification test and normalized capability/limit evidence, requires
-the runtime chip identity to be Apple M3/M3 Pro/M3 Max, writes its report under
+public-API qualification test, normalized capability/limit evidence, and the
+bounded private-WGPU characterization, requires the runtime chip identity to be
+Apple M3/M3 Pro/M3 Max, writes its report under
 ignored `target/` state by default,
 and verifies that the repository remains clean. The report intentionally
 records model/chip and sanitized GPU adapter facts without retaining serial
