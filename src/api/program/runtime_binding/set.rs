@@ -3,8 +3,9 @@ use super::{
     GpuValidatedBindGroupBindings,
 };
 use crate::{
-    GpuBindingClass, GpuBindingDeclaration, GpuBufferAccess, GpuBufferAccessKind, GpuBufferRange,
-    GpuPipelineLayoutDescriptor, GpuProgramContractCause, GpuProgramContractError,
+    GpuBindGroupLayoutDescriptor, GpuBindingClass, GpuBindingDeclaration, GpuBufferAccess,
+    GpuBufferAccessKind, GpuBufferRange, GpuPipelineLayoutDescriptor, GpuProgramContractCause,
+    GpuProgramContractError,
     GpuResourceAccess, GpuSamplerUse, GpuShaderStage, GpuStorageBufferAccess,
     GpuStorageTextureAccess, GpuTextureAccess, GpuTextureAccessKind, GpuTextureAccessResource,
 };
@@ -99,6 +100,20 @@ impl GpuRuntimeBindingSet {
             group.validate_device_facts(device_facts)?;
         }
         Ok(())
+    }
+
+    pub(crate) fn validate_pipeline_layout_device_facts(
+        layout: &GpuPipelineLayoutDescriptor,
+        device_facts: &GpuRuntimeBindingDeviceFacts,
+    ) -> Result<(), GpuProgramContractError> {
+        validate_pipeline_binding_limits(layout, device_facts)
+    }
+
+    pub(crate) fn validate_bind_group_layout_array_limits(
+        layout: &GpuBindGroupLayoutDescriptor,
+        device_facts: &GpuRuntimeBindingDeviceFacts,
+    ) -> Result<(), GpuProgramContractError> {
+        validate_binding_array_limits(core::iter::once(layout), device_facts)
     }
 }
 
@@ -291,23 +306,9 @@ fn validate_pipeline_binding_limits(
 
     let mut dynamic_uniform_buffers = 0_u64;
     let mut dynamic_storage_buffers = 0_u64;
-    let mut binding_array_elements = [0_u32; 3];
-    let mut binding_array_sampler_elements = [0_u32; 3];
 
     for group in layout.groups() {
         for declaration in group.bindings() {
-            if let Some(count) = declaration.array_count() {
-                for stage in declaration.visibility().iter() {
-                    let index = shader_stage_index(stage);
-                    binding_array_elements[index] =
-                        binding_array_elements[index].saturating_add(count.get());
-                    if declaration.kind().class() == GpuBindingClass::Sampler {
-                        binding_array_sampler_elements[index] =
-                            binding_array_sampler_elements[index].saturating_add(count.get());
-                    }
-                }
-            }
-
             if !declaration.kind().uses_dynamic_offset() {
                 continue;
             }
@@ -341,6 +342,33 @@ fn validate_pipeline_binding_limits(
             "dynamic storage buffers",
             "reduce dynamic storage-buffer declarations to the admitted pipeline-layout limit",
         ));
+    }
+
+    validate_binding_array_limits(layout.groups(), device_facts)
+}
+
+fn validate_binding_array_limits<'a>(
+    groups: impl IntoIterator<Item = &'a GpuBindGroupLayoutDescriptor>,
+    device_facts: &GpuRuntimeBindingDeviceFacts,
+) -> Result<(), GpuProgramContractError> {
+    let mut binding_array_elements = [0_u32; 3];
+    let mut binding_array_sampler_elements = [0_u32; 3];
+
+    for group in groups {
+        for declaration in group.bindings() {
+            let Some(count) = declaration.array_count() else {
+                continue;
+            };
+            for stage in declaration.visibility().iter() {
+                let index = shader_stage_index(stage);
+                binding_array_elements[index] =
+                    binding_array_elements[index].saturating_add(count.get());
+                if declaration.kind().class() == GpuBindingClass::Sampler {
+                    binding_array_sampler_elements[index] =
+                        binding_array_sampler_elements[index].saturating_add(count.get());
+                }
+            }
+        }
     }
 
     let required_binding_array_elements = binding_array_elements.into_iter().max().unwrap_or(0);
