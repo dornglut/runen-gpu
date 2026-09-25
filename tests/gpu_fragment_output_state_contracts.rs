@@ -1,9 +1,8 @@
 use runen_gpu::{
     GpuBlendComponent, GpuBlendFactor, GpuBlendOperation, GpuBlendState,
-    GpuColorTargetStateDescriptor, GpuColorWriteMask, GpuCompareFunction,
-    GpuDepthStateDescriptor, GpuDepthStencilStateDescriptor, GpuEntryPointName,
-    GpuFragmentOutputStateDescriptor, GpuProgramContractCause, GpuShaderIoScalarClass,
-    GpuTextureFormat,
+    GpuColorTargetStateDescriptor, GpuColorWriteMask, GpuCompareFunction, GpuDepthStateDescriptor,
+    GpuDepthStencilStateDescriptor, GpuEntryPointName, GpuFragmentOutputStateDescriptor,
+    GpuProgramContractCause, GpuShaderIoScalarClass, GpuTextureFormat,
 };
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
@@ -84,17 +83,17 @@ fn color_target_state_rejects_depth_and_integer_alpha_blending() {
     let integer_alpha = GpuColorTargetStateDescriptor::new(
         GpuTextureFormat::R32Uint,
         Some(GpuBlendState::new(
-                    GpuBlendComponent::new(
-                        GpuBlendFactor::SrcAlpha,
-                        GpuBlendFactor::OneMinusSrcAlpha,
-                        GpuBlendOperation::Add,
-                    ),
-                    GpuBlendComponent::new(
-                        GpuBlendFactor::One,
-                        GpuBlendFactor::OneMinusSrcAlpha,
-                        GpuBlendOperation::Add,
-                    ),
-                )),
+            GpuBlendComponent::new(
+                GpuBlendFactor::SrcAlpha,
+                GpuBlendFactor::OneMinusSrcAlpha,
+                GpuBlendOperation::Add,
+            ),
+            GpuBlendComponent::new(
+                GpuBlendFactor::One,
+                GpuBlendFactor::OneMinusSrcAlpha,
+                GpuBlendOperation::Add,
+            ),
+        )),
         GpuColorWriteMask::ALL,
     )
     .expect_err("integer color targets cannot use alpha blending");

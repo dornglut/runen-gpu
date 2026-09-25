@@ -1,18 +1,18 @@
 use super::{
-    GpuAdmittedProgramSource, GpuBindingLayoutRefinement, GpuBufferDescriptor,
-    GpuBufferHandle, GpuColorTargetStateDescriptor, GpuColorWriteMask,
-    GpuComputePipelineDescriptor, GpuContext, GpuEntryPointName, GpuFragmentOutputStateDescriptor,
-    GpuMultisampleStateDescriptor, GpuPipelineConfiguration, GpuPrimitiveStateDescriptor,
-    GpuProgramContractError, GpuProgramDescriptor, GpuProgramSourceCause, GpuProgramSourceError,
-    GpuProgramSourceIdentity, GpuProgramSourceKey, GpuProgramSourceOwnerId,
-    GpuProgramSourceProvenance, GpuProgramSourceRegistry, GpuProgramSourceRevision,
-    GpuQuerySetDescriptor, GpuQuerySetHandle, GpuRenderEntryPoints, GpuRenderPipelineDescriptor,
-    GpuRenderPipelineStateDescriptor, GpuResourceDescriptorError, GpuResourceLabel,
-    GpuSamplerDescriptor, GpuSamplerHandle, GpuSubmission, GpuSubmissionPreparationError,
-    GpuSubmissionRejectionReason, GpuTextureDescriptor, GpuTextureFormat, GpuTextureHandle,
-    GpuTextureViewDescriptor, GpuTextureViewHandle, GpuVertexInputStateDescriptor,
-    GpuWorkAuthoringError, GpuWorkFragment, GpuWorkFragmentBuilder, GpuWorkGraphError,
-    GpuWorkNodeId, GpuWorkOperation, GpuWorkResourceIdAllocationError, GpuWorkResourceIdAllocator,
+    GpuAdmittedProgramSource, GpuBindingLayoutRefinement, GpuBufferDescriptor, GpuBufferHandle,
+    GpuColorTargetStateDescriptor, GpuColorWriteMask, GpuComputePipelineDescriptor, GpuContext,
+    GpuEntryPointName, GpuFragmentOutputStateDescriptor, GpuMultisampleStateDescriptor,
+    GpuPipelineConfiguration, GpuPrimitiveStateDescriptor, GpuProgramContractError,
+    GpuProgramDescriptor, GpuProgramSourceCause, GpuProgramSourceError, GpuProgramSourceIdentity,
+    GpuProgramSourceKey, GpuProgramSourceOwnerId, GpuProgramSourceProvenance,
+    GpuProgramSourceRegistry, GpuProgramSourceRevision, GpuQuerySetDescriptor, GpuQuerySetHandle,
+    GpuRenderEntryPoints, GpuRenderPipelineDescriptor, GpuRenderPipelineStateDescriptor,
+    GpuResourceDescriptorError, GpuResourceLabel, GpuSamplerDescriptor, GpuSamplerHandle,
+    GpuSubmission, GpuSubmissionPreparationError, GpuSubmissionRejectionReason,
+    GpuTextureDescriptor, GpuTextureFormat, GpuTextureHandle, GpuTextureViewDescriptor,
+    GpuTextureViewHandle, GpuVertexInputStateDescriptor, GpuWorkAuthoringError, GpuWorkFragment,
+    GpuWorkFragmentBuilder, GpuWorkGraphError, GpuWorkNodeId, GpuWorkOperation,
+    GpuWorkResourceIdAllocationError, GpuWorkResourceIdAllocator,
 };
 use core::fmt;
 
@@ -164,11 +164,7 @@ impl GpuRenderPipelineDescriptor {
         let state = GpuRenderPipelineStateDescriptor::new(
             GpuVertexInputStateDescriptor::new([])?,
             Some(GpuFragmentOutputStateDescriptor::new([
-                GpuColorTargetStateDescriptor::new(
-                    format,
-                    None,
-                    GpuColorWriteMask::ALL,
-                )?,
+                GpuColorTargetStateDescriptor::new(format, None, GpuColorWriteMask::ALL)?,
             ])),
             GpuPrimitiveStateDescriptor::default(),
             None,

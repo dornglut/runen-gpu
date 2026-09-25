@@ -1,6 +1,6 @@
 use runen_gpu::{
-    GpuColorTargetStateDescriptor, GpuColorWriteMask, GpuCompareFunction,
-    GpuDepthStateDescriptor, GpuDepthStencilStateDescriptor, GpuFragmentOutputStateDescriptor,
+    GpuColorTargetStateDescriptor, GpuColorWriteMask, GpuCompareFunction, GpuDepthStateDescriptor,
+    GpuDepthStencilStateDescriptor, GpuFragmentOutputStateDescriptor,
     GpuMultisampleStateDescriptor, GpuPrimitiveStateDescriptor, GpuProgramContractCause,
     GpuRenderPipelineStateDescriptor, GpuTextureFormat, GpuVertexInputStateDescriptor,
 };

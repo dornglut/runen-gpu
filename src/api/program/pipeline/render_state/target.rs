@@ -441,8 +441,7 @@ mod tests {
     use super::*;
 
     fn target(format: GpuTextureFormat) -> GpuColorTargetStateDescriptor {
-        GpuColorTargetStateDescriptor::new(format, None, GpuColorWriteMask::ALL)
-            .unwrap()
+        GpuColorTargetStateDescriptor::new(format, None, GpuColorWriteMask::ALL).unwrap()
     }
 
     #[test]
@@ -548,12 +547,7 @@ mod tests {
             GpuTextureFormat::Depth32Float,
         ] {
             assert!(
-                GpuColorTargetStateDescriptor::new(
-                    format,
-                    None,
-                    GpuColorWriteMask::ALL,
-                )
-                .is_err()
+                GpuColorTargetStateDescriptor::new(format, None, GpuColorWriteMask::ALL,).is_err()
             );
             assert!(
                 GpuDepthStencilStateDescriptor::new(
@@ -577,28 +571,23 @@ mod tests {
                 GpuColorTargetStateDescriptor::new(
                     format,
                     Some(GpuBlendState::new(
-                    GpuBlendComponent::new(
-                        GpuBlendFactor::SrcAlpha,
-                        GpuBlendFactor::OneMinusSrcAlpha,
-                        GpuBlendOperation::Add,
-                    ),
-                    GpuBlendComponent::new(
-                        GpuBlendFactor::One,
-                        GpuBlendFactor::OneMinusSrcAlpha,
-                        GpuBlendOperation::Add,
-                    ),
-                )),
+                        GpuBlendComponent::new(
+                            GpuBlendFactor::SrcAlpha,
+                            GpuBlendFactor::OneMinusSrcAlpha,
+                            GpuBlendOperation::Add,
+                        ),
+                        GpuBlendComponent::new(
+                            GpuBlendFactor::One,
+                            GpuBlendFactor::OneMinusSrcAlpha,
+                            GpuBlendOperation::Add,
+                        ),
+                    )),
                     GpuColorWriteMask::ALL,
                 )
                 .is_err()
             );
             assert!(
-                GpuColorTargetStateDescriptor::new(
-                    format,
-                    None,
-                    GpuColorWriteMask::ALL,
-                )
-                .is_ok()
+                GpuColorTargetStateDescriptor::new(format, None, GpuColorWriteMask::ALL,).is_ok()
             );
         }
         assert!(

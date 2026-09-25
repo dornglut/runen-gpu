@@ -187,12 +187,8 @@ fn fragment_output_shape_and_integer_blend_rules_follow_format_semantics() {
             true,
         ),
     ] {
-        let target = GpuColorTargetStateDescriptor::new(
-            format,
-            None,
-            GpuColorWriteMask::ALL,
-        )
-        .unwrap();
+        let target =
+            GpuColorTargetStateDescriptor::new(format, None, GpuColorWriteMask::ALL).unwrap();
         let signature = GpuFragmentOutputStateDescriptor::new([target])
             .expected_signature(GpuEntryPointName::new("fragment_main").unwrap())
             .unwrap();
@@ -227,14 +223,7 @@ fn fragment_output_shape_and_integer_blend_rules_follow_format_semantics() {
             )
             .is_err()
         );
-        assert!(
-            GpuColorTargetStateDescriptor::new(
-                format,
-                None,
-                GpuColorWriteMask::ALL,
-            )
-            .is_ok()
-        );
+        assert!(GpuColorTargetStateDescriptor::new(format, None, GpuColorWriteMask::ALL,).is_ok());
     }
 }
 

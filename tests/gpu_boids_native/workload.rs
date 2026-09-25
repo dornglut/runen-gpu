@@ -284,17 +284,17 @@ fn render_pipeline(source: &GpuAdmittedProgramSource) -> GpuRenderPipelineDescri
     let target = GpuColorTargetStateDescriptor::new(
         GpuTextureFormat::Rgba8Unorm,
         Some(GpuBlendState::new(
-                    GpuBlendComponent::new(
-                        GpuBlendFactor::SrcAlpha,
-                        GpuBlendFactor::OneMinusSrcAlpha,
-                        GpuBlendOperation::Add,
-                    ),
-                    GpuBlendComponent::new(
-                        GpuBlendFactor::One,
-                        GpuBlendFactor::OneMinusSrcAlpha,
-                        GpuBlendOperation::Add,
-                    ),
-                )),
+            GpuBlendComponent::new(
+                GpuBlendFactor::SrcAlpha,
+                GpuBlendFactor::OneMinusSrcAlpha,
+                GpuBlendOperation::Add,
+            ),
+            GpuBlendComponent::new(
+                GpuBlendFactor::One,
+                GpuBlendFactor::OneMinusSrcAlpha,
+                GpuBlendOperation::Add,
+            ),
+        )),
         GpuColorWriteMask::ALL,
     )
     .unwrap();

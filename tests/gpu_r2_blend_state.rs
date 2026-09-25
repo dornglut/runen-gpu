@@ -314,7 +314,10 @@ async fn wait_for_readback(
         }
         progress_yield().await;
     }
-    panic!("{} blend proof exceeded its bounded progress budget", case.name)
+    panic!(
+        "{} blend proof exceeded its bounded progress budget",
+        case.name
+    )
 }
 
 fn pixel_at(bytes: &GpuReadbackBytes, x: u32, y: u32) -> [u8; 4] {
@@ -410,7 +413,10 @@ fn blend_state_census_matches_portable_contract() {
     assert_eq!(factors.len(), 13);
     assert_eq!(operations.len(), 5);
 
-    assert_eq!(CUSTOM_BLEND.color().operation(), GpuBlendOperation::Subtract);
+    assert_eq!(
+        CUSTOM_BLEND.color().operation(),
+        GpuBlendOperation::Subtract
+    );
     assert_eq!(CUSTOM_BLEND.alpha().operation(), GpuBlendOperation::Add);
     assert_eq!(MIN_MAX_BLEND.color().operation(), GpuBlendOperation::Min);
     assert_eq!(MIN_MAX_BLEND.alpha().operation(), GpuBlendOperation::Max);

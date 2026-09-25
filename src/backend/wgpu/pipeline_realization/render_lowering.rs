@@ -2,9 +2,8 @@ use super::super::texture_format_mapping::texture_format;
 use super::render_mapping;
 use crate::{
     GpuBlendComponent, GpuBlendState, GpuColorTargetStateDescriptor, GpuContext,
-    GpuPipelineRealizationError,
-    GpuPipelineRealizationErrorCategory, GpuPrimitiveStateDescriptor, GpuRenderPipelineDescriptor,
-    GpuTextureFormat,
+    GpuPipelineRealizationError, GpuPipelineRealizationErrorCategory, GpuPrimitiveStateDescriptor,
+    GpuRenderPipelineDescriptor, GpuTextureFormat,
 };
 use wgpu::{
     BlendState, ColorTargetState, DepthBiasState, DepthStencilState, DownlevelFlags, Features,
