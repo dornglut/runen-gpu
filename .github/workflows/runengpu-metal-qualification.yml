@@ -139,6 +139,32 @@ jobs:
           assert report["environment"]["chip_type"]
           assert report["adapter"]["backend"] == "Metal"
           assert report["adapter"]["name"]
+          expected_limit_keys = {
+              "max_uniform_buffer_binding_size",
+              "max_storage_buffer_binding_size",
+              "max_color_attachments",
+              "max_vertex_buffers",
+              "max_bindings_per_group",
+              "max_texture_dimension_2d",
+              "max_bind_groups",
+              "max_bind_groups_plus_vertex_buffers",
+              "max_dynamic_uniform_buffers_per_pipeline_layout",
+              "max_dynamic_storage_buffers_per_pipeline_layout",
+              "max_compute_workgroups_per_dimension",
+              "max_buffer_size",
+              "max_texture_dimension_1d",
+              "max_texture_dimension_3d",
+              "max_texture_array_layers",
+              "max_vertex_attributes",
+              "max_vertex_buffer_array_stride",
+          }
+          for level in ("adapter", "device"):
+              limits = report["limits"][level]
+              assert set(limits) == expected_limit_keys
+              assert all(type(value) is int and value >= 0 for value in limits.values())
+              assert limits["max_buffer_size"] > 0
+              assert limits["max_texture_dimension_2d"] > 0
+              assert limits["max_compute_workgroups_per_dimension"] > 0
           assert report["proofs"]["prefix_scan_exclusive"] == "EXERCISED"
           assert report["proofs"]["prefix_scan_inclusive"] == "EXERCISED"
           assert report["proofs"]["indexed_offscreen_render"] == "EXERCISED"
