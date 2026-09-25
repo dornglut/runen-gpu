@@ -714,9 +714,7 @@ mod tests {
 
     #[test]
     fn binding_array_features_request_only_the_normalized_feature_scoped_budget() {
-        let texture = candidate_with_enabled_features([
-            GpuCapabilityFeature::TextureBindingArray,
-        ]);
+        let texture = candidate_with_enabled_features([GpuCapabilityFeature::TextureBindingArray]);
         let texture_budget = texture.contract().workload_budget().limits();
         assert_eq!(
             texture_budget.max_binding_array_elements_per_shader_stage(),
@@ -736,9 +734,7 @@ mod tests {
             1_000
         );
 
-        let buffer = candidate_with_enabled_features([
-            GpuCapabilityFeature::BufferBindingArray,
-        ]);
+        let buffer = candidate_with_enabled_features([GpuCapabilityFeature::BufferBindingArray]);
         let buffer_requested = requested_limits(&buffer).unwrap();
         assert_eq!(
             buffer_requested.max_binding_array_elements_per_shader_stage,
