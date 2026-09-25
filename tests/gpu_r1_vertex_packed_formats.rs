@@ -96,11 +96,8 @@ fn pipeline(case: PackedVertexCase) -> GpuRenderPipelineDescriptor {
         .admit_wgsl(
             identity,
             &source_text,
-            GpuProgramSourceProvenance::new(
-                format!("R1 packed vertex {} proof", case.name),
-                None,
-            )
-            .unwrap(),
+            GpuProgramSourceProvenance::new(format!("R1 packed vertex {} proof", case.name), None)
+                .unwrap(),
         )
         .unwrap();
     let vertex = GpuEntryPointName::new("vs_main").unwrap();

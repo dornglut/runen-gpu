@@ -496,7 +496,6 @@ fn vertex16_compact_scalar_offsets_use_two_byte_alignment_while_stride_stays_fou
     );
 }
 
-
 #[test]
 fn packed_vertex_formats_reuse_four_byte_alignment_and_float4_shader_io() {
     for format in [
