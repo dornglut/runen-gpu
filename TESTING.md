@@ -66,9 +66,11 @@ Metal qualification lane on GitHub-hosted Apple-Silicon macOS. The workflow
 does not treat the runner label as support evidence: the retained test requires
 an actual normalized `GpuBackendFamily::Metal` context, records the exact Git
 revision plus macOS/architecture/hardware and sanitized adapter facts, executes
-the exact 4097-element prefix-scan oracle in both modes, executes the indexed
-offscreen exact-readback oracle, and retains a JSON report. It also preserves
-the current conservative Metal `TimestampQuery` suppression.
+the exact 4097-element prefix-scan oracle in both modes, executes indexed and
+compute-generated-indirect offscreen exact-readback oracles, reuses the retained
+8-bit/16-bit/packed vertex suites, blend and baseline depth-bias suites, realizes
+anisotropic sampling, and retains a JSON report. It also preserves the current
+conservative Metal `TimestampQuery` suppression.
 
 Generic hosted Metal evidence is not Apple M3 evidence. The trusted owner-run
 actual-M3 path is:

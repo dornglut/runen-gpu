@@ -3,10 +3,24 @@ use serde_json::{Map, Value, json};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+#[path = "gpu_compute_generated_indirect_native.rs"]
+mod retained_indirect;
 #[path = "gpu_offscreen_indexed_native.rs"]
 mod retained_offscreen;
 #[path = "gpu_prefix_scan_native.rs"]
 mod retained_prefix_scan;
+#[path = "gpu_r1_vertex16_formats.rs"]
+mod retained_vertex16;
+#[path = "gpu_r1_vertex8_formats.rs"]
+mod retained_vertex8;
+#[path = "gpu_r1_vertex_packed_formats.rs"]
+mod retained_vertex_packed;
+#[path = "gpu_r2_blend_state.rs"]
+mod retained_blend;
+#[path = "gpu_r2_depth_bias.rs"]
+mod retained_depth_bias;
+#[path = "gpu_r2_sampler_anisotropy.rs"]
+mod retained_sampler_anisotropy;
 #[path = "support/readback_wait.rs"]
 mod readback_wait;
 
@@ -140,16 +154,25 @@ fn qualification_context(
     exclusive: &GpuPreparedWorkGraph,
     inclusive: &GpuPreparedWorkGraph,
     render: &GpuPreparedWorkGraph,
+    indirect: &GpuPreparedWorkGraph,
 ) -> GpuContext {
-    let requirements = exclusive
+    let mut requirements = exclusive
         .requirements()
         .merge(inclusive.requirements())
         .unwrap()
         .merge(render.requirements())
+        .unwrap()
+        .merge(indirect.requirements())
+        .unwrap();
+    requirements
+        .insert(GpuCapabilityRequirement::Required(
+            GpuCapabilityFeature::DepthAttachment,
+        ))
         .unwrap();
     let descriptor = GpuContextDescriptor::new(requirements)
         .require_format_role(GpuTextureFormat::Rgba8Unorm, GpuFormatRole::ColorAttachment)
         .require_format_role(GpuTextureFormat::Rgba8Unorm, GpuFormatRole::CopySource)
+        .require_format_role(GpuTextureFormat::Depth16Unorm, GpuFormatRole::DepthStencil)
         .with_allowed_backends([GpuBackendFamily::Metal])
         .with_label("RunenGPU generic Metal qualification");
     let context = pollster::block_on(GpuContext::request(descriptor))
@@ -207,6 +230,23 @@ async fn execute_render(
     )
     .await;
     retained_offscreen::assert_known_pattern(&bytes);
+}
+
+async fn execute_indirect(
+    context: &GpuContext,
+    graph: GpuPreparedWorkGraph,
+    readback_id: GpuReadbackId,
+) {
+    let prepared = context.prepare_submission(graph).await.unwrap();
+    let submission = context.submit_prepared(prepared).unwrap();
+    let bytes = readback_wait::wait_for_readback(
+        context,
+        &submission,
+        readback_id,
+        "Metal qualification compute-generated indirect draw",
+    )
+    .await;
+    retained_indirect::assert_rendered_pixels(&bytes);
 }
 
 fn capability_report(context: &GpuContext) -> Value {
@@ -277,8 +317,11 @@ fn metal_qualification_records_exact_public_api_evidence() {
     let (inclusive, inclusive_output, inclusive_total) =
         prefix_graph(&sources, retained_prefix_scan::ScanMode::Inclusive);
     let (render, render_readback) = retained_offscreen::render_graph();
+    let (indirect, indirect_readback, indirect_args, indirect_vertices) =
+        retained_indirect::graph();
+    retained_indirect::assert_graph_contract(&indirect, &indirect_args, &indirect_vertices);
 
-    let context = qualification_context(&exclusive, &inclusive, &render);
+    let context = qualification_context(&exclusive, &inclusive, &render, &indirect);
     let adapter = context.adapter_facts();
     let adapter_name = adapter
         .diagnostic_name()
@@ -313,6 +356,17 @@ fn metal_qualification_records_exact_public_api_evidence() {
         retained_prefix_scan::ScanMode::Inclusive,
     ));
     pollster::block_on(execute_render(&context, render, render_readback));
+    pollster::block_on(execute_indirect(
+        &context,
+        indirect,
+        indirect_readback,
+    ));
+    let vertex8_mask = pollster::block_on(retained_vertex8::run_suite(&context));
+    let vertex16_mask = pollster::block_on(retained_vertex16::run_suite(&context));
+    let vertex_packed_mask = pollster::block_on(retained_vertex_packed::run_suite(&context));
+    let blend_mask = pollster::block_on(retained_blend::run_suite(&context));
+    let depth_bias_mask = pollster::block_on(retained_depth_bias::run_baseline(&context));
+    retained_sampler_anisotropy::realize_anisotropic_sampler(&context);
 
     let stats = context.execution_stats();
     assert_eq!(stats.prepared_submissions(), 0);
@@ -347,6 +401,13 @@ fn metal_qualification_records_exact_public_api_evidence() {
             "prefix_scan_exclusive": "EXERCISED",
             "prefix_scan_inclusive": "EXERCISED",
             "indexed_offscreen_render": "EXERCISED",
+            "compute_generated_indirect_draw": "EXERCISED",
+            "vertex8_mask": vertex8_mask,
+            "vertex16_mask": vertex16_mask,
+            "vertex_packed_mask": vertex_packed_mask,
+            "blend_state_mask": blend_mask,
+            "depth_bias_baseline_mask": depth_bias_mask,
+            "sampler_anisotropy": "EXERCISED",
             "timestamp_query": "UNSUPPORTED_SUPPRESSED",
         },
     });

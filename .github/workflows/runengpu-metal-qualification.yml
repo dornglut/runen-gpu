@@ -140,6 +140,13 @@ jobs:
           assert report["proofs"]["prefix_scan_exclusive"] == "EXERCISED"
           assert report["proofs"]["prefix_scan_inclusive"] == "EXERCISED"
           assert report["proofs"]["indexed_offscreen_render"] == "EXERCISED"
+          assert report["proofs"]["compute_generated_indirect_draw"] == "EXERCISED"
+          assert report["proofs"]["vertex8_mask"] == 0xFFF
+          assert report["proofs"]["vertex16_mask"] == 0x7FFF
+          assert report["proofs"]["vertex_packed_mask"] == 0x3
+          assert report["proofs"]["blend_state_mask"] == 0x3
+          assert report["proofs"]["depth_bias_baseline_mask"] == 0x7
+          assert report["proofs"]["sampler_anisotropy"] == "EXERCISED"
           assert report["proofs"]["timestamp_query"] == "UNSUPPORTED_SUPPRESSED"
           print(
               "Generic Metal qualification:",

@@ -417,7 +417,7 @@ async fn run_case(context: &GpuContext, case: BiasCase) {
     println!("{} depth bias: EXERCISED (exact color readback)", case.name);
 }
 
-async fn run_baseline(context: &GpuContext) -> u32 {
+pub(crate) async fn run_baseline(context: &GpuContext) -> u32 {
     let mut mask = 0_u32;
     for (index, case) in baseline_cases().into_iter().enumerate() {
         run_case(context, case).await;
