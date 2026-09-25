@@ -819,6 +819,34 @@ pub(super) fn atomic_texture_aspects(
     }
 }
 
+#[cfg(test)]
+mod combined_aspect_tests {
+    use super::*;
+
+    #[test]
+    fn combined_all_coverage_expands_to_independent_atomic_aspects() {
+        assert_eq!(
+            atomic_texture_aspects(GpuTextureAspect::All, GpuTextureAspect::All),
+            [
+                Some(GpuTextureAspect::DepthOnly),
+                Some(GpuTextureAspect::StencilOnly),
+            ]
+        );
+        assert_eq!(
+            atomic_texture_aspects(GpuTextureAspect::DepthOnly, GpuTextureAspect::All),
+            [Some(GpuTextureAspect::DepthOnly), None]
+        );
+        assert_eq!(
+            atomic_texture_aspects(GpuTextureAspect::StencilOnly, GpuTextureAspect::All),
+            [Some(GpuTextureAspect::StencilOnly), None]
+        );
+        assert_eq!(
+            atomic_texture_aspects(GpuTextureAspect::All, GpuTextureAspect::Color),
+            [Some(GpuTextureAspect::Color), None]
+        );
+    }
+}
+
 pub(super) fn storage_identity(resource: &GpuResourceRef) -> GpuWorkResourceId {
     match resource {
         GpuResourceRef::TextureView(view) => view.descriptor().texture().diagnostic_identity(),

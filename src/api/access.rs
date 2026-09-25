@@ -884,6 +884,42 @@ mod tests {
     }
 
     #[test]
+    fn combined_texture_aspect_intersections_preserve_atomic_overlap() {
+        assert_eq!(
+            intersect_aspects(
+                GpuTextureAspect::All,
+                GpuTextureAspect::DepthOnly,
+                GpuTextureAspect::All,
+            ),
+            Some(GpuTextureAspect::DepthOnly)
+        );
+        assert_eq!(
+            intersect_aspects(
+                GpuTextureAspect::StencilOnly,
+                GpuTextureAspect::All,
+                GpuTextureAspect::All,
+            ),
+            Some(GpuTextureAspect::StencilOnly)
+        );
+        assert_eq!(
+            intersect_aspects(
+                GpuTextureAspect::All,
+                GpuTextureAspect::All,
+                GpuTextureAspect::All,
+            ),
+            Some(GpuTextureAspect::All)
+        );
+        assert_eq!(
+            intersect_aspects(
+                GpuTextureAspect::DepthOnly,
+                GpuTextureAspect::StencilOnly,
+                GpuTextureAspect::All,
+            ),
+            None
+        );
+    }
+
+    #[test]
     fn checked_buffer_and_query_ranges_reject_zero_overflow_and_bounds() {
         let mut allocator = allocator();
         let buffer = buffer(&mut allocator, "buffer", [GpuBufferUsage::Storage]);
