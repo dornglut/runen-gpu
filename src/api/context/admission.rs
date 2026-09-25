@@ -490,7 +490,8 @@ fn effective_workload_budget(
     descriptor: &GpuContextDescriptor,
     enabled_features: &BTreeSet<GpuCapabilityFeature>,
 ) -> Result<GpuWorkloadBudget, GpuContextRequestError> {
-    let has_general_binding_arrays = enabled_features.contains(&GpuCapabilityFeature::TextureBindingArray)
+    let has_general_binding_arrays = enabled_features
+        .contains(&GpuCapabilityFeature::TextureBindingArray)
         || enabled_features.contains(&GpuCapabilityFeature::BufferBindingArray);
     let has_sampler_binding_arrays =
         enabled_features.contains(&GpuCapabilityFeature::TextureBindingArray);
