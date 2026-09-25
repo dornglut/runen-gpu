@@ -101,6 +101,13 @@ fn sampler_filter_state_enforces_anisotropy_invariants() {
         );
     }
 
+    let unrestricted = linear_anisotropic_state(u16::MAX);
+    assert_eq!(
+        unrestricted.max_anisotropy(),
+        u16::MAX,
+        "the public contract must not manufacture a platform-specific anisotropy ceiling"
+    );
+
     let state = linear_anisotropic_state(8);
     assert_eq!(
         state.filters(),
