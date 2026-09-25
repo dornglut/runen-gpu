@@ -675,6 +675,37 @@ fn validate_texture_usage(
         GpuTextureAccessKind::Present => None,
     };
     let usages = texture.descriptor().usages();
+    if usages.contains(GpuTextureUsage::TransientAttachment) {
+        let valid_transient_access = match kind {
+            GpuTextureAccessKind::ColorAttachment { load_kind, store } => {
+                load_kind == GpuAttachmentLoadKind::Clear && store == GpuAttachmentStore::Discard
+            }
+            GpuTextureAccessKind::DepthStencilAttachment {
+                access,
+                load_kind,
+                store,
+            } => {
+                access == GpuDepthStencilAccess::ReadWrite
+                    && load_kind == GpuAttachmentLoadKind::Clear
+                    && store == GpuAttachmentStore::Discard
+            }
+            GpuTextureAccessKind::SampledRead
+            | GpuTextureAccessKind::StorageRead
+            | GpuTextureAccessKind::StorageWrite
+            | GpuTextureAccessKind::StorageReadWrite
+            | GpuTextureAccessKind::CopySource
+            | GpuTextureAccessKind::CopyDestination
+            | GpuTextureAccessKind::MultisampleResolveDestination
+            | GpuTextureAccessKind::Present => false,
+        };
+        if !valid_transient_access {
+            return Err(texture_access_error(
+                texture,
+                GpuAccessCause::InvalidDescriptorUsage,
+                "use transient attachments only as Clear + Discard color attachments or writable Clear + Discard depth/stencil attachments",
+            ));
+        }
+    }
     let valid = match kind {
         GpuTextureAccessKind::StorageReadWrite => {
             usages.contains(GpuTextureUsage::StorageRead)
@@ -1189,6 +1220,73 @@ mod tests {
                 .cause(),
             GpuAccessCause::InvalidTextureAspect
         );
+    }
+
+    #[test]
+    fn transient_attachment_access_is_clear_discard_only_and_never_present_or_resolve_destination()
+    {
+        let mut allocator = allocator();
+        let texture_label = label("transient attachment access");
+        let texture = allocator
+            .allocate_texture_handle(
+                GpuTextureDescriptor::new(
+                    common("transient attachment access"),
+                    GpuTextureDimension::D2,
+                    GpuTextureExtent::new(&texture_label, GpuTextureDimension::D2, 8, 8, 1)
+                        .unwrap(),
+                    1,
+                    1,
+                    GpuTextureFormat::Rgba8Unorm,
+                    GpuTextureUsages::new(
+                        &texture_label,
+                        [
+                            GpuTextureUsage::ColorAttachment,
+                            GpuTextureUsage::TransientAttachment,
+                        ],
+                    )
+                    .unwrap(),
+                    GpuTextureInitialization::Uninitialized,
+                )
+                .unwrap(),
+            )
+            .unwrap();
+        let range = GpuTextureSubresourceRange::whole(&texture).unwrap();
+
+        assert!(
+            GpuTextureAccess::new(
+                GpuTextureAccessResource::Texture(texture.clone()),
+                range,
+                GpuTextureAccessKind::ColorAttachment {
+                    load_kind: GpuAttachmentLoadKind::Clear,
+                    store: GpuAttachmentStore::Discard,
+                },
+            )
+            .is_ok()
+        );
+
+        for kind in [
+            GpuTextureAccessKind::ColorAttachment {
+                load_kind: GpuAttachmentLoadKind::Load,
+                store: GpuAttachmentStore::Discard,
+            },
+            GpuTextureAccessKind::ColorAttachment {
+                load_kind: GpuAttachmentLoadKind::Clear,
+                store: GpuAttachmentStore::Store,
+            },
+            GpuTextureAccessKind::MultisampleResolveDestination,
+            GpuTextureAccessKind::Present,
+        ] {
+            assert_eq!(
+                GpuTextureAccess::new(
+                    GpuTextureAccessResource::Texture(texture.clone()),
+                    range,
+                    kind,
+                )
+                .unwrap_err()
+                .cause(),
+                GpuAccessCause::InvalidDescriptorUsage
+            );
+        }
     }
 
     #[test]

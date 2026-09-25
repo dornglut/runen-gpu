@@ -19,6 +19,8 @@ mod retained_offscreen;
 mod retained_prefix_scan;
 #[path = "gpu_r2_sampler_anisotropy.rs"]
 mod retained_sampler_anisotropy;
+#[path = "gpu_transient_attachment/mod.rs"]
+mod retained_transient_attachment;
 #[path = "gpu_r1_vertex16_formats.rs"]
 mod retained_vertex16;
 #[path = "gpu_r1_vertex8_formats.rs"]
@@ -488,6 +490,56 @@ fn metal_qualification_records_exact_public_api_evidence() {
     let blend_mask = pollster::block_on(retained_blend::run_suite(&context));
     let depth_bias_mask = pollster::block_on(retained_depth_bias::run_baseline(&context));
     retained_sampler_anisotropy::realize_anisotropic_sampler(&context);
+    let (transient_graph, transient_readback_id) = retained_transient_attachment::graph();
+    let transient_prepared =
+        pollster::block_on(context.prepare_submission(transient_graph)).unwrap();
+    let transient_submission = context.submit_prepared(transient_prepared).unwrap();
+    let transient_bytes = pollster::block_on(readback_wait::wait_for_readback(
+        &context,
+        &transient_submission,
+        transient_readback_id,
+        "Metal qualification transient attachment resolve",
+    ));
+    retained_transient_attachment::assert_resolved(&transient_bytes);
+
+    let (transient_depth_graph, transient_depth_readback_id) =
+        retained_transient_attachment::depth_graph();
+    let transient_depth_prepared =
+        pollster::block_on(context.prepare_submission(transient_depth_graph)).unwrap();
+    let transient_depth_submission = context.submit_prepared(transient_depth_prepared).unwrap();
+    let transient_depth_bytes = pollster::block_on(readback_wait::wait_for_readback(
+        &context,
+        &transient_depth_submission,
+        transient_depth_readback_id,
+        "Metal qualification transient depth observable color",
+    ));
+    retained_transient_attachment::assert_depth_color(&transient_depth_bytes);
+
+    let transient_stencil8 = if retained_transient_attachment::stencil_supported(&context) {
+        let stencil_context = pollster::block_on(GpuContext::request(
+            retained_transient_attachment::stencil_descriptor(GpuBackendFamily::Metal),
+        ))
+        .expect("advertised Metal Stencil8 depth/stencil role must admit a context");
+        assert_eq!(
+            stencil_context.adapter_facts(),
+            context.adapter_facts(),
+            "conditional transient Stencil8 proof must stay on the qualified Metal adapter"
+        );
+        let (stencil_graph, stencil_readback_id) = retained_transient_attachment::stencil_graph();
+        let stencil_prepared =
+            pollster::block_on(stencil_context.prepare_submission(stencil_graph)).unwrap();
+        let stencil_submission = stencil_context.submit_prepared(stencil_prepared).unwrap();
+        let stencil_bytes = pollster::block_on(readback_wait::wait_for_readback(
+            &stencil_context,
+            &stencil_submission,
+            stencil_readback_id,
+            "Metal qualification transient Stencil8 terminal color",
+        ));
+        retained_transient_attachment::assert_stencil_terminal(&stencil_bytes);
+        "EXERCISED"
+    } else {
+        "UNSUPPORTED"
+    };
 
     let stats = context.execution_stats();
     assert_eq!(stats.prepared_submissions(), 0);
@@ -497,7 +549,7 @@ fn metal_qualification_records_exact_public_api_evidence() {
     assert_eq!(stats.pending_readbacks(), 0);
 
     let report = json!({
-        "schema_version": 2,
+        "schema_version": 3,
         "qualification_level": mode.report_name(),
         "revision": revision,
         "environment": {
@@ -538,6 +590,9 @@ fn metal_qualification_records_exact_public_api_evidence() {
             "blend_state_mask": blend_mask,
             "depth_bias_baseline_mask": depth_bias_mask,
             "sampler_anisotropy": "EXERCISED",
+            "transient_attachment": "EXERCISED",
+            "transient_depth": "EXERCISED",
+            "transient_stencil8": transient_stencil8,
             "timestamp_query": "UNSUPPORTED_SUPPRESSED",
         },
     });

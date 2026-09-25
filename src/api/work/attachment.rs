@@ -1,7 +1,7 @@
 use super::super::{
     GpuAttachmentLoadKind, GpuAttachmentStore, GpuDepthStencilAccess, GpuTextureAccess,
     GpuTextureAccessKind, GpuTextureAccessResource, GpuTextureAspect, GpuTextureFormat,
-    GpuTextureSubresourceRange, GpuTextureViewDimension, GpuTextureViewHandle,
+    GpuTextureSubresourceRange, GpuTextureUsage, GpuTextureViewDimension, GpuTextureViewHandle,
     GpuWorkOperationCause, GpuWorkOperationError,
 };
 use super::mip_extent;
@@ -590,6 +590,20 @@ impl GpuRenderDepthStencilAttachment {
                 Some(texture.diagnostic_identity()),
                 GpuWorkOperationCause::InvalidAttachment,
                 "use a view whose effective format contains a stencil aspect before configuring stencil attachment state",
+            ));
+        }
+        if texture
+            .descriptor()
+            .usages()
+            .contains(GpuTextureUsage::TransientAttachment)
+            && (depth.is_some() != format.is_depth() || stencil.is_some() != format.is_stencil())
+        {
+            return Err(GpuWorkOperationError::invalid(
+                "construct GPU render depth/stencil attachment",
+                label,
+                Some(texture.diagnostic_identity()),
+                GpuWorkOperationCause::InvalidAttachment,
+                "provide writable Clear + Discard state for every depth/stencil aspect present in a transient attachment format",
             ));
         }
 
