@@ -137,7 +137,7 @@ fn render_pipeline() -> GpuRenderPipelineDescriptor {
     .unwrap();
     let color_target = GpuColorTargetStateDescriptor::new(
         GpuTextureFormat::Rgba8Unorm,
-        GpuBlendMode::Replace,
+        None,
         GpuColorWriteMask::ALL,
     )
     .unwrap();

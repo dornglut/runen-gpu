@@ -8,6 +8,9 @@ mod retained_offscreen_indexed;
 #[path = "gpu_prefix_scan_native.rs"]
 mod retained_prefix_scan;
 #[cfg(target_arch = "wasm32")]
+#[path = "gpu_r2_blend_state.rs"]
+mod retained_blend_state;
+#[cfg(target_arch = "wasm32")]
 #[path = "gpu_r2_sampler_anisotropy.rs"]
 mod retained_sampler_anisotropy;
 #[cfg(target_arch = "wasm32")]
@@ -23,8 +26,8 @@ mod retained_vertex_packed;
 #[cfg(target_arch = "wasm32")]
 mod browser {
     use super::{
-        retained_bc, retained_offscreen_indexed, retained_prefix_scan, retained_sampler_anisotropy,
-        retained_vertex_packed, retained_vertex8, retained_vertex16,
+        retained_bc, retained_blend_state, retained_offscreen_indexed, retained_prefix_scan,
+        retained_sampler_anisotropy, retained_vertex_packed, retained_vertex8, retained_vertex16,
     };
     use runen_gpu::*;
     use std::cell::RefCell;
@@ -44,6 +47,7 @@ mod browser {
         static PACKED32_SAMPLED_MASK: RefCell<u32> = RefCell::new(0);
         static PACKED32_COLOR_ATTACHMENT_MASK: RefCell<u32> = RefCell::new(0);
         static BC_EXERCISED_MASK: RefCell<u32> = RefCell::new(0);
+        static BLEND_STATE_EXERCISED_MASK: RefCell<u32> = RefCell::new(0);
         static SAMPLER_ANISOTROPY_EXERCISED: RefCell<u32> = RefCell::new(0);
         static VERTEX8_EXERCISED_MASK: RefCell<u32> = RefCell::new(0);
         static VERTEX16_EXERCISED_MASK: RefCell<u32> = RefCell::new(0);
@@ -2134,6 +2138,8 @@ fn cs_main() {
         run_browser_packed32().await;
         let bc_mask = retained_bc::run_browser_bc().await;
         BC_EXERCISED_MASK.with(|slot| *slot.borrow_mut() = bc_mask);
+        let blend_state_mask = retained_blend_state::run_browser_blend_state().await;
+        BLEND_STATE_EXERCISED_MASK.with(|slot| *slot.borrow_mut() = blend_state_mask);
         let sampler_anisotropy =
             retained_sampler_anisotropy::run_browser_sampler_anisotropy().await;
         SAMPLER_ANISOTROPY_EXERCISED.with(|slot| *slot.borrow_mut() = sampler_anisotropy);
@@ -2226,6 +2232,11 @@ fn cs_main() {
     #[unsafe(no_mangle)]
     pub extern "C" fn runengpu_browser_bc_exercised_mask() -> u32 {
         BC_EXERCISED_MASK.with(|mask| *mask.borrow())
+    }
+
+    #[unsafe(no_mangle)]
+    pub extern "C" fn runengpu_browser_blend_state_exercised_mask() -> u32 {
+        BLEND_STATE_EXERCISED_MASK.with(|mask| *mask.borrow())
     }
 
     #[unsafe(no_mangle)]

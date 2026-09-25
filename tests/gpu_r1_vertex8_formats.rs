@@ -203,7 +203,7 @@ fn pipeline(case: Vertex8Case) -> GpuRenderPipelineDescriptor {
     .unwrap();
     let target = GpuColorTargetStateDescriptor::new(
         GpuTextureFormat::Rgba8Unorm,
-        GpuBlendMode::Replace,
+        None,
         GpuColorWriteMask::ALL,
     )
     .unwrap();

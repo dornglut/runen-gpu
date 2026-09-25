@@ -1,5 +1,5 @@
 use super::{
-    GpuAdmittedProgramSource, GpuBindingLayoutRefinement, GpuBlendMode, GpuBufferDescriptor,
+    GpuAdmittedProgramSource, GpuBindingLayoutRefinement, GpuBufferDescriptor,
     GpuBufferHandle, GpuColorTargetStateDescriptor, GpuColorWriteMask,
     GpuComputePipelineDescriptor, GpuContext, GpuEntryPointName, GpuFragmentOutputStateDescriptor,
     GpuMultisampleStateDescriptor, GpuPipelineConfiguration, GpuPrimitiveStateDescriptor,
@@ -166,7 +166,7 @@ impl GpuRenderPipelineDescriptor {
             Some(GpuFragmentOutputStateDescriptor::new([
                 GpuColorTargetStateDescriptor::new(
                     format,
-                    GpuBlendMode::Replace,
+                    None,
                     GpuColorWriteMask::ALL,
                 )?,
             ])),
@@ -458,7 +458,7 @@ fn fs_main() -> @location(0) vec4<f32> {
         );
         assert_eq!(state.vertex_input().layouts().len(), 0);
         assert_eq!(target.format(), GpuTextureFormat::Rgba8Unorm);
-        assert_eq!(target.blend(), GpuBlendMode::Replace);
+        assert_eq!(target.blend(), None);
         assert_eq!(target.write_mask(), GpuColorWriteMask::ALL);
         assert_eq!(state.primitive(), GpuPrimitiveStateDescriptor::default());
         assert_eq!(state.depth_stencil(), None);

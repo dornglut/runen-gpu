@@ -71,7 +71,7 @@ fn packed32_public_semantics_and_program_typing_are_exact() {
 
         let target = GpuColorTargetStateDescriptor::new(
             format,
-            GpuBlendMode::Replace,
+            None,
             GpuColorWriteMask::ALL,
         )
         .unwrap();
@@ -84,7 +84,18 @@ fn packed32_public_semantics_and_program_typing_are_exact() {
         assert_eq!(target.has_blendable_alpha_channel(), alpha);
 
         let alpha_result =
-            GpuColorTargetStateDescriptor::new(format, GpuBlendMode::Alpha, GpuColorWriteMask::ALL);
+            GpuColorTargetStateDescriptor::new(format, Some(GpuBlendState::new(
+                    GpuBlendComponent::new(
+                        GpuBlendFactor::SrcAlpha,
+                        GpuBlendFactor::OneMinusSrcAlpha,
+                        GpuBlendOperation::Add,
+                    ),
+                    GpuBlendComponent::new(
+                        GpuBlendFactor::One,
+                        GpuBlendFactor::OneMinusSrcAlpha,
+                        GpuBlendOperation::Add,
+                    ),
+                )), GpuColorWriteMask::ALL);
         if class == GpuShaderIoScalarClass::Uint {
             assert!(alpha_result.is_err());
         } else {

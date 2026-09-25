@@ -189,7 +189,7 @@ fn fragment_output_shape_and_integer_blend_rules_follow_format_semantics() {
     ] {
         let target = GpuColorTargetStateDescriptor::new(
             format,
-            GpuBlendMode::Replace,
+            None,
             GpuColorWriteMask::ALL,
         )
         .unwrap();
@@ -211,7 +211,18 @@ fn fragment_output_shape_and_integer_blend_rules_follow_format_semantics() {
         assert!(
             GpuColorTargetStateDescriptor::new(
                 format,
-                GpuBlendMode::Alpha,
+                Some(GpuBlendState::new(
+                    GpuBlendComponent::new(
+                        GpuBlendFactor::SrcAlpha,
+                        GpuBlendFactor::OneMinusSrcAlpha,
+                        GpuBlendOperation::Add,
+                    ),
+                    GpuBlendComponent::new(
+                        GpuBlendFactor::One,
+                        GpuBlendFactor::OneMinusSrcAlpha,
+                        GpuBlendOperation::Add,
+                    ),
+                )),
                 GpuColorWriteMask::ALL,
             )
             .is_err()
@@ -219,7 +230,7 @@ fn fragment_output_shape_and_integer_blend_rules_follow_format_semantics() {
         assert!(
             GpuColorTargetStateDescriptor::new(
                 format,
-                GpuBlendMode::Replace,
+                None,
                 GpuColorWriteMask::ALL,
             )
             .is_ok()

@@ -1,6 +1,5 @@
 use runen_gpu::{
-    GpuAdmittedProgramSource, GpuBindingKey, GpuBindingLayoutRefinement, GpuBlendMode,
-    GpuCapabilityFeature, GpuCapabilityRequirement, GpuCapabilityRequirements,
+    GpuAdmittedProgramSource, GpuBindingKey, GpuBindingLayoutRefinement,     GpuCapabilityFeature, GpuCapabilityRequirement, GpuCapabilityRequirements,
     GpuColorTargetStateDescriptor, GpuColorWriteMask, GpuComputePipelineDescriptor,
     GpuEntryPointName, GpuFragmentOutputStateDescriptor, GpuMultisampleStateDescriptor,
     GpuPipelineConfiguration, GpuPrimitiveStateDescriptor, GpuProgramDescriptor,
@@ -152,7 +151,7 @@ fn render_pipeline_inherits_program_interface_requirements() {
 
     let color_target = GpuColorTargetStateDescriptor::new(
         GpuTextureFormat::Rgba8Unorm,
-        GpuBlendMode::Replace,
+        None,
         GpuColorWriteMask::ALL,
     )
     .unwrap();

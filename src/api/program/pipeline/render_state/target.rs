@@ -7,9 +7,82 @@ use crate::api::texture_format::{self, GpuTextureScalarClass};
 use crate::{GpuCompareFunction, GpuTextureFormat};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum GpuBlendMode {
-    Replace,
-    Alpha,
+pub enum GpuBlendFactor {
+    Zero,
+    One,
+    Src,
+    OneMinusSrc,
+    SrcAlpha,
+    OneMinusSrcAlpha,
+    Dst,
+    OneMinusDst,
+    DstAlpha,
+    OneMinusDstAlpha,
+    SrcAlphaSaturated,
+    Constant,
+    OneMinusConstant,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum GpuBlendOperation {
+    Add,
+    Subtract,
+    ReverseSubtract,
+    Min,
+    Max,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct GpuBlendComponent {
+    src_factor: GpuBlendFactor,
+    dst_factor: GpuBlendFactor,
+    operation: GpuBlendOperation,
+}
+
+impl GpuBlendComponent {
+    pub const fn new(
+        src_factor: GpuBlendFactor,
+        dst_factor: GpuBlendFactor,
+        operation: GpuBlendOperation,
+    ) -> Self {
+        Self {
+            src_factor,
+            dst_factor,
+            operation,
+        }
+    }
+
+    pub const fn src_factor(self) -> GpuBlendFactor {
+        self.src_factor
+    }
+
+    pub const fn dst_factor(self) -> GpuBlendFactor {
+        self.dst_factor
+    }
+
+    pub const fn operation(self) -> GpuBlendOperation {
+        self.operation
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct GpuBlendState {
+    color: GpuBlendComponent,
+    alpha: GpuBlendComponent,
+}
+
+impl GpuBlendState {
+    pub const fn new(color: GpuBlendComponent, alpha: GpuBlendComponent) -> Self {
+        Self { color, alpha }
+    }
+
+    pub const fn color(self) -> GpuBlendComponent {
+        self.color
+    }
+
+    pub const fn alpha(self) -> GpuBlendComponent {
+        self.alpha
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -53,27 +126,25 @@ impl GpuColorWriteMask {
 /// Raw WGPU formats cannot enter the generic descriptor:
 ///
 /// ```compile_fail
-/// use runen_gpu::{
-///     GpuBlendMode, GpuColorTargetStateDescriptor, GpuColorWriteMask,
-/// };
+/// use runen_gpu::{GpuColorTargetStateDescriptor, GpuColorWriteMask};
 ///
 /// let _target = GpuColorTargetStateDescriptor::new(
 ///     wgpu::TextureFormat::Rgba8Unorm,
-///     GpuBlendMode::Replace,
+///     None,
 ///     GpuColorWriteMask::ALL,
 /// );
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct GpuColorTargetStateDescriptor {
     format: GpuTextureFormat,
-    blend: GpuBlendMode,
+    blend: Option<GpuBlendState>,
     write_mask: GpuColorWriteMask,
 }
 
 impl GpuColorTargetStateDescriptor {
     pub fn new(
         format: GpuTextureFormat,
-        blend: GpuBlendMode,
+        blend: Option<GpuBlendState>,
         write_mask: GpuColorWriteMask,
     ) -> Result<Self, GpuProgramContractError> {
         if format.is_depth() || format.is_stencil() {
@@ -82,7 +153,7 @@ impl GpuColorTargetStateDescriptor {
                 "use a color-attachment format for a color target",
             ));
         }
-        if blend == GpuBlendMode::Alpha
+        if blend.is_some()
             && matches!(
                 texture_format::color_scalar_class(format),
                 Some(GpuTextureScalarClass::Sint | GpuTextureScalarClass::Uint)
@@ -104,7 +175,7 @@ impl GpuColorTargetStateDescriptor {
         self.format
     }
 
-    pub const fn blend(self) -> GpuBlendMode {
+    pub const fn blend(self) -> Option<GpuBlendState> {
         self.blend
     }
 
@@ -370,7 +441,7 @@ mod tests {
     use super::*;
 
     fn target(format: GpuTextureFormat) -> GpuColorTargetStateDescriptor {
-        GpuColorTargetStateDescriptor::new(format, GpuBlendMode::Replace, GpuColorWriteMask::ALL)
+        GpuColorTargetStateDescriptor::new(format, None, GpuColorWriteMask::ALL)
             .unwrap()
     }
 
@@ -479,7 +550,7 @@ mod tests {
             assert!(
                 GpuColorTargetStateDescriptor::new(
                     format,
-                    GpuBlendMode::Replace,
+                    None,
                     GpuColorWriteMask::ALL,
                 )
                 .is_err()
@@ -505,7 +576,18 @@ mod tests {
             assert!(
                 GpuColorTargetStateDescriptor::new(
                     format,
-                    GpuBlendMode::Alpha,
+                    Some(GpuBlendState::new(
+                    GpuBlendComponent::new(
+                        GpuBlendFactor::SrcAlpha,
+                        GpuBlendFactor::OneMinusSrcAlpha,
+                        GpuBlendOperation::Add,
+                    ),
+                    GpuBlendComponent::new(
+                        GpuBlendFactor::One,
+                        GpuBlendFactor::OneMinusSrcAlpha,
+                        GpuBlendOperation::Add,
+                    ),
+                )),
                     GpuColorWriteMask::ALL,
                 )
                 .is_err()
@@ -513,7 +595,7 @@ mod tests {
             assert!(
                 GpuColorTargetStateDescriptor::new(
                     format,
-                    GpuBlendMode::Replace,
+                    None,
                     GpuColorWriteMask::ALL,
                 )
                 .is_ok()
@@ -522,7 +604,18 @@ mod tests {
         assert!(
             GpuColorTargetStateDescriptor::new(
                 GpuTextureFormat::Rgba8Unorm,
-                GpuBlendMode::Alpha,
+                Some(GpuBlendState::new(
+                    GpuBlendComponent::new(
+                        GpuBlendFactor::SrcAlpha,
+                        GpuBlendFactor::OneMinusSrcAlpha,
+                        GpuBlendOperation::Add,
+                    ),
+                    GpuBlendComponent::new(
+                        GpuBlendFactor::One,
+                        GpuBlendFactor::OneMinusSrcAlpha,
+                        GpuBlendOperation::Add,
+                    ),
+                )),
                 GpuColorWriteMask::ALL,
             )
             .is_ok()

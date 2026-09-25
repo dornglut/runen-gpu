@@ -240,7 +240,7 @@ fn assert_fragment_io_and_integer_blending_follow_scalar_class(
     for (format, _, _, class) in formats.iter().copied() {
         let target = GpuColorTargetStateDescriptor::new(
             format,
-            GpuBlendMode::Replace,
+            None,
             GpuColorWriteMask::ALL,
         )
         .unwrap();
@@ -258,7 +258,18 @@ fn assert_fragment_io_and_integer_blending_follow_scalar_class(
             assert!(
                 GpuColorTargetStateDescriptor::new(
                     format,
-                    GpuBlendMode::Alpha,
+                    Some(GpuBlendState::new(
+                    GpuBlendComponent::new(
+                        GpuBlendFactor::SrcAlpha,
+                        GpuBlendFactor::OneMinusSrcAlpha,
+                        GpuBlendOperation::Add,
+                    ),
+                    GpuBlendComponent::new(
+                        GpuBlendFactor::One,
+                        GpuBlendFactor::OneMinusSrcAlpha,
+                        GpuBlendOperation::Add,
+                    ),
+                )),
                     GpuColorWriteMask::ALL
                 )
                 .is_err()

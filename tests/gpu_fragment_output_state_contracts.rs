@@ -1,5 +1,6 @@
 use runen_gpu::{
-    GpuBlendMode, GpuColorTargetStateDescriptor, GpuColorWriteMask, GpuCompareFunction,
+    GpuBlendComponent, GpuBlendFactor, GpuBlendOperation, GpuBlendState,
+    GpuColorTargetStateDescriptor, GpuColorWriteMask, GpuCompareFunction,
     GpuDepthStateDescriptor, GpuDepthStencilStateDescriptor, GpuEntryPointName,
     GpuFragmentOutputStateDescriptor, GpuProgramContractCause, GpuShaderIoScalarClass,
     GpuTextureFormat,
@@ -15,7 +16,7 @@ fn color_target(
     format: GpuTextureFormat,
     write_mask: GpuColorWriteMask,
 ) -> GpuColorTargetStateDescriptor {
-    GpuColorTargetStateDescriptor::new(format, GpuBlendMode::Replace, write_mask)
+    GpuColorTargetStateDescriptor::new(format, None, write_mask)
         .expect("test color target should be valid")
 }
 
@@ -71,7 +72,7 @@ fn fragment_output_state_supports_no_color_outputs() {
 fn color_target_state_rejects_depth_and_integer_alpha_blending() {
     let depth = GpuColorTargetStateDescriptor::new(
         GpuTextureFormat::Depth32Float,
-        GpuBlendMode::Replace,
+        None,
         GpuColorWriteMask::ALL,
     )
     .expect_err("depth formats are not color targets");
@@ -82,7 +83,18 @@ fn color_target_state_rejects_depth_and_integer_alpha_blending() {
 
     let integer_alpha = GpuColorTargetStateDescriptor::new(
         GpuTextureFormat::R32Uint,
-        GpuBlendMode::Alpha,
+        Some(GpuBlendState::new(
+                    GpuBlendComponent::new(
+                        GpuBlendFactor::SrcAlpha,
+                        GpuBlendFactor::OneMinusSrcAlpha,
+                        GpuBlendOperation::Add,
+                    ),
+                    GpuBlendComponent::new(
+                        GpuBlendFactor::One,
+                        GpuBlendFactor::OneMinusSrcAlpha,
+                        GpuBlendOperation::Add,
+                    ),
+                )),
         GpuColorWriteMask::ALL,
     )
     .expect_err("integer color targets cannot use alpha blending");

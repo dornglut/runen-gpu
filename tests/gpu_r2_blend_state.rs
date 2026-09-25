@@ -2,30 +2,59 @@ use runen_gpu::*;
 
 const WIDTH: u32 = 8;
 const HEIGHT: u32 = 8;
-const CLEAR_PIXEL: [u8; 4] = [0, 0, 0, 255];
-const DRAW_PIXEL: [u8; 4] = [0, 255, 0, 255];
 
 #[derive(Clone, Copy)]
-struct PackedVertexCase {
+struct BlendCase {
     name: &'static str,
-    format: GpuVertexFormat,
-    bytes: [u8; 4],
-    condition: &'static str,
+    blend: GpuBlendState,
+    clear: [f64; 4],
+    source: &'static str,
+    blend_constant: [f64; 4],
+    expected: [u8; 4],
 }
 
-const CASES: [PackedVertexCase; 2] = [
-    PackedVertexCase {
-        name: "unorm10_10_10_2",
-        format: GpuVertexFormat::Unorm10_10_10_2,
-        // x = 1023, y = 256, z = 768, w = 2 -> packed u32 0xb00403ff.
-        bytes: [0xff, 0x03, 0x04, 0xb0],
-        condition: "value.x > 0.99 && value.y > 0.24 && value.y < 0.26 && value.z > 0.74 && value.z < 0.76 && value.w > 0.65 && value.w < 0.68",
+const CUSTOM_BLEND: GpuBlendState = GpuBlendState::new(
+    GpuBlendComponent::new(
+        GpuBlendFactor::Constant,
+        GpuBlendFactor::OneMinusConstant,
+        GpuBlendOperation::Subtract,
+    ),
+    GpuBlendComponent::new(
+        GpuBlendFactor::SrcAlpha,
+        GpuBlendFactor::OneMinusSrcAlpha,
+        GpuBlendOperation::Add,
+    ),
+);
+
+const MIN_MAX_BLEND: GpuBlendState = GpuBlendState::new(
+    GpuBlendComponent::new(
+        GpuBlendFactor::Constant,
+        GpuBlendFactor::OneMinusConstant,
+        GpuBlendOperation::Min,
+    ),
+    GpuBlendComponent::new(
+        GpuBlendFactor::OneMinusConstant,
+        GpuBlendFactor::Constant,
+        GpuBlendOperation::Max,
+    ),
+);
+
+const CASES: [BlendCase; 2] = [
+    BlendCase {
+        name: "independent_subtract",
+        blend: CUSTOM_BLEND,
+        clear: [0.0, 1.0, 1.0, 0.0],
+        source: "vec4<f32>(1.0, 0.0, 0.0, 1.0)",
+        blend_constant: [1.0, 0.0, 1.0, 0.0],
+        expected: [255, 0, 0, 255],
     },
-    PackedVertexCase {
-        name: "unorm8x4_bgra",
-        format: GpuVertexFormat::Unorm8x4Bgra,
-        bytes: [32, 96, 224, 160],
-        condition: "value.x > 0.87 && value.x < 0.89 && value.y > 0.37 && value.y < 0.39 && value.z > 0.12 && value.z < 0.14 && value.w > 0.62 && value.w < 0.64",
+    BlendCase {
+        name: "min_max",
+        blend: MIN_MAX_BLEND,
+        clear: [0.0, 1.0, 0.0, 1.0],
+        source: "vec4<f32>(1.0, 0.0, 1.0, 0.0)",
+        blend_constant: [1.0, 0.0, 1.0, 0.0],
+        expected: [0, 0, 0, 255],
     },
 ];
 
@@ -50,46 +79,39 @@ fn common(value: impl AsRef<str>) -> GpuResourceCommon {
     .unwrap()
 }
 
-fn shader_source(case: PackedVertexCase) -> String {
+fn shader_source(case: BlendCase) -> String {
     format!(
         r#"
 struct VertexOutput {{
     @builtin(position) position: vec4<f32>,
-    @location(0) color: vec4<f32>,
 }};
 
 @vertex
-fn vs_main(
-    @builtin(vertex_index) vertex_index: u32,
-    @location(0) value: vec4<f32>
-) -> VertexOutput {{
-    var position = vec2<f32>(0.0, 0.75);
-    if vertex_index == 0u {{
-        position = vec2<f32>(-0.75, -0.75);
-    }} else if vertex_index == 1u {{
-        position = vec2<f32>(0.75, -0.75);
-    }}
-    let decoded = {};
+fn vs_main(@builtin(vertex_index) vertex_index: u32) -> VertexOutput {{
+    var positions = array<vec2<f32>, 3>(
+        vec2<f32>(-1.0, -1.0),
+        vec2<f32>(3.0, -1.0),
+        vec2<f32>(-1.0, 3.0),
+    );
     var output: VertexOutput;
-    output.position = vec4<f32>(position, 0.0, 1.0);
-    output.color = vec4<f32>(0.0, select(0.0, 1.0, decoded), 0.0, 1.0);
+    output.position = vec4<f32>(positions[vertex_index], 0.0, 1.0);
     return output;
 }}
 
 @fragment
-fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {{
-    return input.color;
+fn fs_main() -> @location(0) vec4<f32> {{
+    return {};
 }}
 "#,
-        case.condition
+        case.source
     )
 }
 
-fn pipeline(case: PackedVertexCase) -> GpuRenderPipelineDescriptor {
+fn pipeline(case: BlendCase) -> GpuRenderPipelineDescriptor {
     let source_text = shader_source(case);
     let identity = GpuProgramSourceIdentity::new(
         GpuProgramSourceOwnerId::allocate().unwrap(),
-        GpuProgramSourceKey::new(format!("r1.vertex_packed.{}", case.name)).unwrap(),
+        GpuProgramSourceKey::new(format!("r2.blend.{}", case.name)).unwrap(),
         GpuProgramSourceRevision::try_from_raw(1).unwrap(),
     );
     let mut sources = GpuProgramSourceRegistry::new(2, 16 * 1024).unwrap();
@@ -97,8 +119,7 @@ fn pipeline(case: PackedVertexCase) -> GpuRenderPipelineDescriptor {
         .admit_wgsl(
             identity,
             &source_text,
-            GpuProgramSourceProvenance::new(format!("R1 packed vertex {} proof", case.name), None)
-                .unwrap(),
+            GpuProgramSourceProvenance::new(format!("R2 blend {} proof", case.name), None).unwrap(),
         )
         .unwrap();
     let vertex = GpuEntryPointName::new("vs_main").unwrap();
@@ -109,21 +130,14 @@ fn pipeline(case: PackedVertexCase) -> GpuRenderPipelineDescriptor {
         std::iter::empty::<GpuBindingLayoutRefinement>(),
     )
     .unwrap();
-    let layout = GpuVertexBufferLayoutDescriptor::new(
-        0,
-        4,
-        GpuVertexStepMode::Vertex,
-        [GpuVertexAttribute::new(0, 0, case.format)],
-    )
-    .unwrap();
     let target = GpuColorTargetStateDescriptor::new(
         GpuTextureFormat::Rgba8Unorm,
-        None,
+        Some(case.blend),
         GpuColorWriteMask::ALL,
     )
     .unwrap();
     let state = GpuRenderPipelineStateDescriptor::new(
-        GpuVertexInputStateDescriptor::new([layout]).unwrap(),
+        GpuVertexInputStateDescriptor::new([]).unwrap(),
         Some(GpuFragmentOutputStateDescriptor::new([target])),
         GpuPrimitiveStateDescriptor::default(),
         None,
@@ -139,38 +153,11 @@ fn pipeline(case: PackedVertexCase) -> GpuRenderPipelineDescriptor {
     .unwrap()
 }
 
-fn vertex_buffer(scope: &mut GpuResourceScope, case: PackedVertexCase) -> GpuBufferHandle {
-    let mut bytes = Vec::with_capacity(12);
-    for _ in 0..3 {
-        bytes.extend_from_slice(&case.bytes);
-    }
-    let prepared =
-        PreparedGpuData::<TransferData>::ordinary_pod_transfer(case.name, bytes.as_slice())
-            .unwrap();
-    let name = format!("{} packed vertex buffer", case.name);
-    let resource_label = label(&name);
-    scope
-        .buffer(
-            GpuBufferDescriptor::new(
-                common(&name),
-                prepared.layout().byte_len(),
-                GpuBufferUsages::new(
-                    &resource_label,
-                    [GpuBufferUsage::Vertex, GpuBufferUsage::CopyDestination],
-                )
-                .unwrap(),
-                GpuBufferInitialization::Prepared(prepared),
-            )
-            .unwrap(),
-        )
-        .unwrap()
-}
-
 fn render_target(
     scope: &mut GpuResourceScope,
-    case: PackedVertexCase,
+    case: BlendCase,
 ) -> (GpuTextureHandle, GpuTextureViewHandle) {
-    let name = format!("{} packed vertex target", case.name);
+    let name = format!("{} blend target", case.name);
     let resource_label = label(&name);
     let texture = scope
         .texture(
@@ -210,19 +197,15 @@ fn render_target(
     (texture, view)
 }
 
-fn graph(case: PackedVertexCase) -> (GpuPreparedWorkGraph, GpuReadbackId) {
+fn graph(case: BlendCase) -> (GpuPreparedWorkGraph, GpuReadbackId) {
     let mut scope = GpuResourceScope::new();
-    let vertices = vertex_buffer(&mut scope, case);
     let (target, target_view) = render_target(&mut scope, case);
     let pipeline = pipeline(case);
     let bindings = GpuRuntimeBindingSet::new(pipeline.layout().clone(), []).unwrap();
-    let vertex_binding =
-        GpuVertexBufferBinding::new(0, &vertices, GpuBufferRange::whole(&vertices).unwrap())
-            .unwrap();
     let draw = GpuRenderDraw::new(
         pipeline,
         bindings,
-        [vertex_binding],
+        [],
         None,
         GpuDrawIntent::direct(
             GpuDrawRange::new(0, 3).unwrap(),
@@ -230,13 +213,22 @@ fn graph(case: PackedVertexCase) -> (GpuPreparedWorkGraph, GpuReadbackId) {
         ),
         GpuViewport::new(0.0, 0.0, WIDTH as f32, HEIGHT as f32, 0.0, 1.0).unwrap(),
         GpuScissorRect::new(0, 0, WIDTH, HEIGHT).unwrap(),
-        GpuBlendConstant::new(0.0, 0.0, 0.0, 0.0).unwrap(),
+        GpuBlendConstant::new(
+            case.blend_constant[0],
+            case.blend_constant[1],
+            case.blend_constant[2],
+            case.blend_constant[3],
+        )
+        .unwrap(),
         0,
     )
     .unwrap();
     let attachment = GpuRenderColorAttachment::new(
         target_view,
-        GpuColorAttachmentLoad::Clear(GpuColorClearValue::new(0.0, 0.0, 0.0, 1.0).unwrap()),
+        GpuColorAttachmentLoad::Clear(
+            GpuColorClearValue::new(case.clear[0], case.clear[1], case.clear[2], case.clear[3])
+                .unwrap(),
+        ),
         GpuAttachmentStore::Store,
         None,
     )
@@ -256,10 +248,10 @@ fn graph(case: PackedVertexCase) -> (GpuPreparedWorkGraph, GpuReadbackId) {
         readback_id,
     )
     .unwrap();
-    let graph_name = format!("R1 packed vertex {}", case.name);
+    let graph_name = format!("R2 blend {}", case.name);
     let fragment = GpuWorkFragment::build(&graph_name, |builder| {
-        builder.operation("draw packed vertex format", render)?;
-        builder.operation("read packed vertex target", readback)?;
+        builder.operation("draw blend proof", render)?;
+        builder.operation("read blend target", readback)?;
         Ok(())
     })
     .unwrap();
@@ -300,7 +292,7 @@ async fn wait_for_readback(
     context: &GpuContext,
     submission: &GpuSubmission,
     id: GpuReadbackId,
-    case: PackedVertexCase,
+    case: BlendCase,
 ) -> GpuReadbackBytes {
     const MAX_PROGRESS_TICKS: usize = 4_000;
     let readback = submission.readback(id).unwrap().clone();
@@ -314,18 +306,15 @@ async fn wait_for_readback(
             }
             GpuReadbackStatus::Ready(_) | GpuReadbackStatus::Pending => {}
             GpuReadbackStatus::Failed(error) => {
-                panic!("{} packed vertex readback failed: {error:?}", case.name)
+                panic!("{} blend readback failed: {error:?}", case.name)
             }
         }
         if let GpuSubmissionStatus::Failed(error) = submission.status() {
-            panic!("{} packed vertex submission failed: {error:?}", case.name);
+            panic!("{} blend submission failed: {error:?}", case.name);
         }
         progress_yield().await;
     }
-    panic!(
-        "{} packed vertex proof exceeded its bounded progress budget",
-        case.name
-    )
+    panic!("{} blend proof exceeded its bounded progress budget", case.name)
 }
 
 fn pixel_at(bytes: &GpuReadbackBytes, x: u32, y: u32) -> [u8; 4] {
@@ -341,11 +330,15 @@ async fn run_suite(context: &GpuContext) -> u32 {
         let submission = context.submit_prepared(prepared).unwrap();
         let bytes = wait_for_readback(context, &submission, readback_id, case).await;
         assert_eq!(bytes.texture_format(), Some(GpuTextureFormat::Rgba8Unorm));
-        assert_eq!(pixel_at(&bytes, WIDTH / 2, HEIGHT / 2), DRAW_PIXEL);
-        assert_eq!(pixel_at(&bytes, 0, 0), CLEAR_PIXEL);
+        assert_eq!(
+            pixel_at(&bytes, WIDTH / 2, HEIGHT / 2),
+            case.expected,
+            "{} exact blend result",
+            case.name
+        );
         println!(
-            "{:?} vertex: EXERCISED (non-symmetric packed decode + exact readback)",
-            case.format
+            "{} blend: EXERCISED (independent normalized blend state + exact readback)",
+            case.name
         );
         mask |= 1 << index;
     }
@@ -361,7 +354,7 @@ fn native_context() -> GpuContext {
             .require_format_role(GpuTextureFormat::Rgba8Unorm, GpuFormatRole::CopySource)
             .with_fallback_policy(GpuSoftwareFallbackPolicy::Require)
             .with_allowed_backends([GpuBackendFamily::Vulkan])
-            .with_label("R1 packed vertex proof");
+            .with_label("R2 blend proof");
     let context = pollster::block_on(GpuContext::request(descriptor))
         .expect("native Conformance must provide the retained Vulkan fallback adapter");
     assert_eq!(context.adapter_facts().backend(), GpuBackendFamily::Vulkan);
@@ -373,13 +366,13 @@ fn native_context() -> GpuContext {
 }
 
 #[cfg(target_arch = "wasm32")]
-pub(crate) async fn run_browser_vertex_packed() -> u32 {
+pub(crate) async fn run_browser_blend_state() -> u32 {
     let descriptor =
         GpuContextDescriptor::new(GpuCapabilityProfile::OffscreenGraphicsBaseline.requirements())
             .require_format_role(GpuTextureFormat::Rgba8Unorm, GpuFormatRole::ColorAttachment)
             .require_format_role(GpuTextureFormat::Rgba8Unorm, GpuFormatRole::CopySource)
             .with_allowed_backends([GpuBackendFamily::BrowserWebGpu])
-            .with_label("R1 browser packed vertex proof");
+            .with_label("R2 browser blend proof");
     let context = GpuContext::request(descriptor)
         .await
         .expect("actual-browser Conformance must provide WebGPU");
@@ -391,26 +384,59 @@ pub(crate) async fn run_browser_vertex_packed() -> u32 {
 }
 
 #[test]
-fn packed_vertex_case_census_matches_public_semantics() {
-    assert_eq!(CASES.len(), 2);
-    for case in CASES {
-        assert_eq!(case.format.size_bytes(), 4, "{:?}", case.format);
-        assert_eq!(
-            case.format.attribute_alignment_bytes(),
-            4,
-            "{:?}",
-            case.format
-        );
-        let value_type = case.format.shader_io_type();
-        assert_eq!(value_type.scalar_class(), GpuShaderIoScalarClass::Float);
-        assert_eq!(value_type.vector_width().get(), 4);
-    }
+fn blend_state_census_matches_portable_contract() {
+    let factors = [
+        GpuBlendFactor::Zero,
+        GpuBlendFactor::One,
+        GpuBlendFactor::Src,
+        GpuBlendFactor::OneMinusSrc,
+        GpuBlendFactor::SrcAlpha,
+        GpuBlendFactor::OneMinusSrcAlpha,
+        GpuBlendFactor::Dst,
+        GpuBlendFactor::OneMinusDst,
+        GpuBlendFactor::DstAlpha,
+        GpuBlendFactor::OneMinusDstAlpha,
+        GpuBlendFactor::SrcAlphaSaturated,
+        GpuBlendFactor::Constant,
+        GpuBlendFactor::OneMinusConstant,
+    ];
+    let operations = [
+        GpuBlendOperation::Add,
+        GpuBlendOperation::Subtract,
+        GpuBlendOperation::ReverseSubtract,
+        GpuBlendOperation::Min,
+        GpuBlendOperation::Max,
+    ];
+    assert_eq!(factors.len(), 13);
+    assert_eq!(operations.len(), 5);
+
+    assert_eq!(CUSTOM_BLEND.color().operation(), GpuBlendOperation::Subtract);
+    assert_eq!(CUSTOM_BLEND.alpha().operation(), GpuBlendOperation::Add);
+    assert_eq!(MIN_MAX_BLEND.color().operation(), GpuBlendOperation::Min);
+    assert_eq!(MIN_MAX_BLEND.alpha().operation(), GpuBlendOperation::Max);
+
+    assert!(
+        GpuColorTargetStateDescriptor::new(
+            GpuTextureFormat::R32Uint,
+            Some(CUSTOM_BLEND),
+            GpuColorWriteMask::ALL,
+        )
+        .is_err()
+    );
+    assert!(
+        GpuColorTargetStateDescriptor::new(
+            GpuTextureFormat::Rgba8Unorm,
+            Some(CUSTOM_BLEND),
+            GpuColorWriteMask::ALL,
+        )
+        .is_ok()
+    );
 }
 
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
 #[ignore = "requires the retained Vulkan software adapter"]
-fn packed_vertex_native_pipeline_and_decode_are_backend_proven() {
+fn portable_blend_state_native_execution_is_backend_proven() {
     let context = native_context();
     let mask = pollster::block_on(run_suite(&context));
     assert_eq!(mask, 0b11);
