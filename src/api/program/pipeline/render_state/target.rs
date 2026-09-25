@@ -546,6 +546,32 @@ mod tests {
                 .unwrap();
         assert_eq!(state.stencil(), Some(stencil));
         assert!(stencil.may_write());
+
+        let depth = GpuDepthStateDescriptor::new(true, GpuCompareFunction::LessEqual);
+        assert!(
+            GpuDepthStencilStateDescriptor::new(
+                GpuTextureFormat::Depth24PlusStencil8,
+                Some(depth),
+                None,
+            )
+            .is_ok()
+        );
+        assert!(
+            GpuDepthStencilStateDescriptor::new(
+                GpuTextureFormat::Depth24PlusStencil8,
+                None,
+                Some(stencil),
+            )
+            .is_ok()
+        );
+        let combined = GpuDepthStencilStateDescriptor::new(
+            GpuTextureFormat::Depth24PlusStencil8,
+            Some(depth),
+            Some(stencil),
+        )
+        .unwrap();
+        assert_eq!(combined.depth(), Some(depth));
+        assert_eq!(combined.stencil(), Some(stencil));
         assert!(
             GpuDepthStencilStateDescriptor::new(
                 GpuTextureFormat::Stencil8,

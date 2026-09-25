@@ -741,6 +741,11 @@ mod tests {
                 TextureFormat::Depth24Plus,
                 None,
             ),
+            (
+                GpuTextureFormat::Depth24PlusStencil8,
+                TextureFormat::Depth24PlusStencil8,
+                None,
+            ),
         ] {
             assert!(texture_formats().contains(&(format, native)));
             assert!(!is_g7a_presentation_format(format));

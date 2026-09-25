@@ -716,6 +716,7 @@ mod tests {
             (GpuTextureFormat::Stencil8, Some(1)),
             (GpuTextureFormat::Depth16Unorm, Some(2)),
             (GpuTextureFormat::Depth24Plus, None),
+            (GpuTextureFormat::Depth24PlusStencil8, None),
         ] {
             let input = GpuTextureFormatCapabilities {
                 sampled: true,
