@@ -714,7 +714,10 @@ mod tests {
         ] {
             assert!(texture_formats().contains(&(format, native)));
             assert!(!is_g7a_presentation_format(format));
-            assert_eq!(format.copy_block_size(GpuTextureAspect::All), expected_copy_size);
+            assert_eq!(
+                format.copy_block_size(GpuTextureAspect::All),
+                expected_copy_size
+            );
 
             let facts = format_capabilities(
                 format,
@@ -738,7 +741,6 @@ mod tests {
             assert_eq!(facts.block_copy_size, None);
         }
     }
-
 }
 
 #[cfg(test)]

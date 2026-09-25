@@ -660,9 +660,8 @@ mod browser {
             &format!("{name} render"),
             GpuWorkOperation::Render(browser_depth_clear(view)),
         );
-        let graph =
-            GpuPreparedWorkGraph::prepare(format_label(&name), [builder.finish().unwrap()])
-                .unwrap();
+        let graph = GpuPreparedWorkGraph::prepare(format_label(&name), [builder.finish().unwrap()])
+            .unwrap();
         let prepared = context.prepare_submission(graph).await.unwrap();
         let submission = context.submit_prepared(prepared).unwrap();
         let readbacks = wait_for_terminal_readbacks(&context, &submission, &[]).await;
@@ -731,9 +730,8 @@ mod browser {
             &format!("{name} copy"),
             GpuWorkOperation::Copy(copy),
         );
-        let graph =
-            GpuPreparedWorkGraph::prepare(format_label(&name), [builder.finish().unwrap()])
-                .unwrap();
+        let graph = GpuPreparedWorkGraph::prepare(format_label(&name), [builder.finish().unwrap()])
+            .unwrap();
         let prepared = context.prepare_submission(graph).await.unwrap();
         let submission = context.submit_prepared(prepared).unwrap();
         let readbacks = wait_for_terminal_readbacks(&context, &submission, &[]).await;
@@ -762,7 +760,10 @@ mod browser {
             &mut allocator,
             &format!("{name} source"),
             format,
-            [GpuTextureUsage::CopySource, GpuTextureUsage::CopyDestination],
+            [
+                GpuTextureUsage::CopySource,
+                GpuTextureUsage::CopyDestination,
+            ],
             GpuTextureInitialization::Uninitialized,
             width,
             height,
@@ -771,7 +772,10 @@ mod browser {
             &mut allocator,
             &format!("{name} destination"),
             format,
-            [GpuTextureUsage::CopySource, GpuTextureUsage::CopyDestination],
+            [
+                GpuTextureUsage::CopySource,
+                GpuTextureUsage::CopyDestination,
+            ],
             GpuTextureInitialization::Uninitialized,
             width,
             height,
@@ -803,8 +807,8 @@ mod browser {
             .unwrap(),
         )
         .unwrap();
-        let copy =
-            GpuCopyOperation::texture_to_texture(source_region, destination_region.clone()).unwrap();
+        let copy = GpuCopyOperation::texture_to_texture(source_region, destination_region.clone())
+            .unwrap();
         let readback_id = GpuReadbackId::allocate().unwrap();
         let readback = GpuReadbackOperation::new(destination_region.into(), readback_id).unwrap();
         let mut builder =
@@ -826,9 +830,8 @@ mod browser {
             &format!("{name} readback"),
             GpuWorkOperation::Readback(readback),
         );
-        let graph =
-            GpuPreparedWorkGraph::prepare(format_label(&name), [builder.finish().unwrap()])
-                .unwrap();
+        let graph = GpuPreparedWorkGraph::prepare(format_label(&name), [builder.finish().unwrap()])
+            .unwrap();
         let prepared = context.prepare_submission(graph).await.unwrap();
         let submission = context.submit_prepared(prepared).unwrap();
         let readbacks = wait_for_terminal_readbacks(&context, &submission, &[readback_id]).await;

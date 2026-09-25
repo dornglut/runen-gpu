@@ -192,9 +192,7 @@ fn new_depth_only_formats_preserve_full_plane_and_non_linear_copy_semantics() {
                 GpuCopyOperation::buffer_to_texture(layout.clone(), destination_region.clone())
                     .is_err()
             );
-            assert!(
-                GpuCopyOperation::texture_to_buffer(source_region.clone(), layout).is_err()
-            );
+            assert!(GpuCopyOperation::texture_to_buffer(source_region.clone(), layout).is_err());
 
             let payload = PreparedGpuData::<TransferData>::from_pod_transfer(
                 "depth24plus upload bytes",
@@ -218,8 +216,7 @@ fn new_depth_only_formats_preserve_full_plane_and_non_linear_copy_semantics() {
 fn depth24plus_prepared_bytes_fail_closed() {
     let name = "depth24plus prepared bytes";
     let resource_label = label(name);
-    let extent =
-        GpuTextureExtent::new(&resource_label, GpuTextureDimension::D2, 16, 8, 1).unwrap();
+    let extent = GpuTextureExtent::new(&resource_label, GpuTextureDimension::D2, 16, 8, 1).unwrap();
     let data = PreparedGpuData::<TransferData>::from_pod_transfer(
         name,
         &[0_u8; 256],

@@ -6,7 +6,9 @@ const DEPTH_FORMATS: [GpuTextureFormat; 2] = [
     GpuTextureFormat::Depth24Plus,
 ];
 
-fn label(value: &str) -> GpuResourceLabel { GpuResourceLabel::new(value).unwrap() }
+fn label(value: &str) -> GpuResourceLabel {
+    GpuResourceLabel::new(value).unwrap()
+}
 fn provenance(value: &str) -> GpuResourceProvenance {
     GpuResourceProvenance::new(label(value), None, None)
 }
@@ -17,7 +19,8 @@ fn common(value: &str) -> GpuResourceCommon {
         GpuMemoryIntent::Device,
         GpuReconstruction::SourceBacked,
         provenance(value),
-    ).unwrap()
+    )
+    .unwrap()
 }
 
 fn requirements() -> GpuCapabilityRequirements {

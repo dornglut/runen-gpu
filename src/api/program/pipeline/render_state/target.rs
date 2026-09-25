@@ -342,12 +342,8 @@ mod tests {
                 .is_err()
             );
             assert!(
-                GpuDepthStencilStateDescriptor::new(
-                    format,
-                    true,
-                    GpuCompareFunction::LessEqual,
-                )
-                .is_ok()
+                GpuDepthStencilStateDescriptor::new(format, true, GpuCompareFunction::LessEqual,)
+                    .is_ok()
             );
         }
         for format in [
