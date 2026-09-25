@@ -388,7 +388,7 @@ impl GpuStencilStateDescriptor {
 /// Floating values are stored as canonical IEEE-754 bits so render-pipeline
 /// equality and hashing remain deterministic. Negative zero is normalized to
 /// positive zero; NaN and infinity are rejected.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct GpuDepthBiasState {
     constant: i32,
     slope_scale_bits: u32,
@@ -432,16 +432,6 @@ impl GpuDepthBiasState {
 
     pub const fn is_zero(self) -> bool {
         self.constant == 0 && self.slope_scale_bits == 0 && self.clamp_bits == 0
-    }
-}
-
-impl Default for GpuDepthBiasState {
-    fn default() -> Self {
-        Self {
-            constant: 0,
-            slope_scale_bits: 0,
-            clamp_bits: 0,
-        }
     }
 }
 
