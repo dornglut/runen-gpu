@@ -592,6 +592,20 @@ impl GpuRenderDepthStencilAttachment {
                 "use a view whose effective format contains a stencil aspect before configuring stencil attachment state",
             ));
         }
+        if texture
+            .descriptor()
+            .usages()
+            .contains(GpuTextureUsage::TransientAttachment)
+            && (depth.is_some() != format.is_depth() || stencil.is_some() != format.is_stencil())
+        {
+            return Err(GpuWorkOperationError::invalid(
+                "construct GPU render depth/stencil attachment",
+                label,
+                Some(texture.diagnostic_identity()),
+                GpuWorkOperationCause::InvalidAttachment,
+                "provide writable Clear + Discard state for every depth/stencil aspect present in a transient attachment format",
+            ));
+        }
 
         let make_access = |aspect, access, load_kind, store| {
             let selected = source.descriptor().subresources();

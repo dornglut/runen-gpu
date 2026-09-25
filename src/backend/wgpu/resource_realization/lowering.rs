@@ -205,7 +205,10 @@ pub(super) fn lower_texture(
     }
 
     let downlevel = context.backend.adapter.get_downlevel_capabilities();
-    let permits_format_reinterpretation = downlevel.flags.contains(DownlevelFlags::VIEW_FORMATS);
+    let permits_format_reinterpretation = !descriptor
+        .usages()
+        .contains(GpuTextureUsage::TransientAttachment)
+        && downlevel.flags.contains(DownlevelFlags::VIEW_FORMATS);
     Ok(LoweredTexture {
         size: Extent3d {
             width: extent.width(),
@@ -445,15 +448,18 @@ fn validate_texture_roles(
         .collect::<std::collections::BTreeSet<_>>();
     for usage in usages {
         let role = match usage {
-            GpuTextureUsage::Sampled => GpuFormatRole::Sampled,
-            GpuTextureUsage::StorageRead => GpuFormatRole::StorageRead,
-            GpuTextureUsage::StorageWrite => GpuFormatRole::StorageWrite,
-            GpuTextureUsage::ColorAttachment => GpuFormatRole::ColorAttachment,
-            GpuTextureUsage::DepthStencilAttachment => GpuFormatRole::DepthStencil,
-            GpuTextureUsage::CopySource => GpuFormatRole::CopySource,
-            GpuTextureUsage::CopyDestination => GpuFormatRole::CopyDestination,
+            GpuTextureUsage::Sampled => Some(GpuFormatRole::Sampled),
+            GpuTextureUsage::StorageRead => Some(GpuFormatRole::StorageRead),
+            GpuTextureUsage::StorageWrite => Some(GpuFormatRole::StorageWrite),
+            GpuTextureUsage::ColorAttachment => Some(GpuFormatRole::ColorAttachment),
+            GpuTextureUsage::DepthStencilAttachment => Some(GpuFormatRole::DepthStencil),
+            GpuTextureUsage::TransientAttachment => None,
+            GpuTextureUsage::CopySource => Some(GpuFormatRole::CopySource),
+            GpuTextureUsage::CopyDestination => Some(GpuFormatRole::CopyDestination),
         };
-        if !admitted_roles.contains(&(format, role)) {
+        if let Some(role) = role
+            && !admitted_roles.contains(&(format, role))
+        {
             return Err(incompatible(
                 identity,
                 "texture format role was not admitted by the context request",
@@ -472,7 +478,7 @@ fn validate_texture_roles(
             GpuTextureUsage::CopySource | GpuTextureUsage::CopyDestination => {
                 require_feature(context, identity, GpuCapabilityFeature::Copy)?;
             }
-            GpuTextureUsage::Sampled => {}
+            GpuTextureUsage::Sampled | GpuTextureUsage::TransientAttachment => {}
         }
     }
     Ok(())
@@ -542,6 +548,7 @@ const fn map_texture_usage(usage: GpuTextureUsage) -> TextureUsages {
         GpuTextureUsage::ColorAttachment | GpuTextureUsage::DepthStencilAttachment => {
             TextureUsages::RENDER_ATTACHMENT
         }
+        GpuTextureUsage::TransientAttachment => TextureUsages::TRANSIENT_ATTACHMENT,
         GpuTextureUsage::CopySource => TextureUsages::COPY_SRC,
         GpuTextureUsage::CopyDestination => TextureUsages::COPY_DST,
     }
@@ -568,6 +575,10 @@ mod tests {
         assert_eq!(
             map_texture_usage(GpuTextureUsage::StorageRead),
             TextureUsages::STORAGE_BINDING
+        );
+        assert_eq!(
+            map_texture_usage(GpuTextureUsage::TransientAttachment),
+            TextureUsages::TRANSIENT_ATTACHMENT
         );
         for (normalized, native) in [
             (GpuTextureFormat::Rgba8Snorm, TextureFormat::Rgba8Snorm),
