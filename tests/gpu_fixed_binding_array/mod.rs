@@ -284,11 +284,9 @@ fn prepared_uniform_buffer(
     name: &str,
     value: u32,
 ) -> GpuBufferHandle {
-    let data = PreparedGpuData::<TransferData>::ordinary_pod_transfer(
-        name,
-        &[value, 0_u32, 0_u32, 0_u32],
-    )
-    .unwrap();
+    let data =
+        PreparedGpuData::<TransferData>::ordinary_pod_transfer(name, &[value, 0_u32, 0_u32, 0_u32])
+            .unwrap();
     resources
         .buffer(
             GpuBufferDescriptor::ordinary_owned(
