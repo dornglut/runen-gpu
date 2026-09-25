@@ -95,7 +95,11 @@ const done = arguments[arguments.length - 1];
         typeof wasm.runengpu_browser_r8_new_exercised_mask !== "function" ||
         typeof wasm.runengpu_browser_rg8_exercised_mask !== "function" ||
         typeof wasm.runengpu_browser_r16_exercised_mask !== "function" ||
-        typeof wasm.runengpu_browser_rg16_exercised_mask !== "function") {
+        typeof wasm.runengpu_browser_rg16_exercised_mask !== "function" ||
+        typeof wasm.runengpu_browser_depth_sampled_exercised_mask !== "function" ||
+        typeof wasm.runengpu_browser_depth_attachment_exercised_mask !== "function" ||
+        typeof wasm.runengpu_browser_depth_copy_exercised_mask !== "function" ||
+        typeof wasm.runengpu_browser_depth_linear_exercised_mask !== "function") {
       throw new Error("RunenGPU browser proof control exports are absent");
     }
     wasm.runengpu_browser_start();
@@ -110,6 +114,10 @@ const done = arguments[arguments.length - 1];
           rg8Mask: wasm.runengpu_browser_rg8_exercised_mask(),
           r16Mask: wasm.runengpu_browser_r16_exercised_mask(),
           rg16Mask: wasm.runengpu_browser_rg16_exercised_mask(),
+          depthSampledMask: wasm.runengpu_browser_depth_sampled_exercised_mask(),
+          depthAttachmentMask: wasm.runengpu_browser_depth_attachment_exercised_mask(),
+          depthCopyMask: wasm.runengpu_browser_depth_copy_exercised_mask(),
+          depthLinearMask: wasm.runengpu_browser_depth_linear_exercised_mask(),
         });
         return;
       }
@@ -126,31 +134,108 @@ const done = arguments[arguments.length - 1];
 """
 
 
+def read_exercised_mask(
+    value: dict[str, object],
+    mask_key: str,
+    family: str,
+    format_count: int,
+) -> int:
+    if format_count < 1 or format_count > 32:
+        raise ValueError("format reporter requires 1..32 formats")
+    mask = value.get(mask_key)
+    full_mask = (1 << format_count) - 1
+    if type(mask) is not int or mask < 0 or mask > full_mask:
+        raise RuntimeError(
+            f"actual-browser {family} proof did not report valid execution evidence: {mask!r}"
+        )
+    return mask
+
+
 def report_format_family(
     value: dict[str, object],
     mask_key: str,
     family: str,
     format_names: tuple[str, ...],
-    widths: str,
+    evidence: str,
+    skip_reason: str = "copy roles not both advertised",
 ) -> None:
-    if not format_names or len(format_names) > 32:
-        raise ValueError("format reporter requires 1..32 names")
-    mask = value.get(mask_key)
-    full_mask = (1 << len(format_names)) - 1
-    if type(mask) is not int or mask < 0 or mask > full_mask:
-        raise RuntimeError(
-            f"actual-browser {family} proof did not report valid execution evidence: {mask!r}"
-        )
+    mask = read_exercised_mask(value, mask_key, family, len(format_names))
     for index, format_name in enumerate(format_names):
         if mask & (1 << index):
-            print(f"RunenGPU actual-browser {format_name}: EXERCISED ({widths} copy round trips)")
+            print(f"RunenGPU actual-browser {format_name}: EXERCISED ({evidence})")
         else:
-            print(f"RunenGPU actual-browser {format_name}: SKIPPED (copy roles not both advertised)")
+            print(f"RunenGPU actual-browser {format_name}: SKIPPED ({skip_reason})")
     if mask == 0:
         message = (
             f"RunenGPU actual-browser {family}: NOT QUALIFIED "
             f"(all {len(format_names)} formats skipped)"
         )
+        print(message)
+        raise RuntimeError(message)
+
+
+def report_depth_proofs(value: dict[str, object]) -> None:
+    formats = ("Depth16Unorm", "Depth24Plus")
+    sampled = read_exercised_mask(value, "depthSampledMask", "Depth sampled", len(formats))
+    attachment = read_exercised_mask(
+        value, "depthAttachmentMask", "Depth attachment", len(formats)
+    )
+    copy = read_exercised_mask(value, "depthCopyMask", "Depth copy", len(formats))
+    linear = read_exercised_mask(value, "depthLinearMask", "Depth16 linear", len(formats))
+
+    if linear & ~copy or linear & ~1:
+        raise RuntimeError("actual-browser Depth16 linear evidence is inconsistent")
+
+    for index, format_name in enumerate(formats):
+        bit = 1 << index
+        if sampled & bit:
+            print(
+                f"RunenGPU actual-browser {format_name} Sampled: "
+                "EXERCISED (D2 sampled-usage realization)"
+            )
+        else:
+            print(
+                f"RunenGPU actual-browser {format_name} Sampled: "
+                "SKIPPED (sampled role not advertised)"
+            )
+
+        if attachment & bit:
+            print(
+                f"RunenGPU actual-browser {format_name} DepthStencil: "
+                "EXERCISED (clear-only depth attachment pass)"
+            )
+        else:
+            print(
+                f"RunenGPU actual-browser {format_name} DepthStencil: "
+                "SKIPPED (depth-attachment role not advertised)"
+            )
+
+        if copy & bit:
+            print(
+                f"RunenGPU actual-browser {format_name} Copy: "
+                "EXERCISED (full-plane texture-to-texture copy)"
+            )
+        else:
+            print(
+                f"RunenGPU actual-browser {format_name} Copy: "
+                "SKIPPED (CopySource + CopyDestination not both advertised)"
+            )
+
+    if linear & 1:
+        print(
+            "RunenGPU actual-browser Depth16Unorm linear transfer: "
+            "EXERCISED (127px and 128px buffer -> texture -> texture -> buffer round trips)"
+        )
+    elif copy & 1:
+        raise RuntimeError("actual-browser Depth16 copy executed without required linear proof")
+    else:
+        print(
+            "RunenGPU actual-browser Depth16Unorm linear transfer: "
+            "SKIPPED (CopySource + CopyDestination not both advertised)"
+        )
+
+    if attachment == 0:
+        message = "RunenGPU actual-browser Depth: NOT QUALIFIED (all formats skipped)"
         print(message)
         raise RuntimeError(message)
 
@@ -172,7 +257,7 @@ def verify_format_reporter() -> None:
             failed = False
             try:
                 with contextlib.redirect_stdout(captured):
-                    report_format_family({"mask": mask}, "mask", family, names, "test widths")
+                    report_format_family({"mask": mask}, "mask", family, names, "test evidence")
             except RuntimeError as error:
                 if mask != 0 or "NOT QUALIFIED" not in str(error):
                     raise AssertionError(
@@ -201,7 +286,7 @@ def verify_format_reporter() -> None:
         ):
             try:
                 with contextlib.redirect_stdout(io.StringIO()):
-                    report_format_family(invalid, "mask", family, names, "test widths")
+                    report_format_family(invalid, "mask", family, names, "test evidence")
             except RuntimeError as error:
                 if "valid execution evidence" not in str(error):
                     raise AssertionError(
@@ -212,9 +297,42 @@ def verify_format_reporter() -> None:
     print("RunenGPU actual-browser format reporter regression: PASS")
 
 
+def verify_depth_reporter() -> None:
+    valid = {
+        "depthSampledMask": 3,
+        "depthAttachmentMask": 1,
+        "depthCopyMask": 1,
+        "depthLinearMask": 1,
+    }
+    captured = io.StringIO()
+    with contextlib.redirect_stdout(captured):
+        report_depth_proofs(valid)
+    transcript = captured.getvalue()
+    if transcript.count(": EXERCISED (") != 5:
+        raise AssertionError("incorrect exercised count for depth proof reporter")
+    if transcript.count(": SKIPPED (") != 2:
+        raise AssertionError("incorrect skipped count for depth proof reporter")
+
+    for invalid in (
+        {**valid, "depthAttachmentMask": 0, "depthCopyMask": 0, "depthLinearMask": 0},
+        {**valid, "depthCopyMask": 0},
+        {**valid, "depthLinearMask": 2},
+        {**valid, "depthSampledMask": 4},
+    ):
+        try:
+            with contextlib.redirect_stdout(io.StringIO()):
+                report_depth_proofs(invalid)
+        except RuntimeError:
+            pass
+        else:
+            raise AssertionError(f"invalid depth proof evidence was accepted: {invalid!r}")
+    print("RunenGPU actual-browser depth reporter regression: PASS")
+
+
 def main() -> int:
     args = parse_args()
     verify_format_reporter()
+    verify_depth_reporter()
     out_dir = args.out_dir.resolve()
     js_path = out_dir / "gpu_browser_webgpu.js"
     wasm_path = out_dir / "gpu_browser_webgpu_bg.wasm"
@@ -314,43 +432,44 @@ def main() -> int:
             "rgba16Mask",
             "RGBA16",
             ("Rgba16Uint", "Rgba16Sint", "Rgba16Float"),
-            "31px and 32px",
+            "31px and 32px copy round trips",
         )
         report_format_family(
             value,
             "rgba8Mask",
             "RGBA8",
             ("Rgba8Snorm", "Rgba8Uint", "Rgba8Sint"),
-            "63px and 64px",
+            "63px and 64px copy round trips",
         )
         report_format_family(
             value,
             "r8NewMask",
             "R8-new",
             ("R8Snorm", "R8Uint", "R8Sint"),
-            "255px and 256px",
+            "255px and 256px copy round trips",
         )
         report_format_family(
             value,
             "rg8Mask",
             "RG8",
             ("Rg8Unorm", "Rg8Snorm", "Rg8Uint", "Rg8Sint"),
-            "127px and 128px",
+            "127px and 128px copy round trips",
         )
         report_format_family(
             value,
             "r16Mask",
             "R16",
             ("R16Uint", "R16Sint", "R16Float"),
-            "127px and 128px",
+            "127px and 128px copy round trips",
         )
         report_format_family(
             value,
             "rg16Mask",
             "RG16",
             ("Rg16Uint", "Rg16Sint", "Rg16Float"),
-            "63px and 64px",
+            "63px and 64px copy round trips",
         )
+        report_depth_proofs(value)
         print("RunenGPU actual-browser WebGPU conformance: PASS")
         return 0
     except Exception:

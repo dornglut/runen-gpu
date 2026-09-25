@@ -506,6 +506,33 @@ mod plain_color_sampled_class_tests {
     use super::*;
 
     #[test]
+    fn depth_only_formats_require_depth_sample_class() {
+        for format in [
+            GpuTextureFormat::Depth16Unorm,
+            GpuTextureFormat::Depth24Plus,
+            GpuTextureFormat::Depth32Float,
+        ] {
+            assert!(sampled_texture_class_matches(
+                format,
+                GpuTextureAspect::DepthOnly,
+                GpuTextureSampleClass::Depth,
+            ));
+            for mismatch in [
+                GpuTextureSampleClass::FloatFilterable,
+                GpuTextureSampleClass::FloatUnfilterable,
+                GpuTextureSampleClass::Sint,
+                GpuTextureSampleClass::Uint,
+            ] {
+                assert!(!sampled_texture_class_matches(
+                    format,
+                    GpuTextureAspect::DepthOnly,
+                    mismatch,
+                ));
+            }
+        }
+    }
+
+    #[test]
     fn normalized_scalar_class_drives_sampled_texture_structure() {
         for (format, class) in [
             (

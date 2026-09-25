@@ -222,6 +222,7 @@ jobs:
           cargo +stable test --test gpu_r1_rgba16_texture_formats --locked -- --ignored --nocapture
           cargo +stable test --test gpu_r1_r_rg8_texture_formats --locked -- --ignored --nocapture
           cargo +stable test --test gpu_r1_r_rg16_texture_formats --locked -- --ignored --nocapture
+          cargo +stable test --test gpu_r1_depth_texture_formats --locked -- --ignored --nocapture
 
       - name: Run graceful execution shutdown proof
         env:

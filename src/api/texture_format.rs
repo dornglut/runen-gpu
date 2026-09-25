@@ -479,6 +479,30 @@ const fn semantics(format: GpuTextureFormat) -> GpuTextureFormatSemantics {
             component_count: 4,
             has_alpha: true,
         },
+        GpuTextureFormat::Depth16Unorm => GpuTextureFormatSemantics {
+            aspect_class: GpuTextureAspectClass::Depth,
+            block_dimensions: (1, 1),
+            color_copy_block_size: None,
+            depth_copy_block_size: Some(2),
+            stencil_copy_block_size: None,
+            srgb: false,
+            paired_view_format: None,
+            scalar_class: GpuTextureScalarClass::Float,
+            component_count: 1,
+            has_alpha: false,
+        },
+        GpuTextureFormat::Depth24Plus => GpuTextureFormatSemantics {
+            aspect_class: GpuTextureAspectClass::Depth,
+            block_dimensions: (1, 1),
+            color_copy_block_size: None,
+            depth_copy_block_size: None,
+            stencil_copy_block_size: None,
+            srgb: false,
+            paired_view_format: None,
+            scalar_class: GpuTextureScalarClass::Float,
+            component_count: 1,
+            has_alpha: false,
+        },
         GpuTextureFormat::Depth32Float => GpuTextureFormatSemantics {
             aspect_class: GpuTextureAspectClass::Depth,
             block_dimensions: (1, 1),
@@ -650,7 +674,7 @@ mod tests {
         let cases = [
             (
                 GpuTextureFormat::R8Unorm,
-                1,
+                Some(1),
                 false,
                 false,
                 None,
@@ -660,7 +684,7 @@ mod tests {
             ),
             (
                 GpuTextureFormat::R8Snorm,
-                1,
+                Some(1),
                 false,
                 false,
                 None,
@@ -670,7 +694,7 @@ mod tests {
             ),
             (
                 GpuTextureFormat::R8Uint,
-                1,
+                Some(1),
                 false,
                 false,
                 None,
@@ -680,7 +704,7 @@ mod tests {
             ),
             (
                 GpuTextureFormat::R8Sint,
-                1,
+                Some(1),
                 false,
                 false,
                 None,
@@ -690,7 +714,7 @@ mod tests {
             ),
             (
                 GpuTextureFormat::Rg8Unorm,
-                2,
+                Some(2),
                 false,
                 false,
                 None,
@@ -700,7 +724,7 @@ mod tests {
             ),
             (
                 GpuTextureFormat::Rg8Snorm,
-                2,
+                Some(2),
                 false,
                 false,
                 None,
@@ -710,7 +734,7 @@ mod tests {
             ),
             (
                 GpuTextureFormat::Rg8Uint,
-                2,
+                Some(2),
                 false,
                 false,
                 None,
@@ -720,7 +744,7 @@ mod tests {
             ),
             (
                 GpuTextureFormat::Rg8Sint,
-                2,
+                Some(2),
                 false,
                 false,
                 None,
@@ -730,7 +754,7 @@ mod tests {
             ),
             (
                 GpuTextureFormat::R16Uint,
-                2,
+                Some(2),
                 false,
                 false,
                 None,
@@ -740,7 +764,7 @@ mod tests {
             ),
             (
                 GpuTextureFormat::R16Sint,
-                2,
+                Some(2),
                 false,
                 false,
                 None,
@@ -750,7 +774,7 @@ mod tests {
             ),
             (
                 GpuTextureFormat::R16Float,
-                2,
+                Some(2),
                 false,
                 false,
                 None,
@@ -760,7 +784,7 @@ mod tests {
             ),
             (
                 GpuTextureFormat::Rg16Uint,
-                4,
+                Some(4),
                 false,
                 false,
                 None,
@@ -770,7 +794,7 @@ mod tests {
             ),
             (
                 GpuTextureFormat::Rg16Sint,
-                4,
+                Some(4),
                 false,
                 false,
                 None,
@@ -780,7 +804,7 @@ mod tests {
             ),
             (
                 GpuTextureFormat::Rg16Float,
-                4,
+                Some(4),
                 false,
                 false,
                 None,
@@ -790,7 +814,7 @@ mod tests {
             ),
             (
                 GpuTextureFormat::Rgba8Unorm,
-                4,
+                Some(4),
                 false,
                 false,
                 Some(GpuTextureFormat::Rgba8UnormSrgb),
@@ -800,7 +824,7 @@ mod tests {
             ),
             (
                 GpuTextureFormat::Rgba8UnormSrgb,
-                4,
+                Some(4),
                 false,
                 true,
                 Some(GpuTextureFormat::Rgba8Unorm),
@@ -810,7 +834,7 @@ mod tests {
             ),
             (
                 GpuTextureFormat::Rgba8Snorm,
-                4,
+                Some(4),
                 false,
                 false,
                 None,
@@ -820,7 +844,7 @@ mod tests {
             ),
             (
                 GpuTextureFormat::Rgba8Uint,
-                4,
+                Some(4),
                 false,
                 false,
                 None,
@@ -830,7 +854,7 @@ mod tests {
             ),
             (
                 GpuTextureFormat::Rgba8Sint,
-                4,
+                Some(4),
                 false,
                 false,
                 None,
@@ -840,7 +864,7 @@ mod tests {
             ),
             (
                 GpuTextureFormat::Bgra8Unorm,
-                4,
+                Some(4),
                 false,
                 false,
                 Some(GpuTextureFormat::Bgra8UnormSrgb),
@@ -850,7 +874,7 @@ mod tests {
             ),
             (
                 GpuTextureFormat::Bgra8UnormSrgb,
-                4,
+                Some(4),
                 false,
                 true,
                 Some(GpuTextureFormat::Bgra8Unorm),
@@ -860,7 +884,7 @@ mod tests {
             ),
             (
                 GpuTextureFormat::R32Uint,
-                4,
+                Some(4),
                 false,
                 false,
                 None,
@@ -870,7 +894,7 @@ mod tests {
             ),
             (
                 GpuTextureFormat::R32Sint,
-                4,
+                Some(4),
                 false,
                 false,
                 None,
@@ -880,7 +904,7 @@ mod tests {
             ),
             (
                 GpuTextureFormat::R32Float,
-                4,
+                Some(4),
                 false,
                 false,
                 None,
@@ -890,7 +914,7 @@ mod tests {
             ),
             (
                 GpuTextureFormat::Rg32Uint,
-                8,
+                Some(8),
                 false,
                 false,
                 None,
@@ -900,7 +924,7 @@ mod tests {
             ),
             (
                 GpuTextureFormat::Rg32Sint,
-                8,
+                Some(8),
                 false,
                 false,
                 None,
@@ -910,7 +934,7 @@ mod tests {
             ),
             (
                 GpuTextureFormat::Rg32Float,
-                8,
+                Some(8),
                 false,
                 false,
                 None,
@@ -920,7 +944,7 @@ mod tests {
             ),
             (
                 GpuTextureFormat::Rgba32Uint,
-                16,
+                Some(16),
                 false,
                 false,
                 None,
@@ -930,7 +954,7 @@ mod tests {
             ),
             (
                 GpuTextureFormat::Rgba32Sint,
-                16,
+                Some(16),
                 false,
                 false,
                 None,
@@ -940,7 +964,7 @@ mod tests {
             ),
             (
                 GpuTextureFormat::Rgba32Float,
-                16,
+                Some(16),
                 false,
                 false,
                 None,
@@ -950,7 +974,7 @@ mod tests {
             ),
             (
                 GpuTextureFormat::Rgba16Uint,
-                8,
+                Some(8),
                 false,
                 false,
                 None,
@@ -960,7 +984,7 @@ mod tests {
             ),
             (
                 GpuTextureFormat::Rgba16Sint,
-                8,
+                Some(8),
                 false,
                 false,
                 None,
@@ -970,7 +994,7 @@ mod tests {
             ),
             (
                 GpuTextureFormat::Rgba16Float,
-                8,
+                Some(8),
                 false,
                 false,
                 None,
@@ -979,8 +1003,28 @@ mod tests {
                 true,
             ),
             (
+                GpuTextureFormat::Depth16Unorm,
+                Some(2),
+                true,
+                false,
+                None,
+                GpuTextureScalarClass::Float,
+                1,
+                false,
+            ),
+            (
+                GpuTextureFormat::Depth24Plus,
+                None,
+                true,
+                false,
+                None,
+                GpuTextureScalarClass::Float,
+                1,
+                false,
+            ),
+            (
                 GpuTextureFormat::Depth32Float,
-                4,
+                Some(4),
                 true,
                 false,
                 None,
@@ -990,7 +1034,7 @@ mod tests {
             ),
         ];
 
-        assert_eq!(cases.len(), 34);
+        assert_eq!(cases.len(), 36);
         for (format, bytes, depth, srgb, pair, class, components, alpha) in cases {
             let explicit_aspect = if depth {
                 GpuTextureAspect::DepthOnly
@@ -998,14 +1042,14 @@ mod tests {
                 GpuTextureAspect::Color
             };
             assert_eq!(block_dimensions(format), (1, 1));
-            assert_eq!(copy_block_size(format, GpuTextureAspect::All), Some(bytes));
-            assert_eq!(copy_block_size(format, explicit_aspect), Some(bytes));
+            assert_eq!(copy_block_size(format, GpuTextureAspect::All), bytes);
+            assert_eq!(copy_block_size(format, explicit_aspect), bytes);
             assert_eq!(format.block_dimensions(), block_dimensions(format));
             assert_eq!(
                 format.copy_block_size(GpuTextureAspect::All),
                 copy_block_size(format, GpuTextureAspect::All)
             );
-            assert_eq!(format.copy_block_size(GpuTextureAspect::All), Some(bytes));
+            assert_eq!(format.copy_block_size(GpuTextureAspect::All), bytes);
             assert_eq!(is_depth(format), depth);
             assert_eq!(is_srgb(format), srgb);
             assert_eq!(paired_view_format(format), pair);
@@ -1020,14 +1064,28 @@ mod tests {
                 canonical_copy_aspect(format, GpuTextureAspect::All),
                 Some(explicit_aspect)
             );
-            assert_eq!(
-                logical_copy_footprint(format, GpuTextureAspect::All, 7, 5),
-                Some((7 * bytes, 5))
-            );
-            assert_eq!(
-                tightly_packed_copy_byte_len(format, GpuTextureAspect::All, 7, 5, 3),
-                Some(u64::from(7 * bytes * 5 * 3))
-            );
+            match bytes {
+                Some(bytes) => {
+                    assert_eq!(
+                        logical_copy_footprint(format, GpuTextureAspect::All, 7, 5),
+                        Some((7 * bytes, 5))
+                    );
+                    assert_eq!(
+                        tightly_packed_copy_byte_len(format, GpuTextureAspect::All, 7, 5, 3),
+                        Some(u64::from(7 * bytes * 5 * 3))
+                    );
+                }
+                None => {
+                    assert_eq!(
+                        logical_copy_footprint(format, GpuTextureAspect::All, 7, 5),
+                        None
+                    );
+                    assert_eq!(
+                        tightly_packed_copy_byte_len(format, GpuTextureAspect::All, 7, 5, 3),
+                        None
+                    );
+                }
+            }
         }
     }
 
@@ -1119,6 +1177,27 @@ mod tests {
         assert_eq!(
             canonical_copy_aspect(GpuTextureFormat::Rgba16Float, GpuTextureAspect::All),
             Some(GpuTextureAspect::Color)
+        );
+        for format in [
+            GpuTextureFormat::Depth16Unorm,
+            GpuTextureFormat::Depth24Plus,
+            GpuTextureFormat::Depth32Float,
+        ] {
+            assert_eq!(
+                canonical_aspect(format, GpuTextureAspect::All),
+                Some(GpuTextureAspect::DepthOnly)
+            );
+            assert!(supports_aspect(format, GpuTextureAspect::DepthOnly));
+            assert!(!supports_aspect(format, GpuTextureAspect::Color));
+            assert!(!supports_aspect(format, GpuTextureAspect::StencilOnly));
+        }
+        assert_eq!(
+            copy_block_size(GpuTextureFormat::Depth16Unorm, GpuTextureAspect::All),
+            Some(2)
+        );
+        assert_eq!(
+            copy_block_size(GpuTextureFormat::Depth24Plus, GpuTextureAspect::All),
+            None
         );
         assert_eq!(
             canonical_copy_aspect(GpuTextureFormat::Depth32Float, GpuTextureAspect::All),
