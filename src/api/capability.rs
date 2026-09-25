@@ -709,34 +709,52 @@ mod tests {
 
     #[test]
     fn format_capability_construction_normalizes_structural_fields() {
-        let input = GpuTextureFormatCapabilities {
-            sampled: true,
-            filterable: false,
-            storage_read: true,
-            storage_write: false,
-            color_attachment: false,
-            depth_stencil: false,
-            copy_source: true,
-            copy_destination: false,
-            block_dimensions: Some((99, 77)),
-            block_copy_size: Some(123),
-        };
-        let capabilities = GpuCapabilities::from_normalized_facts(
-            [],
-            test_limits(),
-            [(GpuTextureFormat::R32Float, input)],
-        );
-        let normalized = capabilities.format(GpuTextureFormat::R32Float).unwrap();
-        assert_eq!(normalized.block_dimensions, Some((1, 1)));
-        assert_eq!(normalized.block_copy_size, Some(4));
-        assert_eq!(normalized.sampled, input.sampled);
-        assert_eq!(normalized.filterable, input.filterable);
-        assert_eq!(normalized.storage_read, input.storage_read);
-        assert_eq!(normalized.storage_write, input.storage_write);
-        assert_eq!(normalized.color_attachment, input.color_attachment);
-        assert_eq!(normalized.depth_stencil, input.depth_stencil);
-        assert_eq!(normalized.copy_source, input.copy_source);
-        assert_eq!(normalized.copy_destination, input.copy_destination);
+        for (format, expected_copy_size) in [
+            (GpuTextureFormat::R32Float, Some(4)),
+            (GpuTextureFormat::Depth16Unorm, Some(2)),
+            (GpuTextureFormat::Depth24Plus, None),
+        ] {
+            let input = GpuTextureFormatCapabilities {
+                sampled: true,
+                filterable: false,
+                storage_read: true,
+                storage_write: false,
+                color_attachment: false,
+                depth_stencil: false,
+                copy_source: true,
+                copy_destination: false,
+                block_dimensions: Some((99, 77)),
+                block_copy_size: Some(123),
+            };
+            let capabilities =
+                GpuCapabilities::from_normalized_facts([], test_limits(), [(format, input)]);
+            let normalized = capabilities.format(format).unwrap();
+            assert_eq!(normalized.block_dimensions, Some((1, 1)), "{format:?}");
+            assert_eq!(
+                normalized.block_copy_size, expected_copy_size,
+                "{format:?}"
+            );
+            assert_eq!(normalized.sampled, input.sampled, "{format:?}");
+            assert_eq!(normalized.filterable, input.filterable, "{format:?}");
+            assert_eq!(normalized.storage_read, input.storage_read, "{format:?}");
+            assert_eq!(
+                normalized.storage_write, input.storage_write,
+                "{format:?}"
+            );
+            assert_eq!(
+                normalized.color_attachment, input.color_attachment,
+                "{format:?}"
+            );
+            assert_eq!(
+                normalized.depth_stencil, input.depth_stencil,
+                "{format:?}"
+            );
+            assert_eq!(normalized.copy_source, input.copy_source, "{format:?}");
+            assert_eq!(
+                normalized.copy_destination, input.copy_destination,
+                "{format:?}"
+            );
+        }
     }
 
     #[test]
