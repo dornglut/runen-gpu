@@ -1,7 +1,7 @@
 use super::admission::GpuAdmissionContract;
-use super::descriptor::{GpuAdapterClass, GpuBackendFamily};
+use super::descriptor::{GpuAdapterClass, GpuBackendFamily, GpuFormatRole};
 use super::selection::GpuCandidateDisposition;
-use crate::{GpuCapabilities, GpuCapabilityFeature, GpuLimits};
+use crate::{GpuCapabilities, GpuCapabilityFeature, GpuLimits, GpuTextureFormat};
 use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -38,6 +38,10 @@ pub enum GpuPortabilityClass {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum GpuPortabilityReason {
     DeclaredExtension(GpuCapabilityFeature),
+    DeclaredFormatRoleExtension {
+        format: GpuTextureFormat,
+        role: GpuFormatRole,
+    },
     PreferredRequirementDegraded(GpuCapabilityFeature),
     BackendSpecialization(GpuBackendFamily),
     UnknownBackend,

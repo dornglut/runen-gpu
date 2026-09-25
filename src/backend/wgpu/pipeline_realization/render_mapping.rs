@@ -146,6 +146,7 @@ pub(super) const fn texture_format(value: GpuTextureFormat) -> TextureFormat {
         GpuTextureFormat::Depth24Plus => TextureFormat::Depth24Plus,
         GpuTextureFormat::Depth24PlusStencil8 => TextureFormat::Depth24PlusStencil8,
         GpuTextureFormat::Depth32Float => TextureFormat::Depth32Float,
+        GpuTextureFormat::Depth32FloatStencil8 => TextureFormat::Depth32FloatStencil8,
     }
 }
 

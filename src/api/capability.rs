@@ -248,6 +248,7 @@ pub enum GpuTextureFormat {
     Depth24Plus,
     Depth24PlusStencil8,
     Depth32Float,
+    Depth32FloatStencil8,
 }
 
 impl GpuTextureFormat {

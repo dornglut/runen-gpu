@@ -10,7 +10,8 @@ use crate::{
     GpuContext, GpuContextAdmissionReport, GpuContextAffinity, GpuContextDescriptor, GpuContextId,
     GpuContextRequestError, GpuContextRequestErrorCategory, GpuDeviceGeneration, GpuDeviceLimits,
     GpuDeviceRequestProfile, GpuExecutionPolicy, GpuFallbackStatus, GpuLimits,
-    GpuRealizationPolicies, GpuSoftwareFallbackPolicy, admitted_device_facts, allocate_context_id,
+    GpuRealizationPolicies, GpuSoftwareFallbackPolicy, GpuTextureFormat, admitted_device_facts,
+    allocate_context_id,
     canonical_candidate_input_key, select_candidate_inputs,
 };
 use std::sync::Arc;
@@ -394,11 +395,19 @@ fn map_power_preference(preference: crate::GpuPowerPreference) -> wgpu::PowerPre
 }
 
 fn requested_features(candidate: &crate::GpuCandidateAdmissionReport) -> Features {
-    candidate
+    let mut features = candidate
         .enabled_features()
         .fold(Features::empty(), |features, feature| {
             features | wgpu_features_for(feature)
-        })
+        });
+    if candidate
+        .contract()
+        .format_roles()
+        .any(|(format, _)| format == GpuTextureFormat::Depth32FloatStencil8)
+    {
+        features |= Features::DEPTH32FLOAT_STENCIL8;
+    }
+    features
 }
 
 fn wgpu_features_for(feature: GpuCapabilityFeature) -> Features {
@@ -526,7 +535,8 @@ mod tests {
     use crate::{
         GpuAdapterClass, GpuAdapterLimits, GpuBackendFamily, GpuCapabilities,
         GpuCapabilityRequirement, GpuCapabilityRequirements, GpuContextDescriptor,
-        GpuFallbackStatus, GpuSoftwareStatus, select_candidate_with_host_evidence,
+        GpuFallbackStatus, GpuFormatRole, GpuSoftwareStatus, GpuTextureFormatCapabilities,
+        select_candidate_with_host_evidence,
     };
 
     fn candidate() -> crate::GpuCandidateAdmissionReport {
@@ -706,6 +716,70 @@ mod tests {
         assert!(
             verify_requested_features(Features::TIMESTAMP_QUERY, Features::TIMESTAMP_QUERY).is_ok()
         );
+        assert!(
+            verify_requested_features(Features::DEPTH32FLOAT_STENCIL8, Features::empty()).is_err()
+        );
+        assert!(
+            verify_requested_features(
+                Features::DEPTH32FLOAT_STENCIL8,
+                Features::DEPTH32FLOAT_STENCIL8,
+            )
+            .is_ok()
+        );
+    }
+
+    fn candidate_with_depth32float_stencil8_role(
+        role: GpuFormatRole,
+    ) -> crate::GpuCandidateAdmissionReport {
+        let limits = test_gpu_limits();
+        let mut format = GpuTextureFormatCapabilities::none();
+        match role {
+            GpuFormatRole::Sampled => format.sampled = true,
+            GpuFormatRole::DepthStencil => format.depth_stencil = true,
+            GpuFormatRole::CopySource => format.copy_source = true,
+            GpuFormatRole::CopyDestination => format.copy_destination = true,
+            other => panic!("unsupported focused test role: {other:?}"),
+        }
+        let facts = GpuAdapterFacts::new(
+            GpuBackendFamily::Vulkan,
+            GpuAdapterClass::Discrete,
+            GpuSoftwareStatus::Hardware,
+            GpuFallbackStatus::ConfirmedNotFallback,
+            GpuCapabilities::from_normalized_facts(
+                [],
+                limits,
+                [(GpuTextureFormat::Depth32FloatStencil8, format)],
+            ),
+            GpuAdapterLimits::new(limits),
+            GpuAlignmentFacts {
+                uniform_dynamic_offset: Some(256),
+                storage_dynamic_offset: Some(256),
+                copy_buffer_offset: Some(4),
+                bytes_per_row: Some(256),
+                query_resolve_destination: Some(256),
+            },
+        );
+        select_candidate_with_host_evidence(
+            &GpuContextDescriptor::new(GpuCapabilityRequirements::new())
+                .require_format_role(GpuTextureFormat::Depth32FloatStencil8, role),
+            [(facts, GpuCandidateEnvironmentEvidence::headless())],
+        )
+        .unwrap()
+        .candidate
+    }
+
+    #[test]
+    fn depth32float_stencil8_roles_request_only_the_private_backend_prerequisite() {
+        assert!(!requested_features(&candidate()).contains(Features::DEPTH32FLOAT_STENCIL8));
+        for role in [
+            GpuFormatRole::Sampled,
+            GpuFormatRole::DepthStencil,
+            GpuFormatRole::CopySource,
+            GpuFormatRole::CopyDestination,
+        ] {
+            let requested = requested_features(&candidate_with_depth32float_stencil8_role(role));
+            assert!(requested.contains(Features::DEPTH32FLOAT_STENCIL8), "{role:?}");
+        }
     }
 
     #[test]
