@@ -3,6 +3,20 @@ use runen_gpu::*;
 #[path = "../support/readback_wait.rs"]
 mod readback_wait;
 
+const UNUSED_STORAGE_ARRAY_WGSL: &str = r#"
+enable wgpu_binding_array;
+
+struct Value {
+    value: u32,
+}
+
+@group(0) @binding(0)
+var<storage, read> unused_inputs: binding_array<Value, 2>;
+
+@compute @workgroup_size(1)
+fn cs_main() {}
+"#;
+
 const STORAGE_ARRAY_WGSL: &str = r#"
 enable wgpu_binding_array;
 
@@ -50,6 +64,24 @@ fn prepared_u32_buffer(
             .unwrap(),
         )
         .unwrap()
+}
+
+fn unused_storage_array_program() -> GpuProgramDescriptor {
+    let [source] = admit_static_wgsl_sources([(
+        "proof.fixed-binding-array.unused-storage",
+        1,
+        UNUSED_STORAGE_ARRAY_WGSL,
+    )])
+    .unwrap();
+    let entry = GpuEntryPointName::new("cs_main").unwrap();
+    let program = GpuProgramDescriptor::new(
+        source,
+        [entry],
+        std::iter::empty::<GpuBindingLayoutRefinement>(),
+    )
+    .unwrap();
+    assert_eq!(program.interface().bindings().count(), 0);
+    program
 }
 
 fn pipeline() -> GpuComputePipelineDescriptor {
@@ -174,6 +206,27 @@ pub(crate) async fn run_storage_buffer_array_proof(
         println!("Fixed binding arrays: UNSUPPORTED (storage-buffer array capability absent)");
         return false;
     }
+
+    let unused_program = unused_storage_array_program();
+    let error = baseline
+        .realize_program(&unused_program)
+        .await
+        .expect_err("baseline context must reject unused module-global array requirements");
+    assert_eq!(
+        error.category(),
+        GpuProgramBindingRealizationErrorCategory::RequirementNotAdmitted
+    );
+    let unused_context = GpuContext::request(context_descriptor(
+        backend,
+        fallback,
+        unused_program.requirements().clone(),
+    ))
+    .await
+    .expect("unused module-global array requirements must admit the capability-bearing context");
+    unused_context
+        .realize_program(&unused_program)
+        .await
+        .expect("whole-module shader realization must succeed after admitting its exact requirements");
 
     let (graph, readback_id, layout) = proof_graph();
     assert!(
