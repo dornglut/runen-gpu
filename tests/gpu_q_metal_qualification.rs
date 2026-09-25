@@ -390,7 +390,6 @@ fn capability_report(context: &GpuContext) -> Value {
     Value::Object(capabilities)
 }
 
-
 const SELECTED_FIXED_ARRAY_WGSL: &str = r#"
 enable wgpu_binding_array;
 
@@ -413,11 +412,7 @@ var unused_textures: binding_array<texture_2d<u32>, 3>;
 fn compute_main() {}
 "#;
 
-fn admitted_probe_program(
-    key: &str,
-    wgsl: &str,
-    entry_point: &str,
-) -> GpuProgramDescriptor {
+fn admitted_probe_program(key: &str, wgsl: &str, entry_point: &str) -> GpuProgramDescriptor {
     let identity = GpuProgramSourceIdentity::new(
         GpuProgramSourceOwnerId::allocate().expect("probe source owner should allocate"),
         GpuProgramSourceKey::new(key).expect("probe source key should be valid"),
