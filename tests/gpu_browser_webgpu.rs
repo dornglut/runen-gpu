@@ -522,14 +522,8 @@ mod browser {
                 GpuTextureDescriptor::new(
                     format_texture_common(name),
                     GpuTextureDimension::D2,
-                    GpuTextureExtent::new(
-                        &resource_label,
-                        GpuTextureDimension::D2,
-                        4,
-                        4,
-                        1,
-                    )
-                    .unwrap(),
+                    GpuTextureExtent::new(&resource_label, GpuTextureDimension::D2, 4, 4, 1)
+                        .unwrap(),
                     1,
                     1,
                     format,
@@ -549,8 +543,7 @@ mod browser {
             GpuTextureFormat::Rgb10a2Unorm,
             GpuTextureFormat::Rg11b10Ufloat,
         ];
-        let copy_mask =
-            run_browser_format_copy(&FORMATS, &[63, 64], 4, "Packed32", true).await;
+        let copy_mask = run_browser_format_copy(&FORMATS, &[63, 64], 4, "Packed32", true).await;
         PACKED32_EXERCISED_MASK.with(|slot| *slot.borrow_mut() = copy_mask);
 
         let census = GpuContext::request(

@@ -83,11 +83,8 @@ fn packed32_public_semantics_and_program_typing_are_exact() {
         assert_eq!(output.value_type().vector_width().get(), width);
         assert_eq!(target.has_blendable_alpha_channel(), alpha);
 
-        let alpha_result = GpuColorTargetStateDescriptor::new(
-            format,
-            GpuBlendMode::Alpha,
-            GpuColorWriteMask::ALL,
-        );
+        let alpha_result =
+            GpuColorTargetStateDescriptor::new(format, GpuBlendMode::Alpha, GpuColorWriteMask::ALL);
         if class == GpuShaderIoScalarClass::Uint {
             assert!(alpha_result.is_err());
         } else {
@@ -140,14 +137,8 @@ fn texture(
             GpuTextureDescriptor::new(
                 common(name),
                 GpuTextureDimension::D2,
-                GpuTextureExtent::new(
-                    &resource_label,
-                    GpuTextureDimension::D2,
-                    width,
-                    2,
-                    1,
-                )
-                .unwrap(),
+                GpuTextureExtent::new(&resource_label, GpuTextureDimension::D2, width, 2, 1)
+                    .unwrap(),
                 1,
                 1,
                 format,
@@ -187,7 +178,10 @@ fn wait_for_readback(
             GpuSubmissionStatus::Failed(error) => panic!("{name} submission failed: {error:?}"),
             GpuSubmissionStatus::Accepted => {}
         }
-        assert!(Instant::now() < deadline, "{name} submission did not finish");
+        assert!(
+            Instant::now() < deadline,
+            "{name} submission did not finish"
+        );
         std::thread::yield_now();
     }
     bytes
@@ -277,14 +271,20 @@ fn run_native_packed32() -> usize {
                 format,
                 &format!("{name} source"),
                 width,
-                [GpuTextureUsage::CopySource, GpuTextureUsage::CopyDestination],
+                [
+                    GpuTextureUsage::CopySource,
+                    GpuTextureUsage::CopyDestination,
+                ],
             );
             let destination = texture(
                 &mut allocator,
                 format,
                 &format!("{name} destination"),
                 width,
-                [GpuTextureUsage::CopySource, GpuTextureUsage::CopyDestination],
+                [
+                    GpuTextureUsage::CopySource,
+                    GpuTextureUsage::CopyDestination,
+                ],
             );
             let extent = GpuCopyExtent::new(width, 2, 1).unwrap();
             let source_region = GpuTextureCopyRegion::new(
@@ -347,9 +347,7 @@ fn run_native_packed32() -> usize {
             assert_eq!(bytes.layout().byte_len(), expected.len() as u64);
             assert_eq!(bytes.texture_format(), Some(format));
         }
-        println!(
-            "{format:?} Copy: EXERCISED zero-valued 63px/64px round trips"
-        );
+        println!("{format:?} Copy: EXERCISED zero-valued 63px/64px round trips");
         exercised += 1;
     }
     exercised

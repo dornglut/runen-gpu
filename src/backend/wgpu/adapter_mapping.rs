@@ -231,7 +231,10 @@ fn texture_formats() -> [(GpuTextureFormat, TextureFormat); 43] {
         (GpuTextureFormat::Rgb9e5Ufloat, TextureFormat::Rgb9e5Ufloat),
         (GpuTextureFormat::Rgb10a2Uint, TextureFormat::Rgb10a2Uint),
         (GpuTextureFormat::Rgb10a2Unorm, TextureFormat::Rgb10a2Unorm),
-        (GpuTextureFormat::Rg11b10Ufloat, TextureFormat::Rg11b10Ufloat),
+        (
+            GpuTextureFormat::Rg11b10Ufloat,
+            TextureFormat::Rg11b10Ufloat,
+        ),
         (GpuTextureFormat::R32Uint, TextureFormat::R32Uint),
         (GpuTextureFormat::R32Sint, TextureFormat::R32Sint),
         (GpuTextureFormat::R32Float, TextureFormat::R32Float),
@@ -771,7 +774,10 @@ mod tests {
             (GpuTextureFormat::Rgb9e5Ufloat, TextureFormat::Rgb9e5Ufloat),
             (GpuTextureFormat::Rgb10a2Uint, TextureFormat::Rgb10a2Uint),
             (GpuTextureFormat::Rgb10a2Unorm, TextureFormat::Rgb10a2Unorm),
-            (GpuTextureFormat::Rg11b10Ufloat, TextureFormat::Rg11b10Ufloat),
+            (
+                GpuTextureFormat::Rg11b10Ufloat,
+                TextureFormat::Rg11b10Ufloat,
+            ),
         ] {
             assert!(texture_formats().contains(&(format, native)));
             assert!(!is_g7a_presentation_format(format));
