@@ -1100,21 +1100,30 @@ impl GpuTextureViewDescriptor {
             .usages()
             .contains(GpuTextureUsage::TransientAttachment)
         {
-            let exact_parent_format =
-                format.is_none_or(|view_format| view_format == parent.format());
-            let exact_subresource = dimension == GpuTextureViewDimension::D2
-                && subresources.base_mip_level() == 0
-                && subresources.mip_level_count() == 1
-                && subresources.base_array_layer() == 0
-                && subresources.array_layer_count() == 1
-                && texture_format::canonical_aspect(parent.format(), subresources.aspect())
-                    == Some(texture_format::whole_aspect(parent.format()));
-            if !exact_parent_format || !exact_subresource {
+            if dimension != GpuTextureViewDimension::D2 {
+                return Err(GpuResourceDescriptorError::invalid(
+                    "construct GPU texture-view descriptor",
+                    label,
+                    GpuResourceDescriptorCause::IncompatibleViewDimension,
+                    "use a D2 view for transient attachment contents",
+                ));
+            }
+            if texture_format::canonical_aspect(parent.format(), subresources.aspect())
+                != Some(texture_format::whole_aspect(parent.format()))
+            {
+                return Err(GpuResourceDescriptorError::invalid(
+                    "construct GPU texture-view descriptor",
+                    label,
+                    GpuResourceDescriptorCause::InvalidAspect,
+                    "select the complete renderable aspect set for transient attachment contents",
+                ));
+            }
+            if format.is_some_and(|view_format| view_format != parent.format()) {
                 return Err(GpuResourceDescriptorError::invalid(
                     "construct GPU texture-view descriptor",
                     label,
                     GpuResourceDescriptorCause::IncompatibleViewFormat,
-                    "use the transient texture's exact format, complete attachment aspect, sole mip, sole layer, and a D2 view",
+                    "use the transient texture's exact parent format",
                 ));
             }
         }
@@ -2409,6 +2418,70 @@ mod tests {
             &texture,
         )
         .is_ok());
+        assert_eq!(
+            GpuTextureViewDescriptor::new(
+                common("transient array view"),
+                &texture,
+                None,
+                GpuTextureViewDimension::D2Array,
+                exact,
+            )
+            .unwrap_err()
+            .cause(),
+            GpuResourceDescriptorCause::IncompatibleViewDimension
+        );
+
+        let combined_label = label("transient combined view texture");
+        let combined = allocator
+            .allocate_texture_handle(
+                GpuTextureDescriptor::new(
+                    common("transient combined view texture"),
+                    GpuTextureDimension::D2,
+                    GpuTextureExtent::new(
+                        &combined_label,
+                        GpuTextureDimension::D2,
+                        8,
+                        8,
+                        1,
+                    )
+                    .unwrap(),
+                    1,
+                    1,
+                    GpuTextureFormat::Depth24PlusStencil8,
+                    GpuTextureUsages::new(
+                        &combined_label,
+                        [
+                            GpuTextureUsage::DepthStencilAttachment,
+                            GpuTextureUsage::TransientAttachment,
+                        ],
+                    )
+                    .unwrap(),
+                    GpuTextureInitialization::Uninitialized,
+                )
+                .unwrap(),
+            )
+            .unwrap();
+        let depth_only = GpuTextureSubresourceRange::new(
+            &combined_label,
+            0,
+            1,
+            0,
+            1,
+            GpuTextureAspect::DepthOnly,
+        )
+        .unwrap();
+        assert_eq!(
+            GpuTextureViewDescriptor::new(
+                common("transient partial combined view"),
+                &combined,
+                None,
+                GpuTextureViewDimension::D2,
+                depth_only,
+            )
+            .unwrap_err()
+            .cause(),
+            GpuResourceDescriptorCause::InvalidAspect
+        );
     }
 
     #[test]
