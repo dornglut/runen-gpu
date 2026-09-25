@@ -76,13 +76,9 @@ impl GpuVertexFormat {
             Self::Sint8x2 | Self::Sint32x2 => (GpuShaderIoScalarClass::Sint, 2),
             Self::Sint8x4 | Self::Sint32x4 => (GpuShaderIoScalarClass::Sint, 4),
             Self::Unorm8 | Self::Snorm8 | Self::Float32 => (GpuShaderIoScalarClass::Float, 1),
-            Self::Unorm8x2 | Self::Snorm8x2 | Self::Float32x2 => {
-                (GpuShaderIoScalarClass::Float, 2)
-            }
+            Self::Unorm8x2 | Self::Snorm8x2 | Self::Float32x2 => (GpuShaderIoScalarClass::Float, 2),
             Self::Float32x3 => (GpuShaderIoScalarClass::Float, 3),
-            Self::Unorm8x4 | Self::Snorm8x4 | Self::Float32x4 => {
-                (GpuShaderIoScalarClass::Float, 4)
-            }
+            Self::Unorm8x4 | Self::Snorm8x4 | Self::Float32x4 => (GpuShaderIoScalarClass::Float, 4),
             Self::Uint32x3 => (GpuShaderIoScalarClass::Uint, 3),
             Self::Sint32x3 => (GpuShaderIoScalarClass::Sint, 3),
         };
