@@ -1310,6 +1310,7 @@ pub(crate) async fn run_storage_texture_array_proof(
     true
 }
 
+#[allow(dead_code)] // Shared proof module is compiled into binaries that use different retained entry points.
 pub(crate) fn assert_contract_suite_authors_all_resource_families() {
     let unused = unused_storage_array_program();
     assert_eq!(unused.interface().bindings().count(), 0);
@@ -1511,6 +1512,7 @@ async fn run_suite_inner(
     }
 }
 
+#[allow(dead_code)] // Shared proof module is compiled into binaries that use different retained entry points.
 pub(crate) async fn run_suite(
     backend: GpuBackendFamily,
     fallback: Option<GpuSoftwareFallbackPolicy>,
