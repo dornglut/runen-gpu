@@ -1,5 +1,5 @@
 use runen_gpu::{
-    GpuCullMode, GpuFrontFace, GpuIndexFormat, GpuMemoryIntent, GpuMultisampleStateDescriptor,
+    GpuCullMode, GpuDepthClipMode, GpuFrontFace, GpuIndexFormat, GpuMemoryIntent, GpuMultisampleStateDescriptor,
     GpuPrimitiveStateDescriptor, GpuPrimitiveTopology, GpuProgramContractCause, GpuReconstruction,
     GpuResourceCommon, GpuResourceDescriptorError, GpuResourceLabel, GpuResourceLifetime,
     GpuResourceProvenance, GpuTextureDescriptor, GpuTextureDimension, GpuTextureExtent,
@@ -47,6 +47,7 @@ fn primitive_state_retains_normalized_correctness_facts() {
         Some(GpuIndexFormat::Uint32),
         GpuFrontFace::Clockwise,
         GpuCullMode::Back,
+        GpuDepthClipMode::Unclipped,
     )
     .unwrap();
     let equivalent = state;
@@ -57,6 +58,7 @@ fn primitive_state_retains_normalized_correctness_facts() {
     assert_eq!(state.strip_index_format(), Some(GpuIndexFormat::Uint32));
     assert_eq!(state.front_face(), GpuFrontFace::Clockwise);
     assert_eq!(state.cull_mode(), GpuCullMode::Back);
+    assert_eq!(state.depth_clip_mode(), GpuDepthClipMode::Unclipped);
 }
 
 #[test]
@@ -66,6 +68,7 @@ fn primitive_state_rejects_strip_index_format_for_list_topology() {
         Some(GpuIndexFormat::Uint16),
         GpuFrontFace::CounterClockwise,
         GpuCullMode::None,
+        GpuDepthClipMode::Clip,
     )
     .expect_err("list topology cannot declare strip restart index state");
 
@@ -83,6 +86,7 @@ fn primitive_defaults_match_the_neutral_triangle_list_contract() {
     assert_eq!(state.strip_index_format(), None);
     assert_eq!(state.front_face(), GpuFrontFace::CounterClockwise);
     assert_eq!(state.cull_mode(), GpuCullMode::None);
+    assert_eq!(state.depth_clip_mode(), GpuDepthClipMode::Clip);
 }
 
 #[test]
