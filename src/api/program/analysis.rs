@@ -382,21 +382,21 @@ fn scan_non_uniform_binding_array_accesses(
         if function_info[index].uniformity.non_uniform_result.is_none() {
             continue;
         }
-        let TypeInner::BindingArray {
-            base: element_type, ..
-        } = *function_info[base].ty.inner_with(&module.types)
-        else {
+        let Expression::GlobalVariable(global_handle) = function.expressions[base] else {
             continue;
         };
-        let Expression::GlobalVariable(global_handle) = function.expressions[base] else {
-            return Err(invalid(
+        let global = &module.global_variables[global_handle];
+        let (element_type, array_count) = binding_array_type(module, global.ty).map_err(|detail| {
+            invalid(
                 "admit canonical WGSL program",
                 source_label,
                 GpuProgramContractCause::ProgramInterfaceMismatch,
-                "binding-array access must resolve directly to one module resource global",
-            ));
-        };
-        let global = &module.global_variables[global_handle];
+                detail,
+            )
+        })?;
+        if array_count.is_none() {
+            continue;
+        }
         let class = fixed_array_compilation_class(module, global.space, element_type).map_err(
             |detail| {
                 invalid(
