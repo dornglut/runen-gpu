@@ -37,7 +37,7 @@ The retained proof mapping is intentionally successor-local:
 | --- | --- |
 | Public contract | API contract, capability, resource, program, submission, readback, surface, and lifecycle tests under `tests/` |
 | Compute | `gpu_prefix_scan_native` proves exact 4097-element inclusive/exclusive results; `gpu_game_of_life_native` proves the fixed 160x90 final-grid oracle and exact 17-frame compute-to-render visual sequence |
-| Render/runtime | G5 transfer and G5R initial-content tests, indexed offscreen known-pattern output, generated indirect drawing, transient-attachment color/MSAA-resolve/depth execution with conditional Stencil8 coverage, and G7A2 native surface presentation |
+| Render/runtime | G5 transfer and G5R initial-content tests, indexed offscreen known-pattern output, generated indirect drawing, depth-clip control with a color-only clipped-vs-unclipped exact-readback oracle, transient-attachment color/MSAA-resolve/depth execution with conditional Stencil8 coverage, and G7A2 native surface presentation |
 | Characterization | The direct-WGPU cost portfolio and graph-preparation scale report remain explicitly direct-WGPU/CPU measurements, separate from the public API contract |
 | Fixed binding arrays | Generic Metal qualification is the retained capability-bearing public execution target and records per-resource-class outcomes on the correlated adapter; actual-browser WebGPU proves the native fixed-array features unsupported with zero normalized array limits and typed admission rejection. `gpu_fixed_binding_array_native` is ignored by default but explicitly invoked by retained Conformance: real Vulkan adapters run the full capability-gated suite, while the pinned llvmpipe/Lavapipe target records storage-buffer arrays as `UNQUALIFIED` after an observed driver-level device loss and continues the sampled-texture/sampler/storage-texture families where advertised. |
 | Browser/Wasm | `gpu_browser_webgpu` compiles for `wasm32-unknown-unknown` and executes the compute/offscreen plus transient-attachment color/MSAA-resolve/depth proof in Chrome WebGPU, proves native fixed binding arrays unsupported with zero normalized array limits and typed admission rejection, and exercises transient Stencil8 when the normalized role is advertised |
@@ -73,7 +73,8 @@ qualification retains zero fixed-array device/workload budgets; separate adapter
 capability-bearing contexts execute supported fixed-array resource classes. The lane also executes
 the exact 4097-element prefix-scan oracle in both modes, executes indexed and
 compute-generated-indirect offscreen exact-readback oracles, reuses the retained
-8-bit/16-bit/packed vertex suites, blend and baseline depth-bias suites, realizes
+8-bit/16-bit/packed vertex suites, blend and baseline depth-bias suites, executes the
+color-only depth-clip-control semantic oracle on the correlated Metal adapter, realizes
 anisotropic sampling, executes the retained transient-attachment color/MSAA-resolve/depth
 suite plus transient Stencil8 when the normalized role is advertised, records fixed-array
 storage-buffer/uniform-buffer/sampled-texture/sampler/storage-texture outcomes as
