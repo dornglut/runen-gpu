@@ -11,10 +11,10 @@ mod readback_wait;
 mod retained_blend;
 #[path = "gpu_r2_depth_bias.rs"]
 mod retained_depth_bias;
-#[path = "gpu_compute_generated_indirect_native.rs"]
-mod retained_indirect;
 #[path = "gpu_fixed_binding_array/mod.rs"]
 mod retained_fixed_binding_array;
+#[path = "gpu_compute_generated_indirect_native.rs"]
+mod retained_indirect;
 #[path = "gpu_offscreen_indexed_native.rs"]
 mod retained_offscreen;
 #[path = "gpu_prefix_scan_native.rs"]
@@ -490,13 +490,12 @@ fn metal_qualification_records_exact_public_api_evidence() {
     ));
     pollster::block_on(execute_render(&context, render, render_readback));
     pollster::block_on(execute_indirect(&context, indirect, indirect_readback));
-    let fixed_binding_arrays = pollster::block_on(
-        retained_fixed_binding_array::run_suite_on_adapter(
+    let fixed_binding_arrays =
+        pollster::block_on(retained_fixed_binding_array::run_suite_on_adapter(
             GpuBackendFamily::Metal,
             None,
             context.adapter_facts(),
-        ),
-    );
+        ));
     let proof_disposition = |exercised: bool| {
         if exercised {
             "EXERCISED"
