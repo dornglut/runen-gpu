@@ -161,17 +161,15 @@ pub(super) fn normalized_features(
         supported.push(GpuCapabilityFeature::StorageResourceBindingArray);
     }
     if features.contains(Features::TEXTURE_BINDING_ARRAY)
-        && features.contains(
-            Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
-        )
+        && features
+            .contains(Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING)
     {
         supported.push(GpuCapabilityFeature::TextureBindingArrayNonUniformIndexing);
     }
     if features.contains(Features::BUFFER_BINDING_ARRAY)
         && features.contains(Features::STORAGE_RESOURCE_BINDING_ARRAY)
-        && features.contains(
-            Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
-        )
+        && features
+            .contains(Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING)
     {
         supported.push(GpuCapabilityFeature::StorageBufferBindingArrayNonUniformIndexing);
     }
@@ -555,9 +553,8 @@ mod tests {
 
     #[test]
     fn non_uniform_binding_array_features_require_complete_normalized_prerequisites() {
-        let non_uniform =
-            Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING
-                | Features::STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING;
+        let non_uniform = Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING
+            | Features::STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING;
 
         let raw_only = normalized_features(
             Backend::Vulkan,
@@ -566,9 +563,7 @@ mod tests {
             false,
             false,
         );
-        assert!(
-            !raw_only.contains(&GpuCapabilityFeature::TextureBindingArrayNonUniformIndexing)
-        );
+        assert!(!raw_only.contains(&GpuCapabilityFeature::TextureBindingArrayNonUniformIndexing));
         assert!(
             !raw_only.contains(&GpuCapabilityFeature::StorageBufferBindingArrayNonUniformIndexing)
         );
@@ -621,8 +616,7 @@ mod tests {
 
         let storage_texture_without_storage_resource = normalized_features(
             Backend::Vulkan,
-            Features::TEXTURE_BINDING_ARRAY
-                | Features::STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
+            Features::TEXTURE_BINDING_ARRAY | Features::STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
             DownlevelFlags::empty(),
             false,
             false,
