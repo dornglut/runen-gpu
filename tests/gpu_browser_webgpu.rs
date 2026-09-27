@@ -20,6 +20,9 @@ mod retained_sampler_anisotropy;
 #[path = "gpu_r3_shader_f16.rs"]
 mod retained_shader_f16;
 #[cfg(target_arch = "wasm32")]
+#[path = "gpu_transient_attachment/mod.rs"]
+mod retained_transient_attachment;
+#[cfg(target_arch = "wasm32")]
 #[path = "gpu_r1_vertex16_formats.rs"]
 mod retained_vertex16;
 #[cfg(target_arch = "wasm32")]
@@ -34,7 +37,7 @@ mod browser {
     use super::{
         retained_bc, retained_blend_state, retained_depth_bias, retained_offscreen_indexed,
         retained_prefix_scan, retained_sampler_anisotropy, retained_shader_f16,
-        retained_vertex_packed, retained_vertex8, retained_vertex16,
+        retained_transient_attachment, retained_vertex_packed, retained_vertex8, retained_vertex16,
     };
     use runen_gpu::*;
     use std::cell::RefCell;
@@ -2141,6 +2144,75 @@ fn cs_main() {
     }
 
     async fn run_browser_webgpu_conformance() {
+        let transient_context = GpuContext::request(retained_transient_attachment::descriptor(
+            GpuBackendFamily::BrowserWebGpu,
+        ))
+        .await
+        .expect("actual-browser Conformance must provide transient attachment WebGPU support");
+        let (transient_graph, transient_readback_id) = retained_transient_attachment::graph();
+        let transient_prepared = transient_context
+            .prepare_submission(transient_graph)
+            .await
+            .unwrap();
+        let transient_submission = transient_context
+            .submit_prepared(transient_prepared)
+            .unwrap();
+        let mut transient_bytes = wait_for_terminal_readbacks(
+            &transient_context,
+            &transient_submission,
+            &[transient_readback_id],
+        )
+        .await;
+        retained_transient_attachment::assert_resolved(&transient_bytes.remove(0));
+
+        let (transient_depth_graph, transient_depth_readback_id) =
+            retained_transient_attachment::depth_graph();
+        let transient_depth_prepared = transient_context
+            .prepare_submission(transient_depth_graph)
+            .await
+            .unwrap();
+        let transient_depth_submission = transient_context
+            .submit_prepared(transient_depth_prepared)
+            .unwrap();
+        let mut transient_depth_bytes = wait_for_terminal_readbacks(
+            &transient_context,
+            &transient_depth_submission,
+            &[transient_depth_readback_id],
+        )
+        .await;
+        retained_transient_attachment::assert_depth_color(&transient_depth_bytes.remove(0));
+        assert_execution_drained(&transient_context);
+
+        if retained_transient_attachment::stencil_supported(&transient_context) {
+            let stencil_context = GpuContext::request(
+                retained_transient_attachment::stencil_descriptor(GpuBackendFamily::BrowserWebGpu),
+            )
+            .await
+            .expect("advertised browser Stencil8 depth/stencil role must admit a context");
+            assert_eq!(
+                stencil_context.adapter_facts(),
+                transient_context.adapter_facts(),
+                "conditional transient Stencil8 proof must stay on the retained browser adapter"
+            );
+            let (stencil_graph, stencil_readback_id) =
+                retained_transient_attachment::stencil_graph();
+            let stencil_prepared = stencil_context
+                .prepare_submission(stencil_graph)
+                .await
+                .unwrap();
+            let stencil_submission = stencil_context.submit_prepared(stencil_prepared).unwrap();
+            let mut stencil_bytes = wait_for_terminal_readbacks(
+                &stencil_context,
+                &stencil_submission,
+                &[stencil_readback_id],
+            )
+            .await;
+            retained_transient_attachment::assert_stencil_terminal(&stencil_bytes.remove(0));
+            assert_execution_drained(&stencil_context);
+        } else {
+            println!("transient Stencil8: UNSUPPORTED (normalized depth/stencil role absent)");
+        }
+
         run_browser_prefix_scan().await;
         run_browser_offscreen_indexed().await;
         run_browser_rgba16_copy().await;

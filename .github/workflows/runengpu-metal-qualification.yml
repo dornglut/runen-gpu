@@ -131,7 +131,7 @@ jobs:
           report_path, expected_revision = sys.argv[1:3]
           with open(report_path, encoding="utf-8") as handle:
               report = json.load(handle)
-          assert report["schema_version"] == 2
+          assert report["schema_version"] == 3
           assert report["qualification_level"] == "generic_metal"
           assert report["revision"] == expected_revision
           assert report["environment"]["architecture"] == "arm64"
@@ -217,6 +217,9 @@ jobs:
           assert report["proofs"]["blend_state_mask"] == 0x3
           assert report["proofs"]["depth_bias_baseline_mask"] == 0x7
           assert report["proofs"]["sampler_anisotropy"] == "EXERCISED"
+          assert report["proofs"]["transient_attachment"] == "EXERCISED"
+          assert report["proofs"]["transient_depth"] == "EXERCISED"
+          assert report["proofs"]["transient_stencil8"] in {"EXERCISED", "UNSUPPORTED"}
           assert report["proofs"]["timestamp_query"] == "UNSUPPORTED_SUPPRESSED"
           print(
               "Generic Metal qualification:",

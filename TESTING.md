@@ -37,9 +37,9 @@ The retained proof mapping is intentionally successor-local:
 | --- | --- |
 | Public contract | API contract, capability, resource, program, submission, readback, surface, and lifecycle tests under `tests/` |
 | Compute | `gpu_prefix_scan_native` proves exact 4097-element inclusive/exclusive results; `gpu_game_of_life_native` proves the fixed 160x90 final-grid oracle and exact 17-frame compute-to-render visual sequence |
-| Render/runtime | G5 transfer and G5R initial-content tests, indexed offscreen known-pattern output, generated indirect drawing, and G7A2 native surface presentation |
+| Render/runtime | G5 transfer and G5R initial-content tests, indexed offscreen known-pattern output, generated indirect drawing, transient-attachment color/MSAA-resolve/depth execution with conditional Stencil8 coverage, and G7A2 native surface presentation |
 | Characterization | The direct-WGPU cost portfolio and graph-preparation scale report remain explicitly direct-WGPU/CPU measurements, separate from the public API contract |
-| Browser/Wasm | `gpu_browser_webgpu` compiles for `wasm32-unknown-unknown` and executes the compute/offscreen proof in Chrome WebGPU |
+| Browser/Wasm | `gpu_browser_webgpu` compiles for `wasm32-unknown-unknown` and executes the compute/offscreen plus transient-attachment color/MSAA-resolve/depth proof in Chrome WebGPU, with transient Stencil8 exercised when the normalized role is advertised |
 | Downstream | `conformance/downstream` uses only the public crate API for the 4097-element prefix scan |
 
 Native GPU assertions are run on Ubuntu 24.04 with Mesa Lavapipe and Xvfb in
@@ -71,8 +71,9 @@ private-WGPU feature/limit characterization correlated to the same Metal adapter
 the exact 4097-element prefix-scan oracle in both modes, executes indexed and
 compute-generated-indirect offscreen exact-readback oracles, reuses the retained
 8-bit/16-bit/packed vertex suites, blend and baseline depth-bias suites, realizes
-anisotropic sampling, and retains a JSON report. It also preserves the current
-conservative Metal `TimestampQuery` suppression.
+anisotropic sampling, executes the retained transient-attachment color/MSAA-resolve/depth
+suite plus transient Stencil8 when the normalized role is advertised, and retains a JSON
+report. It also preserves the current conservative Metal `TimestampQuery` suppression.
 
 Generic hosted Metal evidence is not Apple M3 evidence. The trusted owner-run
 actual-M3 path is:

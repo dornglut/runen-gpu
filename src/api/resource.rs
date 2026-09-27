@@ -288,6 +288,7 @@ pub enum GpuTextureUsage {
     StorageWrite,
     ColorAttachment,
     DepthStencilAttachment,
+    TransientAttachment,
     CopySource,
     CopyDestination,
 }
@@ -308,6 +309,18 @@ impl GpuTextureUsages {
                 GpuResourceDescriptorCause::EmptyUsage,
                 "declare at least one normalized texture usage",
             ));
+        }
+        if usages.contains(&GpuTextureUsage::TransientAttachment) {
+            let color = usages.contains(&GpuTextureUsage::ColorAttachment);
+            let depth_stencil = usages.contains(&GpuTextureUsage::DepthStencilAttachment);
+            if usages.len() != 2 || color == depth_stencil {
+                return Err(GpuResourceDescriptorError::invalid(
+                    "construct GPU texture usages",
+                    label.as_str(),
+                    GpuResourceDescriptorCause::InvalidFormatUsage,
+                    "combine TransientAttachment with exactly one of ColorAttachment or DepthStencilAttachment",
+                ));
+            }
         }
         Ok(Self(usages))
     }
@@ -852,6 +865,40 @@ impl GpuTextureDescriptor {
                 "leave imported and surface-acquired textures uninitialized by RunenGPU",
             ));
         }
+        if usages.contains(GpuTextureUsage::TransientAttachment) {
+            if common.ownership() != GpuResourceOwnership::Owned {
+                return Err(GpuResourceDescriptorError::invalid(
+                    "construct GPU texture descriptor",
+                    label,
+                    GpuResourceDescriptorCause::InvalidOwnership,
+                    "use RunenGPU-owned textures for transient attachment contents",
+                ));
+            }
+            if dimension != GpuTextureDimension::D2 || extent.depth_or_layers() != 1 {
+                return Err(GpuResourceDescriptorError::invalid(
+                    "construct GPU texture descriptor",
+                    label,
+                    GpuResourceDescriptorCause::InvalidExtent,
+                    "use a two-dimensional transient attachment with exactly one array layer",
+                ));
+            }
+            if mip_level_count != 1 {
+                return Err(GpuResourceDescriptorError::invalid(
+                    "construct GPU texture descriptor",
+                    label,
+                    GpuResourceDescriptorCause::InvalidMipCount,
+                    "use exactly one mip level for transient attachment contents",
+                ));
+            }
+            if !matches!(initialization, GpuTextureInitialization::Uninitialized) {
+                return Err(GpuResourceDescriptorError::invalid(
+                    "construct GPU texture descriptor",
+                    label,
+                    GpuResourceDescriptorCause::InvalidInitialization,
+                    "leave transient attachment contents uninitialized at descriptor construction",
+                ));
+            }
+        }
         let max_dimension = extent.width().max(extent.height()).max(match dimension {
             GpuTextureDimension::D3 => extent.depth_or_layers(),
             GpuTextureDimension::D1 | GpuTextureDimension::D2 => 1,
@@ -1049,6 +1096,37 @@ impl GpuTextureViewDescriptor {
         }
         validate_texture_view_dimension(label, parent, dimension, subresources)?;
         validate_aspect(label, parent.format(), subresources.aspect())?;
+        if parent
+            .usages()
+            .contains(GpuTextureUsage::TransientAttachment)
+        {
+            if dimension != GpuTextureViewDimension::D2 {
+                return Err(GpuResourceDescriptorError::invalid(
+                    "construct GPU texture-view descriptor",
+                    label,
+                    GpuResourceDescriptorCause::IncompatibleViewDimension,
+                    "use a D2 view for transient attachment contents",
+                ));
+            }
+            if texture_format::canonical_aspect(parent.format(), subresources.aspect())
+                != Some(texture_format::whole_aspect(parent.format()))
+            {
+                return Err(GpuResourceDescriptorError::invalid(
+                    "construct GPU texture-view descriptor",
+                    label,
+                    GpuResourceDescriptorCause::InvalidAspect,
+                    "select the complete renderable aspect set for transient attachment contents",
+                ));
+            }
+            if format.is_some_and(|view_format| view_format != parent.format()) {
+                return Err(GpuResourceDescriptorError::invalid(
+                    "construct GPU texture-view descriptor",
+                    label,
+                    GpuResourceDescriptorCause::IncompatibleViewFormat,
+                    "use the transient texture's exact parent format",
+                ));
+            }
+        }
         if let Some(view_format) = format {
             if !texture_format::view_compatible(parent.format(), view_format) {
                 return Err(GpuResourceDescriptorError::invalid(
@@ -2075,6 +2153,329 @@ mod tests {
         );
 
         assert_ne!(first, second);
+    }
+
+    #[test]
+    fn transient_attachment_usage_and_descriptor_contract_is_normalized() {
+        let transient_label = label("transient color");
+        assert!(
+            GpuTextureUsages::new(&transient_label, [GpuTextureUsage::TransientAttachment])
+                .is_err()
+        );
+        assert!(
+            GpuTextureUsages::new(
+                &transient_label,
+                [
+                    GpuTextureUsage::ColorAttachment,
+                    GpuTextureUsage::DepthStencilAttachment,
+                    GpuTextureUsage::TransientAttachment,
+                ]
+            )
+            .is_err()
+        );
+        assert!(
+            GpuTextureUsages::new(
+                &transient_label,
+                [
+                    GpuTextureUsage::ColorAttachment,
+                    GpuTextureUsage::CopySource,
+                    GpuTextureUsage::TransientAttachment,
+                ]
+            )
+            .is_err()
+        );
+
+        for lifetime in [
+            GpuResourceLifetime::Transient,
+            GpuResourceLifetime::Retained,
+        ] {
+            let common = GpuResourceCommon::owned(
+                transient_label.clone(),
+                lifetime,
+                GpuMemoryIntent::Device,
+                GpuReconstruction::SourceBacked,
+                provenance("transient color"),
+            )
+            .unwrap();
+            let descriptor = GpuTextureDescriptor::new(
+                common,
+                GpuTextureDimension::D2,
+                GpuTextureExtent::new(&transient_label, GpuTextureDimension::D2, 8, 8, 1).unwrap(),
+                1,
+                1,
+                GpuTextureFormat::Rgba8Unorm,
+                GpuTextureUsages::new(
+                    &transient_label,
+                    [
+                        GpuTextureUsage::ColorAttachment,
+                        GpuTextureUsage::TransientAttachment,
+                    ],
+                )
+                .unwrap(),
+                GpuTextureInitialization::Uninitialized,
+            )
+            .unwrap();
+            assert_eq!(descriptor.common().lifetime(), lifetime);
+        }
+    }
+
+    #[test]
+    fn transient_attachment_descriptor_rejects_nonportable_shape_ownership_and_initialization() {
+        let transient_label = label("restricted transient attachment");
+        let usages = || {
+            GpuTextureUsages::new(
+                &transient_label,
+                [
+                    GpuTextureUsage::ColorAttachment,
+                    GpuTextureUsage::TransientAttachment,
+                ],
+            )
+            .unwrap()
+        };
+        let extent =
+            GpuTextureExtent::new(&transient_label, GpuTextureDimension::D2, 8, 8, 1).unwrap();
+
+        let imported = GpuResourceCommon::imported(
+            transient_label.clone(),
+            GpuResourceLifetime::Transient,
+            provenance("restricted transient attachment"),
+        );
+        assert_eq!(
+            GpuTextureDescriptor::new(
+                imported,
+                GpuTextureDimension::D2,
+                extent,
+                1,
+                1,
+                GpuTextureFormat::Rgba8Unorm,
+                usages(),
+                GpuTextureInitialization::Uninitialized,
+            )
+            .unwrap_err()
+            .cause(),
+            GpuResourceDescriptorCause::InvalidOwnership
+        );
+
+        let layered_extent =
+            GpuTextureExtent::new(&transient_label, GpuTextureDimension::D2, 8, 8, 2).unwrap();
+        assert_eq!(
+            GpuTextureDescriptor::new(
+                common("restricted transient attachment"),
+                GpuTextureDimension::D2,
+                layered_extent,
+                1,
+                1,
+                GpuTextureFormat::Rgba8Unorm,
+                usages(),
+                GpuTextureInitialization::Uninitialized,
+            )
+            .unwrap_err()
+            .cause(),
+            GpuResourceDescriptorCause::InvalidExtent
+        );
+
+        let d3_extent =
+            GpuTextureExtent::new(&transient_label, GpuTextureDimension::D3, 8, 8, 2).unwrap();
+        assert_eq!(
+            GpuTextureDescriptor::new(
+                common("restricted transient attachment"),
+                GpuTextureDimension::D3,
+                d3_extent,
+                1,
+                1,
+                GpuTextureFormat::Rgba8Unorm,
+                usages(),
+                GpuTextureInitialization::Uninitialized,
+            )
+            .unwrap_err()
+            .cause(),
+            GpuResourceDescriptorCause::InvalidExtent
+        );
+
+        assert_eq!(
+            GpuTextureDescriptor::new(
+                common("restricted transient attachment"),
+                GpuTextureDimension::D2,
+                extent,
+                2,
+                1,
+                GpuTextureFormat::Rgba8Unorm,
+                usages(),
+                GpuTextureInitialization::Uninitialized,
+            )
+            .unwrap_err()
+            .cause(),
+            GpuResourceDescriptorCause::InvalidMipCount
+        );
+
+        assert_eq!(
+            GpuTextureDescriptor::new(
+                common("restricted transient attachment"),
+                GpuTextureDimension::D2,
+                extent,
+                1,
+                1,
+                GpuTextureFormat::Rgba8Unorm,
+                usages(),
+                GpuTextureInitialization::Zeroed,
+            )
+            .unwrap_err()
+            .cause(),
+            GpuResourceDescriptorCause::InvalidInitialization
+        );
+
+        let prepared = GpuPreparedTextureData::new(
+            &transient_label,
+            transfer_data("restricted transient bytes", 256),
+            GpuTextureFormat::Rgba8Unorm,
+            extent,
+            32,
+            0,
+        )
+        .unwrap();
+        assert_eq!(
+            GpuTextureDescriptor::new(
+                common("restricted transient attachment"),
+                GpuTextureDimension::D2,
+                extent,
+                1,
+                1,
+                GpuTextureFormat::Rgba8Unorm,
+                usages(),
+                GpuTextureInitialization::Prepared(prepared),
+            )
+            .unwrap_err()
+            .cause(),
+            GpuResourceDescriptorCause::InvalidInitialization
+        );
+    }
+
+    #[test]
+    fn transient_attachment_views_are_exact_and_non_reinterpreting() {
+        let mut allocator = GpuWorkResourceIdAllocator::new();
+        let texture_label = label("transient view texture");
+        let texture = allocator
+            .allocate_texture_handle(
+                GpuTextureDescriptor::new(
+                    common("transient view texture"),
+                    GpuTextureDimension::D2,
+                    GpuTextureExtent::new(&texture_label, GpuTextureDimension::D2, 8, 8, 1)
+                        .unwrap(),
+                    1,
+                    1,
+                    GpuTextureFormat::Rgba8Unorm,
+                    GpuTextureUsages::new(
+                        &texture_label,
+                        [
+                            GpuTextureUsage::ColorAttachment,
+                            GpuTextureUsage::TransientAttachment,
+                        ],
+                    )
+                    .unwrap(),
+                    GpuTextureInitialization::Uninitialized,
+                )
+                .unwrap(),
+            )
+            .unwrap();
+        let exact =
+            GpuTextureSubresourceRange::new(&texture_label, 0, 1, 0, 1, GpuTextureAspect::Color)
+                .unwrap();
+        assert!(
+            GpuTextureViewDescriptor::new(
+                common("transient exact view"),
+                &texture,
+                None,
+                GpuTextureViewDimension::D2,
+                exact,
+            )
+            .is_ok()
+        );
+        assert!(
+            GpuTextureViewDescriptor::new(
+                common("transient paired view"),
+                &texture,
+                Some(GpuTextureFormat::Rgba8UnormSrgb),
+                GpuTextureViewDimension::D2,
+                exact,
+            )
+            .is_err()
+        );
+        let all_aspect =
+            GpuTextureSubresourceRange::new(&texture_label, 0, 1, 0, 1, GpuTextureAspect::All)
+                .unwrap();
+        assert!(
+            GpuTextureViewDescriptor::new(
+                common("transient canonical all aspect"),
+                &texture,
+                None,
+                GpuTextureViewDimension::D2,
+                all_aspect,
+            )
+            .is_ok()
+        );
+        assert!(GpuTextureViewDescriptor::ordinary_full_owned(
+            "transient ordinary full view",
+            &texture,
+        )
+        .is_ok());
+        assert_eq!(
+            GpuTextureViewDescriptor::new(
+                common("transient array view"),
+                &texture,
+                None,
+                GpuTextureViewDimension::D2Array,
+                exact,
+            )
+            .unwrap_err()
+            .cause(),
+            GpuResourceDescriptorCause::IncompatibleViewDimension
+        );
+
+        let combined_label = label("transient combined view texture");
+        let combined = allocator
+            .allocate_texture_handle(
+                GpuTextureDescriptor::new(
+                    common("transient combined view texture"),
+                    GpuTextureDimension::D2,
+                    GpuTextureExtent::new(&combined_label, GpuTextureDimension::D2, 8, 8, 1)
+                        .unwrap(),
+                    1,
+                    1,
+                    GpuTextureFormat::Depth24PlusStencil8,
+                    GpuTextureUsages::new(
+                        &combined_label,
+                        [
+                            GpuTextureUsage::DepthStencilAttachment,
+                            GpuTextureUsage::TransientAttachment,
+                        ],
+                    )
+                    .unwrap(),
+                    GpuTextureInitialization::Uninitialized,
+                )
+                .unwrap(),
+            )
+            .unwrap();
+        let depth_only = GpuTextureSubresourceRange::new(
+            &combined_label,
+            0,
+            1,
+            0,
+            1,
+            GpuTextureAspect::DepthOnly,
+        )
+        .unwrap();
+        assert_eq!(
+            GpuTextureViewDescriptor::new(
+                common("transient partial combined view"),
+                &combined,
+                None,
+                GpuTextureViewDimension::D2,
+                depth_only,
+            )
+            .unwrap_err()
+            .cause(),
+            GpuResourceDescriptorCause::InvalidAspect
+        );
     }
 
     #[test]

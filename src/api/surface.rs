@@ -528,6 +528,22 @@ mod tests {
             ),
             Err(error) if error.cause() == GpuSurfaceConfigurationCause::UnsupportedUsage
         ));
+        assert!(matches!(
+            GpuSurfaceConfiguration::new(
+                1280,
+                720,
+                GpuTextureFormat::Bgra8Unorm,
+                [
+                    GpuTextureUsage::ColorAttachment,
+                    GpuTextureUsage::TransientAttachment,
+                ],
+                GpuSurfacePresentMode::Fifo,
+                GpuSurfaceAlphaMode::Opaque,
+                2,
+                [],
+            ),
+            Err(error) if error.cause() == GpuSurfaceConfigurationCause::UnsupportedUsage
+        ));
     }
 
     #[test]
