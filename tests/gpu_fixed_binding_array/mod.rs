@@ -1524,6 +1524,32 @@ pub(crate) async fn run_suite(
     ))
     .await
     .expect("retained fixed-array suite requires one anchor adapter");
+
+    // Pinned WGPU 30.0.1 itself skips binding-array GPU coverage on Vulkan llvmpipe/
+    // Lavapipe for known driver crashes. Keep this as qualification-environment policy only:
+    // RunenGPU adapter normalization must continue to follow actual feature/limit facts, while
+    // real Vulkan adapters remain eligible for this public execution suite.
+    if backend == GpuBackendFamily::Vulkan
+        && anchor
+            .adapter_facts()
+            .diagnostic_name()
+            .is_some_and(|name| {
+                let name = name.to_ascii_lowercase();
+                name.contains("llvmpipe") || name.contains("lavapipe")
+            })
+    {
+        println!(
+            "Fixed binding arrays: UNQUALIFIED on retained Lavapipe/llvmpipe (pinned WGPU 30.0.1 skips this driver family for binding-array GPU coverage)"
+        );
+        return FixedBindingArrayProof {
+            storage_buffer: false,
+            uniform_buffer: false,
+            sampled_texture: false,
+            sampler: false,
+            storage_texture: false,
+        };
+    }
+
     run_suite_on_adapter(backend, fallback, anchor.adapter_facts()).await
 }
 
