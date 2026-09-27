@@ -1525,28 +1525,45 @@ pub(crate) async fn run_suite(
     .await
     .expect("retained fixed-array suite requires one anchor adapter");
 
-    // Pinned WGPU 30.0.1 itself skips binding-array GPU coverage on Vulkan llvmpipe/
-    // Lavapipe for known driver crashes. Keep this as qualification-environment policy only:
-    // RunenGPU adapter normalization must continue to follow actual feature/limit facts, while
-    // real Vulkan adapters remain eligible for this public execution suite.
-    if backend == GpuBackendFamily::Vulkan
+    // Pinned WGPU 30.0.1 explicitly skips llvmpipe for affected buffer binding-array GPU
+    // cases because of driver crashes. This retained Lavapipe target also loses the device when
+    // the fixed storage-buffer array pipeline is prepared. Keep that exception in qualification
+    // policy only: RunenGPU capability normalization still follows actual feature/limit facts,
+    // texture-family array proofs remain live here, and real Vulkan adapters run the full suite.
+    let retained_lavapipe = backend == GpuBackendFamily::Vulkan
         && anchor
             .adapter_facts()
             .diagnostic_name()
             .is_some_and(|name| {
                 let name = name.to_ascii_lowercase();
                 name.contains("llvmpipe") || name.contains("lavapipe")
-            })
-    {
+            });
+    if retained_lavapipe {
         println!(
-            "Fixed binding arrays: UNQUALIFIED on retained Lavapipe/llvmpipe (pinned WGPU 30.0.1 skips this driver family for binding-array GPU coverage)"
+            "Fixed binding arrays: UNQUALIFIED (storage-buffer array on retained Lavapipe/llvmpipe driver)"
         );
+        let expected_adapter = Some(anchor.adapter_facts());
         return FixedBindingArrayProof {
             storage_buffer: false,
-            uniform_buffer: false,
-            sampled_texture: false,
-            sampler: false,
-            storage_texture: false,
+            uniform_buffer: run_uniform_buffer_array_proof(
+                backend,
+                fallback,
+                expected_adapter,
+            )
+            .await,
+            sampled_texture: run_sampled_texture_array_proof(
+                backend,
+                fallback,
+                expected_adapter,
+            )
+            .await,
+            sampler: run_sampler_array_proof(backend, fallback, expected_adapter).await,
+            storage_texture: run_storage_texture_array_proof(
+                backend,
+                fallback,
+                expected_adapter,
+            )
+            .await,
         };
     }
 
