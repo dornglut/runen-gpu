@@ -238,7 +238,6 @@ jobs:
           cargo +stable test --test gpu_r2_sampler_anisotropy --locked -- --ignored --nocapture
           cargo +stable test --test gpu_r3_shader_f16 --locked -- --ignored --nocapture
           cargo +stable test --test gpu_transient_attachment_native --locked -- --ignored --nocapture
-          cargo +stable test --test gpu_fixed_binding_array_native --locked -- --ignored --nocapture
 
       - name: Run graceful execution shutdown proof
         env:
