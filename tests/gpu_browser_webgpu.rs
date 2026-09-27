@@ -45,10 +45,10 @@ mod retained_vertex_packed;
 mod browser {
     use super::{
         retained_bc, retained_blend_state, retained_depth_bias, retained_depth_clip_control,
-        retained_fixed_binding_array, retained_non_uniform_binding_array, retained_offscreen_indexed,
-        retained_prefix_scan, retained_sampler_anisotropy, retained_shader_f16,
-        retained_transient_attachment,
-        retained_vertex_packed, retained_vertex8, retained_vertex16,
+        retained_fixed_binding_array, retained_non_uniform_binding_array,
+        retained_offscreen_indexed, retained_prefix_scan, retained_sampler_anisotropy,
+        retained_shader_f16, retained_transient_attachment, retained_vertex_packed,
+        retained_vertex8, retained_vertex16,
     };
     use runen_gpu::*;
     use std::cell::RefCell;
