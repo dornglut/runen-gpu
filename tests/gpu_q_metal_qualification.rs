@@ -15,6 +15,8 @@ mod retained_depth_bias;
 mod retained_depth_clip_control;
 #[path = "gpu_fixed_binding_array/mod.rs"]
 mod retained_fixed_binding_array;
+#[path = "gpu_r3_binding_array_non_uniform_indexing/mod.rs"]
+mod retained_non_uniform_binding_array;
 #[path = "gpu_compute_generated_indirect_native.rs"]
 mod retained_indirect;
 #[path = "gpu_offscreen_indexed_native.rs"]
@@ -32,7 +34,7 @@ mod retained_vertex8;
 #[path = "gpu_r1_vertex_packed_formats.rs"]
 mod retained_vertex_packed;
 
-const FEATURES: [GpuCapabilityFeature; 15] = [
+const FEATURES: [GpuCapabilityFeature; 18] = [
     GpuCapabilityFeature::Compute,
     GpuCapabilityFeature::RenderPipeline,
     GpuCapabilityFeature::Copy,
@@ -42,6 +44,9 @@ const FEATURES: [GpuCapabilityFeature; 15] = [
     GpuCapabilityFeature::BufferBindingArray,
     GpuCapabilityFeature::StorageResourceBindingArray,
     GpuCapabilityFeature::UniformBufferBindingArray,
+    GpuCapabilityFeature::TextureBindingArrayNonUniformIndexing,
+    GpuCapabilityFeature::StorageBufferBindingArrayNonUniformIndexing,
+    GpuCapabilityFeature::StorageTextureBindingArrayNonUniformIndexing,
     GpuCapabilityFeature::DepthAttachment,
     GpuCapabilityFeature::DepthBiasClamp,
     GpuCapabilityFeature::DepthClipControl,
@@ -499,6 +504,12 @@ fn metal_qualification_records_exact_public_api_evidence() {
             None,
             context.adapter_facts(),
         ));
+    let non_uniform_binding_arrays =
+        pollster::block_on(retained_non_uniform_binding_array::run_suite_on_adapter(
+            GpuBackendFamily::Metal,
+            None,
+            context.adapter_facts(),
+        ));
     let proof_disposition = |exercised: bool| {
         if exercised {
             "EXERCISED"
@@ -584,7 +595,7 @@ fn metal_qualification_records_exact_public_api_evidence() {
     assert_eq!(stats.pending_readbacks(), 0);
 
     let report = json!({
-        "schema_version": 5,
+        "schema_version": 6,
         "qualification_level": mode.report_name(),
         "revision": revision,
         "environment": {
@@ -640,6 +651,12 @@ fn metal_qualification_records_exact_public_api_evidence() {
                 proof_disposition(fixed_binding_arrays.sampler),
             "fixed_binding_array_storage_texture":
                 proof_disposition(fixed_binding_arrays.storage_texture),
+            "non_uniform_binding_array_texture_sampler":
+                proof_disposition(non_uniform_binding_arrays.texture_sampler),
+            "non_uniform_binding_array_storage_buffer":
+                proof_disposition(non_uniform_binding_arrays.storage_buffer),
+            "non_uniform_binding_array_storage_texture":
+                proof_disposition(non_uniform_binding_arrays.storage_texture),
             "timestamp_query": "UNSUPPORTED_SUPPRESSED",
         },
     });
