@@ -8,6 +8,9 @@ mod retained_blend_state;
 #[path = "gpu_r2_depth_bias.rs"]
 mod retained_depth_bias;
 #[cfg(target_arch = "wasm32")]
+#[path = "gpu_fixed_binding_array/mod.rs"]
+mod retained_fixed_binding_array;
+#[cfg(target_arch = "wasm32")]
 #[path = "gpu_offscreen_indexed_native.rs"]
 mod retained_offscreen_indexed;
 #[cfg(target_arch = "wasm32")]
@@ -19,9 +22,6 @@ mod retained_sampler_anisotropy;
 #[cfg(target_arch = "wasm32")]
 #[path = "gpu_r3_shader_f16.rs"]
 mod retained_shader_f16;
-#[cfg(target_arch = "wasm32")]
-#[path = "gpu_fixed_binding_array/mod.rs"]
-mod retained_fixed_binding_array;
 #[cfg(target_arch = "wasm32")]
 #[path = "gpu_transient_attachment/mod.rs"]
 mod retained_transient_attachment;
