@@ -916,6 +916,20 @@ mod tests {
     }
 
     #[test]
+    fn depth_clip_control_requests_the_exact_wgpu_feature() {
+        assert_eq!(
+            wgpu_features_for(GpuCapabilityFeature::DepthClipControl),
+            Features::DEPTH_CLIP_CONTROL
+        );
+        assert_eq!(
+            requested_features(&candidate_with_enabled_features([
+                GpuCapabilityFeature::DepthClipControl,
+            ])),
+            Features::DEPTH_CLIP_CONTROL
+        );
+    }
+
+    #[test]
     fn depth_bias_clamp_is_an_admission_fact_not_a_wgpu_feature_request() {
         assert_eq!(
             wgpu_features_for(GpuCapabilityFeature::DepthBiasClamp),
