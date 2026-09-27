@@ -36,11 +36,18 @@ pub enum GpuIndexFormat {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum GpuDepthClipMode {
+    Clip,
+    Unclipped,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct GpuPrimitiveStateDescriptor {
     topology: GpuPrimitiveTopology,
     strip_index_format: Option<GpuIndexFormat>,
     front_face: GpuFrontFace,
     cull_mode: GpuCullMode,
+    depth_clip_mode: GpuDepthClipMode,
 }
 
 impl GpuPrimitiveStateDescriptor {
@@ -49,6 +56,7 @@ impl GpuPrimitiveStateDescriptor {
         strip_index_format: Option<GpuIndexFormat>,
         front_face: GpuFrontFace,
         cull_mode: GpuCullMode,
+        depth_clip_mode: GpuDepthClipMode,
     ) -> Result<Self, GpuProgramContractError> {
         if strip_index_format.is_some() && !topology.is_strip() {
             return Err(GpuProgramContractError::invalid(
@@ -64,6 +72,7 @@ impl GpuPrimitiveStateDescriptor {
             strip_index_format,
             front_face,
             cull_mode,
+            depth_clip_mode,
         })
     }
 
@@ -82,6 +91,10 @@ impl GpuPrimitiveStateDescriptor {
     pub const fn cull_mode(self) -> GpuCullMode {
         self.cull_mode
     }
+
+    pub const fn depth_clip_mode(self) -> GpuDepthClipMode {
+        self.depth_clip_mode
+    }
 }
 
 impl Default for GpuPrimitiveStateDescriptor {
@@ -91,6 +104,7 @@ impl Default for GpuPrimitiveStateDescriptor {
             strip_index_format: None,
             front_face: GpuFrontFace::CounterClockwise,
             cull_mode: GpuCullMode::None,
+            depth_clip_mode: GpuDepthClipMode::Clip,
         }
     }
 }
