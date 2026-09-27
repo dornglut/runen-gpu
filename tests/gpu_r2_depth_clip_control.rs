@@ -301,10 +301,30 @@ async fn run_case_for_census_backend(
         .supports(GpuCapabilityFeature::DepthClipControl);
 
     if !supported {
-        let rejected = GpuContext::request(descriptor(backend, true, fallback)).await;
+        let rejected = GpuContext::request(descriptor(backend, true, fallback))
+            .await
+            .expect_err(
+                "an adapter census without DepthClipControl must reject the optional context",
+            );
+        assert_eq!(
+            rejected.category(),
+            GpuContextRequestErrorCategory::NoAdmissibleCandidate
+        );
         assert!(
-            rejected.is_err(),
-            "an adapter census without DepthClipControl must not silently admit the optional context"
+            rejected.candidate_dispositions().iter().any(|disposition| {
+                matches!(
+                    disposition,
+                    GpuCandidateDisposition::Rejected(report)
+                        if report
+                            .capability_admission_error()
+                            .is_some_and(|error| {
+                                error.cause() == GpuCapabilityAdmissionCause::RequiredUnavailable
+                                    && error.feature()
+                                        == Some(GpuCapabilityFeature::DepthClipControl)
+                            })
+                )
+            }),
+            "depth-clip rejection must retain typed required-feature-unavailable evidence"
         );
         return DepthClipProofOutcome {
             supported: false,
