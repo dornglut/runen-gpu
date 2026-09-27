@@ -38,16 +38,15 @@ pub(crate) fn fixed_array_layout_capabilities(
     }
 }
 
-
 /// Normalized capability required when a fixed binding array is indexed dynamically
 /// with a Naga-proven non-uniform index.
 pub(super) fn fixed_array_non_uniform_indexing_capability(
     class: GpuBindingClass,
 ) -> Result<GpuCapabilityFeature, &'static str> {
     match class {
-        GpuBindingClass::UniformBuffer => Err(
-            "dynamically non-uniform uniform-buffer binding-array indexing is not normalized",
-        ),
+        GpuBindingClass::UniformBuffer => {
+            Err("dynamically non-uniform uniform-buffer binding-array indexing is not normalized")
+        }
         GpuBindingClass::StorageBuffer => {
             Ok(GpuCapabilityFeature::StorageBufferBindingArrayNonUniformIndexing)
         }
