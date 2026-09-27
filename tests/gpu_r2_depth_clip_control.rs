@@ -232,6 +232,35 @@ fn pixel_at(bytes: &GpuReadbackBytes, x: u32, y: u32) -> [u8; 4] {
     bytes.as_bytes()[offset..offset + 4].try_into().unwrap()
 }
 
+async fn assert_unclipped_pipeline_rejected_without_device_feature(context: &GpuContext) {
+    assert!(
+        !context
+            .device_facts()
+            .is_enabled(GpuCapabilityFeature::DepthClipControl),
+        "baseline census context must not enable optional DepthClipControl"
+    );
+
+    let pipeline = pipeline(GpuDepthClipMode::Unclipped);
+    let program = context
+        .realize_program(pipeline.program())
+        .await
+        .expect("unclipped proof program itself must remain realizable without DepthClipControl");
+    let layout = context
+        .realize_pipeline_layout(pipeline.layout())
+        .await
+        .expect("unclipped proof layout itself must remain realizable without DepthClipControl");
+    let error = context
+        .realize_render_pipeline(&pipeline, &program, &layout)
+        .await
+        .expect_err(
+            "an unclipped pipeline must reject before private creation when the device did not enable DepthClipControl",
+        );
+    assert_eq!(
+        error.category(),
+        GpuPipelineRealizationErrorCategory::RequirementNotAdmitted
+    );
+}
+
 pub(crate) async fn run_case(context: &GpuContext, mode: GpuDepthClipMode) {
     let (graph, readback_id) = graph(mode);
     let prepared = context.prepare_submission(graph).await.unwrap();
@@ -367,6 +396,7 @@ pub(crate) async fn run_browser_depth_clip_control() -> u32 {
         census_context.adapter_facts().backend(),
         GpuBackendFamily::BrowserWebGpu
     );
+    assert_unclipped_pipeline_rejected_without_device_feature(&census_context).await;
     run_case(&census_context, GpuDepthClipMode::Clip).await;
     let outcome = run_on_adapter(
         GpuBackendFamily::BrowserWebGpu,
@@ -460,6 +490,9 @@ fn depth_clip_control_native_execution_is_backend_proven_when_advertised() {
         census_context.adapter_facts().fallback(),
         GpuFallbackStatus::ConfirmedFallback
     );
+    pollster::block_on(assert_unclipped_pipeline_rejected_without_device_feature(
+        &census_context,
+    ));
     pollster::block_on(run_case(&census_context, GpuDepthClipMode::Clip));
     let outcome = pollster::block_on(run_on_adapter(
         GpuBackendFamily::Vulkan,
