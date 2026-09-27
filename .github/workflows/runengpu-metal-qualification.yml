@@ -131,7 +131,7 @@ jobs:
           report_path, expected_revision = sys.argv[1:3]
           with open(report_path, encoding="utf-8") as handle:
               report = json.load(handle)
-          assert report["schema_version"] == 3
+          assert report["schema_version"] == 4
           assert report["qualification_level"] == "generic_metal"
           assert report["revision"] == expected_revision
           assert report["environment"]["architecture"] == "arm64"
@@ -199,14 +199,41 @@ jobs:
               "max_texture_array_layers",
               "max_vertex_attributes",
               "max_vertex_buffer_array_stride",
+              "max_binding_array_elements_per_shader_stage",
+              "max_binding_array_sampler_elements_per_shader_stage",
           }
-          for level in ("adapter", "device"):
+          for level in ("adapter", "device", "workload"):
               limits = report["limits"][level]
               assert set(limits) == expected_limit_keys
               assert all(type(value) is int and value >= 0 for value in limits.values())
               assert limits["max_buffer_size"] > 0
               assert limits["max_texture_dimension_2d"] > 0
               assert limits["max_compute_workgroups_per_dimension"] > 0
+
+          adapter_limits = report["limits"]["adapter"]
+          device_limits = report["limits"]["device"]
+          workload_limits = report["limits"]["workload"]
+          capabilities = report["capabilities"]
+
+          if (
+              capabilities["TextureBindingArray"]["supported"]
+              or capabilities["BufferBindingArray"]["supported"]
+          ):
+              assert adapter_limits["max_binding_array_elements_per_shader_stage"] >= 500_000
+          if capabilities["TextureBindingArray"]["supported"]:
+              assert (
+                  adapter_limits["max_binding_array_sampler_elements_per_shader_stage"]
+                  >= 1_000
+              )
+
+          for baseline_limits in (device_limits, workload_limits):
+              assert (
+                  baseline_limits["max_binding_array_elements_per_shader_stage"] == 0
+              ), "ordinary baseline binding-array element budget must remain zero"
+              assert (
+                  baseline_limits["max_binding_array_sampler_elements_per_shader_stage"] == 0
+              ), "ordinary baseline sampler-array budget must remain zero"
+
           assert report["proofs"]["prefix_scan_exclusive"] == "EXERCISED"
           assert report["proofs"]["prefix_scan_inclusive"] == "EXERCISED"
           assert report["proofs"]["indexed_offscreen_render"] == "EXERCISED"
@@ -220,6 +247,23 @@ jobs:
           assert report["proofs"]["transient_attachment"] == "EXERCISED"
           assert report["proofs"]["transient_depth"] == "EXERCISED"
           assert report["proofs"]["transient_stencil8"] in {"EXERCISED", "UNSUPPORTED"}
+          fixed_array_proofs = (
+              "fixed_binding_array_storage_buffer",
+              "fixed_binding_array_uniform_buffer",
+              "fixed_binding_array_sampled_texture",
+              "fixed_binding_array_sampler",
+              "fixed_binding_array_storage_texture",
+          )
+          for proof in fixed_array_proofs:
+              assert report["proofs"][proof] in {"EXERCISED", "UNSUPPORTED"}
+
+          storage_buffer_supported = (
+              capabilities["BufferBindingArray"]["supported"]
+              and capabilities["StorageResourceBindingArray"]["supported"]
+          )
+          assert report["proofs"]["fixed_binding_array_storage_buffer"] == (
+              "EXERCISED" if storage_buffer_supported else "UNSUPPORTED"
+          )
           assert report["proofs"]["timestamp_query"] == "UNSUPPORTED_SUPPRESSED"
           print(
               "Generic Metal qualification:",
