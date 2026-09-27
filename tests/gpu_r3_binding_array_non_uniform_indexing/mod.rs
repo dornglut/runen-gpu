@@ -109,8 +109,7 @@ fn two_pixel_texture(
     pixels: [u8; 8],
 ) -> (GpuTextureHandle, GpuTextureViewHandle) {
     let texture_label = fixed::label(name);
-    let extent =
-        GpuTextureExtent::new(&texture_label, GpuTextureDimension::D2, 2, 1, 1).unwrap();
+    let extent = GpuTextureExtent::new(&texture_label, GpuTextureDimension::D2, 2, 1, 1).unwrap();
     let prepared = GpuPreparedTextureData::new(
         &texture_label,
         PreparedGpuData::<TransferData>::from_pod_transfer(
@@ -191,10 +190,7 @@ fn storage_buffer_graph() -> (GpuPreparedWorkGraph, GpuReadbackId) {
     assert!(
         GpuRuntimeBindingSet::new(
             layout.clone(),
-            [
-                partial,
-                GpuRuntimeBindingValue::whole_buffer(0, 1, &output),
-            ],
+            [partial, GpuRuntimeBindingValue::whole_buffer(0, 1, &output),],
         )
         .is_err(),
         "non-uniform indexing must retain #99 full fixed-array occupancy"
@@ -255,8 +251,12 @@ fn texture_sampler_graph() -> (GpuPreparedWorkGraph, GpuReadbackId) {
         "r3 sampler array repeat",
         GpuAddressMode::Repeat,
     );
-    let output =
-        prepared_u32_pair_buffer(&mut resources, "r3 texture-sampler divergent output", [0, 0], true);
+    let output = prepared_u32_pair_buffer(
+        &mut resources,
+        "r3 texture-sampler divergent output",
+        [0, 0],
+        true,
+    );
 
     let pipeline = fixed::compute_pipeline(
         "proof.r3.binding-array-non-uniform.texture-sampler",
@@ -333,10 +333,7 @@ fn storage_texture_graph() -> (GpuPreparedWorkGraph, [GpuReadbackId; 2]) {
     ));
     let bindings = GpuRuntimeBindingSet::new(
         pipeline.layout().clone(),
-        [fixed::texture_array_binding(
-            0,
-            [&first_view, &second_view],
-        )],
+        [fixed::texture_array_binding(0, [&first_view, &second_view])],
     )
     .unwrap();
     let compute = GpuComputeOperation::new(
@@ -567,10 +564,7 @@ pub(crate) async fn run_storage_texture_proof(
     .await;
     assert_eq!(first.as_bytes().len(), 4);
     assert_eq!(second.as_bytes().len(), 4);
-    assert_eq!(
-        u32::from_le_bytes(first.as_bytes().try_into().unwrap()),
-        17
-    );
+    assert_eq!(u32::from_le_bytes(first.as_bytes().try_into().unwrap()), 17);
     assert_eq!(
         u32::from_le_bytes(second.as_bytes().try_into().unwrap()),
         101
@@ -617,19 +611,11 @@ pub(crate) async fn run_suite(
             "R3 non-uniform storage-buffer arrays: UNQUALIFIED (accepted retained Lavapipe fixed-buffer-array driver exception)"
         );
         return NonUniformBindingArrayProof {
-            texture_sampler: run_texture_sampler_proof(
-                backend,
-                fallback,
-                anchor.adapter_facts(),
-            )
-            .await,
+            texture_sampler: run_texture_sampler_proof(backend, fallback, anchor.adapter_facts())
+                .await,
             storage_buffer: false,
-            storage_texture: run_storage_texture_proof(
-                backend,
-                fallback,
-                anchor.adapter_facts(),
-            )
-            .await,
+            storage_texture: run_storage_texture_proof(backend, fallback, anchor.adapter_facts())
+                .await,
         };
     }
 
