@@ -158,7 +158,59 @@ fn two_pixel_texture(
     (texture, view)
 }
 
+fn assert_pinned_naga_storage_buffer_non_uniformity() {
+    let capabilities = naga::valid::Capabilities::default()
+        | naga::valid::Capabilities::TEXTURE_AND_SAMPLER_BINDING_ARRAY
+        | naga::valid::Capabilities::BUFFER_BINDING_ARRAY
+        | naga::valid::Capabilities::STORAGE_TEXTURE_BINDING_ARRAY
+        | naga::valid::Capabilities::STORAGE_BUFFER_BINDING_ARRAY
+        | naga::valid::Capabilities::TEXTURE_AND_SAMPLER_BINDING_ARRAY_NON_UNIFORM_INDEXING
+        | naga::valid::Capabilities::BUFFER_BINDING_ARRAY_NON_UNIFORM_INDEXING
+        | naga::valid::Capabilities::STORAGE_TEXTURE_BINDING_ARRAY_NON_UNIFORM_INDEXING
+        | naga::valid::Capabilities::STORAGE_BUFFER_BINDING_ARRAY_NON_UNIFORM_INDEXING;
+    let mut frontend =
+        naga::front::wgsl::Frontend::new_with_options(naga::front::wgsl::Options {
+            parse_doc_comments: false,
+            capabilities,
+        });
+    let module = frontend.parse(STORAGE_BUFFER_WGSL).unwrap();
+    let module_info =
+        naga::valid::Validator::new(naga::valid::ValidationFlags::all(), capabilities)
+            .validate(&module)
+            .unwrap();
+    let function = &module.entry_points[0].function;
+    let function_info = module_info.get_entry_point(0);
+    let mut observed = Vec::new();
+
+    for (_, expression) in function.expressions.iter() {
+        let naga::Expression::Access { base, index } = *expression else {
+            continue;
+        };
+        if function_info[index].uniformity.non_uniform_result.is_none() {
+            continue;
+        }
+        let naga::TypeInner::BindingArray { .. } =
+            *function_info[base].ty.inner_with(&module.types)
+        else {
+            continue;
+        };
+        let naga::Expression::GlobalVariable(global_handle) = function.expressions[base] else {
+            panic!("pinned Naga binding-array base must resolve to a module global");
+        };
+        observed.push(module.global_variables[global_handle].space);
+    }
+
+    assert_eq!(
+        observed.as_slice(),
+        &[naga::AddressSpace::Storage {
+            access: naga::StorageAccess::LOAD,
+        }],
+        "pinned Naga must expose the storage-buffer array access as one non-uniform binding-array access"
+    );
+}
+
 fn storage_buffer_graph() -> (GpuPreparedWorkGraph, GpuReadbackId) {
+    assert_pinned_naga_storage_buffer_non_uniformity();
     let mut resources = GpuResourceScope::new();
     let first = fixed::prepared_u32_buffer(&mut resources, "r3 storage first", 17, false);
     let second = fixed::prepared_u32_buffer(&mut resources, "r3 storage second", 101, false);
@@ -170,14 +222,18 @@ fn storage_buffer_graph() -> (GpuPreparedWorkGraph, GpuReadbackId) {
         STORAGE_BUFFER_WGSL,
         std::iter::empty::<GpuBindingLayoutRefinement>(),
     );
-    assert!(matches!(
-        pipeline
-            .requirements()
-            .get(GpuCapabilityFeature::StorageBufferBindingArrayNonUniformIndexing),
-        Some(GpuCapabilityRequirement::Required(
-            GpuCapabilityFeature::StorageBufferBindingArrayNonUniformIndexing
-        ))
-    ));
+    assert!(
+        matches!(
+            pipeline
+                .requirements()
+                .get(GpuCapabilityFeature::StorageBufferBindingArrayNonUniformIndexing),
+            Some(GpuCapabilityRequirement::Required(
+                GpuCapabilityFeature::StorageBufferBindingArrayNonUniformIndexing
+            ))
+        ),
+        "storage-buffer non-uniform requirement missing from {:?}",
+        pipeline.requirements()
+    );
 
     let layout = pipeline.layout().clone();
     let partial = GpuRuntimeBindingValue::new(
