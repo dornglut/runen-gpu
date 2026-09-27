@@ -333,7 +333,7 @@ fn lower_primitive(primitive: GpuPrimitiveStateDescriptor) -> PrimitiveState {
             .map(render_mapping::index_format),
         front_face: render_mapping::front_face(primitive.front_face()),
         cull_mode: render_mapping::cull_mode(primitive.cull_mode()),
-        unclipped_depth: false,
+        unclipped_depth: primitive.depth_clip_mode() == crate::GpuDepthClipMode::Unclipped,
         polygon_mode: PolygonMode::Fill,
         conservative: false,
     }
