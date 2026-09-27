@@ -131,7 +131,7 @@ jobs:
           report_path, expected_revision = sys.argv[1:3]
           with open(report_path, encoding="utf-8") as handle:
               report = json.load(handle)
-          assert report["schema_version"] == 5
+          assert report["schema_version"] == 6
           assert report["qualification_level"] == "generic_metal"
           assert report["revision"] == expected_revision
           assert report["environment"]["architecture"] == "arm64"
@@ -265,6 +265,22 @@ jobs:
           assert report["proofs"]["fixed_binding_array_storage_buffer"] == (
               "EXERCISED" if storage_buffer_supported else "UNSUPPORTED"
           )
+
+          non_uniform_proofs = {
+              "TextureBindingArrayNonUniformIndexing":
+                  "non_uniform_binding_array_texture_sampler",
+              "StorageBufferBindingArrayNonUniformIndexing":
+                  "non_uniform_binding_array_storage_buffer",
+              "StorageTextureBindingArrayNonUniformIndexing":
+                  "non_uniform_binding_array_storage_texture",
+          }
+          for feature, proof in non_uniform_proofs.items():
+              assert report["proofs"][proof] == (
+                  "EXERCISED"
+                  if capabilities[feature]["supported"]
+                  else "UNSUPPORTED"
+              )
+
           assert report["proofs"]["timestamp_query"] == "UNSUPPORTED_SUPPRESSED"
           print(
               "Generic Metal qualification:",
