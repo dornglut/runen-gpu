@@ -524,6 +524,9 @@ pub(crate) const fn preferred_degradation_is_valid(
         | GpuCapabilityFeature::BufferBindingArray
         | GpuCapabilityFeature::StorageResourceBindingArray
         | GpuCapabilityFeature::UniformBufferBindingArray
+        | GpuCapabilityFeature::TextureBindingArrayNonUniformIndexing
+        | GpuCapabilityFeature::StorageBufferBindingArrayNonUniformIndexing
+        | GpuCapabilityFeature::StorageTextureBindingArrayNonUniformIndexing
         | GpuCapabilityFeature::DepthAttachment
         | GpuCapabilityFeature::DepthBiasClamp
         | GpuCapabilityFeature::DepthClipControl
@@ -553,7 +556,7 @@ pub(crate) fn alignment_value(facts: GpuAlignmentFacts, kind: GpuAlignmentKind) 
 mod tests {
     use super::*;
 
-    const FEATURES: [GpuCapabilityFeature; 15] = [
+    const FEATURES: [GpuCapabilityFeature; 18] = [
         GpuCapabilityFeature::Compute,
         GpuCapabilityFeature::RenderPipeline,
         GpuCapabilityFeature::Copy,
@@ -563,6 +566,9 @@ mod tests {
         GpuCapabilityFeature::BufferBindingArray,
         GpuCapabilityFeature::StorageResourceBindingArray,
         GpuCapabilityFeature::UniformBufferBindingArray,
+        GpuCapabilityFeature::TextureBindingArrayNonUniformIndexing,
+        GpuCapabilityFeature::StorageBufferBindingArrayNonUniformIndexing,
+        GpuCapabilityFeature::StorageTextureBindingArrayNonUniformIndexing,
         GpuCapabilityFeature::DepthAttachment,
         GpuCapabilityFeature::DepthBiasClamp,
         GpuCapabilityFeature::DepthClipControl,
