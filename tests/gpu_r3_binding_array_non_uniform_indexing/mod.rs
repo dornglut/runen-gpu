@@ -1,9 +1,7 @@
 use runen_gpu::*;
 
-#[path = "../gpu_fixed_binding_array/mod.rs"]
-mod fixed;
-#[path = "../support/readback_wait.rs"]
-mod readback_wait;
+use crate::retained_fixed_binding_array as fixed;
+use fixed::readback_wait;
 
 const STORAGE_BUFFER_WGSL: &str = r#"
 enable wgpu_binding_array;
