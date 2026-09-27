@@ -6,7 +6,7 @@ use super::super::{
     compare_fragment_output_signatures, compare_vertex_input_signatures,
 };
 use super::GpuPipelineConfiguration;
-use super::render_state::GpuRenderPipelineStateDescriptor;
+use super::render_state::{GpuDepthClipMode, GpuRenderPipelineStateDescriptor};
 use super::requirements::insert_pipeline_requirement;
 use crate::{
     GpuCapabilityFeature, GpuCapabilityRequirement, GpuCapabilityRequirements,
@@ -111,6 +111,14 @@ impl GpuRenderPipelineDescriptor {
             &mut requirements,
             GpuCapabilityRequirement::Required(GpuCapabilityFeature::RenderPipeline),
         )?;
+        if state.primitive().depth_clip_mode() == GpuDepthClipMode::Unclipped {
+            insert_pipeline_requirement(
+                operation,
+                entry_points.diagnostic_label(),
+                &mut requirements,
+                GpuCapabilityRequirement::Required(GpuCapabilityFeature::DepthClipControl),
+            )?;
+        }
         if let Some(depth_stencil) = state.depth_stencil() {
             insert_pipeline_requirement(
                 operation,
