@@ -419,6 +419,29 @@ fn depth_clip_pipeline_requirements_are_mechanical_and_color_only() {
     );
 }
 
+#[test]
+fn unclipped_rejects_conflicting_disabled_depth_clip_requirement() {
+    let base = pipeline(GpuDepthClipMode::Unclipped);
+    let mut requirements = GpuCapabilityRequirements::new();
+    requirements
+        .insert(GpuCapabilityRequirement::Disabled(
+            GpuCapabilityFeature::DepthClipControl,
+        ))
+        .unwrap();
+
+    let error = GpuRenderPipelineDescriptor::new(
+        base.program().clone(),
+        base.entry_points().clone(),
+        base.state().clone(),
+        GpuPipelineConfiguration::new(None, Some(requirements)),
+    )
+    .expect_err("derived unclipped requirement must conflict with caller-disabled capability");
+    assert_eq!(
+        error.cause(),
+        GpuProgramContractCause::PipelineDescriptorInvalid
+    );
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
 #[ignore = "requires the retained Vulkan software adapter"]
