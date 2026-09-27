@@ -108,6 +108,10 @@ fn normalized_limits(native: &wgpu::Limits) -> GpuLimits {
         native.max_vertex_attributes,
         native.max_vertex_buffer_array_stride,
     )
+    .with_binding_array_limits(
+        native.max_binding_array_elements_per_shader_stage,
+        native.max_binding_array_sampler_elements_per_shader_stage,
+    )
 }
 
 /// Maps only downlevel capabilities WGPU explicitly proves. Unknown flag bits suppress
@@ -352,6 +356,8 @@ mod tests {
         native.max_texture_array_layers = 128;
         native.max_vertex_attributes = 12;
         native.max_vertex_buffer_array_stride = 1024;
+        native.max_binding_array_elements_per_shader_stage = 345_678;
+        native.max_binding_array_sampler_elements_per_shader_stage = 901;
         let limits = normalized_limits(&native);
         assert_eq!(limits.max_buffer_size(), 123_456_789);
         assert_eq!(limits.max_texture_dimension_1d(), 4096);
@@ -359,6 +365,14 @@ mod tests {
         assert_eq!(limits.max_texture_array_layers(), 128);
         assert_eq!(limits.max_vertex_attributes(), 12);
         assert_eq!(limits.max_vertex_buffer_array_stride(), 1024);
+        assert_eq!(
+            limits.max_binding_array_elements_per_shader_stage(),
+            345_678
+        );
+        assert_eq!(
+            limits.max_binding_array_sampler_elements_per_shader_stage(),
+            901
+        );
     }
 
     #[test]

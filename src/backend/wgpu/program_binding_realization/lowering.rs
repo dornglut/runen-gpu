@@ -1,6 +1,7 @@
 //! Typed G4B layout/runtime lowering owned by the private G4C2 realization boundary.
 
 use super::super::texture_format_mapping::texture_format;
+use crate::api::fixed_array_layout_capabilities;
 use crate::{
     GpuBindGroupLayoutDescriptor, GpuBindingClass, GpuBindingDeclaration, GpuContext,
     GpuProgramBindingRealizationError, GpuProgramBindingRealizationErrorCategory, GpuSamplerClass,
@@ -16,18 +17,10 @@ pub(super) fn layout_entries(
     context: &GpuContext,
     descriptor: &GpuBindGroupLayoutDescriptor,
 ) -> Result<Vec<BindGroupLayoutEntry>, GpuProgramBindingRealizationError> {
-    let has_binding_array = descriptor
-        .bindings()
-        .any(|binding| binding.array_count().is_some());
-    if has_binding_array
-        && descriptor.bindings().any(|binding| {
-            binding.kind().uses_dynamic_offset()
-                || binding.kind().class() == GpuBindingClass::UniformBuffer
-        })
-    {
+    if has_incompatible_binding_array_mix(descriptor) {
         return Err(layout_error(
             descriptor,
-            "a group containing a binding array cannot contain a uniform buffer or dynamic offset",
+            "a group containing a binding array cannot contain a non-array uniform buffer or dynamic offset",
         ));
     }
     descriptor
@@ -36,8 +29,28 @@ pub(super) fn layout_entries(
         .collect()
 }
 
+fn has_incompatible_binding_array_mix(descriptor: &GpuBindGroupLayoutDescriptor) -> bool {
+    let has_binding_array = descriptor
+        .bindings()
+        .any(|binding| binding.array_count().is_some());
+    has_binding_array
+        && descriptor.bindings().any(|binding| {
+            binding.kind().uses_dynamic_offset()
+                || (binding.kind().class() == GpuBindingClass::UniformBuffer
+                    && binding.array_count().is_none())
+        })
+}
+
 fn layout_entry(
     context: &GpuContext,
+    descriptor: &GpuBindGroupLayoutDescriptor,
+    binding: &GpuBindingDeclaration,
+) -> Result<BindGroupLayoutEntry, GpuProgramBindingRealizationError> {
+    validate_array_feature(context, descriptor, binding)?;
+    lowered_layout_entry(descriptor, binding)
+}
+
+fn lowered_layout_entry(
     descriptor: &GpuBindGroupLayoutDescriptor,
     binding: &GpuBindingDeclaration,
 ) -> Result<BindGroupLayoutEntry, GpuProgramBindingRealizationError> {
@@ -113,7 +126,6 @@ fn layout_entry(
                 })
             }
         };
-    validate_array_feature(context, descriptor, binding)?;
     Ok(BindGroupLayoutEntry {
         binding: binding.key().binding(),
         visibility: shader_stages(binding.visibility()),
@@ -130,25 +142,15 @@ fn validate_array_feature(
     if binding.array_count().is_none() {
         return Ok(());
     }
-    let required = match binding.kind().class() {
-        GpuBindingClass::UniformBuffer => {
-            wgpu::Features::BUFFER_BINDING_ARRAY | wgpu::Features::UNIFORM_BUFFER_BINDING_ARRAYS
+    for feature in fixed_array_layout_capabilities(binding.kind().class()) {
+        if !context.device_facts().is_enabled(*feature) {
+            return Err(layout_error(
+                descriptor,
+                format!(
+                    "the admitted RunenGPU device did not enable {feature:?}, required by this fixed binding-array layout"
+                ),
+            ));
         }
-        GpuBindingClass::StorageBuffer => {
-            wgpu::Features::BUFFER_BINDING_ARRAY | wgpu::Features::STORAGE_RESOURCE_BINDING_ARRAY
-        }
-        GpuBindingClass::SampledTexture | GpuBindingClass::Sampler => {
-            wgpu::Features::TEXTURE_BINDING_ARRAY
-        }
-        GpuBindingClass::StorageTexture => {
-            wgpu::Features::TEXTURE_BINDING_ARRAY | wgpu::Features::STORAGE_RESOURCE_BINDING_ARRAY
-        }
-    };
-    if !context.backend.device.features().contains(required) {
-        return Err(layout_error(
-            descriptor,
-            "the admitted device did not enable the WGPU fixed binding-array features required by this layout",
-        ));
     }
     Ok(())
 }
@@ -195,4 +197,106 @@ fn layout_error(
         format!("bind-group layout group={}", descriptor.group()),
         detail,
     )
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        GpuBindingKey, GpuBindingKind, GpuBindingProvenance, GpuShaderStage, GpuShaderStages,
+        GpuStorageBufferAccess,
+    };
+    use core::num::NonZeroU32;
+
+    fn declaration(
+        binding: u32,
+        class: GpuBindingClass,
+        array_count: Option<u32>,
+        dynamic_offset: bool,
+    ) -> GpuBindingDeclaration {
+        let kind = match class {
+            GpuBindingClass::UniformBuffer => GpuBindingKind::uniform_buffer(dynamic_offset, None),
+            GpuBindingClass::StorageBuffer => GpuBindingKind::storage_buffer(
+                GpuStorageBufferAccess::ReadOnly,
+                dynamic_offset,
+                None,
+            ),
+            _ => panic!("test helper only needs buffer binding classes"),
+        };
+        GpuBindingDeclaration::new(
+            GpuBindingKey::try_new(0, u64::from(binding)).unwrap(),
+            GpuShaderStages::one(GpuShaderStage::Compute),
+            kind,
+            array_count.and_then(NonZeroU32::new),
+            format!("binding-{binding}"),
+            GpuBindingProvenance::new("fixed-array-mix-test", None).unwrap(),
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn fixed_array_lowering_preserves_the_wgpu_array_counter_discriminator() {
+        let array = declaration(0, GpuBindingClass::StorageBuffer, Some(9), false);
+        let ordinary = declaration(1, GpuBindingClass::StorageBuffer, None, false);
+        let descriptor =
+            GpuBindGroupLayoutDescriptor::new(0, [array.clone(), ordinary.clone()]).unwrap();
+
+        let array_entry = lowered_layout_entry(&descriptor, &array).unwrap();
+        let ordinary_entry = lowered_layout_entry(&descriptor, &ordinary).unwrap();
+
+        assert!(matches!(
+            array_entry.ty,
+            BindingType::Buffer {
+                ty: BufferBindingType::Storage { .. },
+                ..
+            }
+        ));
+        assert!(matches!(
+            ordinary_entry.ty,
+            BindingType::Buffer {
+                ty: BufferBindingType::Storage { .. },
+                ..
+            }
+        ));
+        assert_eq!(array_entry.count.map(|count| count.get()), Some(9));
+        assert_eq!(ordinary_entry.count, None);
+    }
+
+    #[test]
+    fn uniform_binding_array_is_not_mistaken_for_an_ordinary_uniform_buffer() {
+        let layout = GpuBindGroupLayoutDescriptor::new(
+            0,
+            [declaration(
+                0,
+                GpuBindingClass::UniformBuffer,
+                Some(2),
+                false,
+            )],
+        )
+        .unwrap();
+
+        assert!(!has_incompatible_binding_array_mix(&layout));
+    }
+
+    #[test]
+    fn binding_array_mix_rejects_ordinary_uniform_or_dynamic_offset_bindings() {
+        let with_uniform = GpuBindGroupLayoutDescriptor::new(
+            0,
+            [
+                declaration(0, GpuBindingClass::StorageBuffer, Some(2), false),
+                declaration(1, GpuBindingClass::UniformBuffer, None, false),
+            ],
+        )
+        .unwrap();
+        assert!(has_incompatible_binding_array_mix(&with_uniform));
+
+        let with_dynamic = GpuBindGroupLayoutDescriptor::new(
+            0,
+            [
+                declaration(0, GpuBindingClass::StorageBuffer, Some(2), false),
+                declaration(1, GpuBindingClass::StorageBuffer, None, true),
+            ],
+        )
+        .unwrap();
+        assert!(has_incompatible_binding_array_mix(&with_dynamic));
+    }
 }

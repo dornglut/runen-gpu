@@ -8,6 +8,9 @@ mod retained_blend_state;
 #[path = "gpu_r2_depth_bias.rs"]
 mod retained_depth_bias;
 #[cfg(target_arch = "wasm32")]
+#[path = "gpu_fixed_binding_array/mod.rs"]
+mod retained_fixed_binding_array;
+#[cfg(target_arch = "wasm32")]
 #[path = "gpu_offscreen_indexed_native.rs"]
 mod retained_offscreen_indexed;
 #[cfg(target_arch = "wasm32")]
@@ -35,9 +38,10 @@ mod retained_vertex_packed;
 #[cfg(target_arch = "wasm32")]
 mod browser {
     use super::{
-        retained_bc, retained_blend_state, retained_depth_bias, retained_offscreen_indexed,
-        retained_prefix_scan, retained_sampler_anisotropy, retained_shader_f16,
-        retained_transient_attachment, retained_vertex_packed, retained_vertex8, retained_vertex16,
+        retained_bc, retained_blend_state, retained_depth_bias, retained_fixed_binding_array,
+        retained_offscreen_indexed, retained_prefix_scan, retained_sampler_anisotropy,
+        retained_shader_f16, retained_transient_attachment, retained_vertex_packed,
+        retained_vertex8, retained_vertex16,
     };
     use runen_gpu::*;
     use std::cell::RefCell;
@@ -2213,6 +2217,7 @@ fn cs_main() {
             println!("transient Stencil8: UNSUPPORTED (normalized depth/stencil role absent)");
         }
 
+        retained_fixed_binding_array::prove_browser_webgpu_unsupported_contract().await;
         run_browser_prefix_scan().await;
         run_browser_offscreen_indexed().await;
         run_browser_rgba16_copy().await;

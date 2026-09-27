@@ -76,6 +76,8 @@ pub enum GpuLimitKind {
     MaxTextureArrayLayers,
     MaxVertexAttributes,
     MaxVertexBufferArrayStride,
+    MaxBindingArrayElementsPerShaderStage,
+    MaxBindingArraySamplerElementsPerShaderStage,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]

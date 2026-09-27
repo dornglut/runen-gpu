@@ -11,6 +11,8 @@ mod readback_wait;
 mod retained_blend;
 #[path = "gpu_r2_depth_bias.rs"]
 mod retained_depth_bias;
+#[path = "gpu_fixed_binding_array/mod.rs"]
+mod retained_fixed_binding_array;
 #[path = "gpu_compute_generated_indirect_native.rs"]
 mod retained_indirect;
 #[path = "gpu_offscreen_indexed_native.rs"]
@@ -373,6 +375,10 @@ fn limits_report(limits: GpuLimits) -> Value {
         "max_texture_array_layers": limits.max_texture_array_layers(),
         "max_vertex_attributes": limits.max_vertex_attributes(),
         "max_vertex_buffer_array_stride": limits.max_vertex_buffer_array_stride(),
+        "max_binding_array_elements_per_shader_stage":
+            limits.max_binding_array_elements_per_shader_stage(),
+        "max_binding_array_sampler_elements_per_shader_stage":
+            limits.max_binding_array_sampler_elements_per_shader_stage(),
     })
 }
 
@@ -484,6 +490,19 @@ fn metal_qualification_records_exact_public_api_evidence() {
     ));
     pollster::block_on(execute_render(&context, render, render_readback));
     pollster::block_on(execute_indirect(&context, indirect, indirect_readback));
+    let fixed_binding_arrays =
+        pollster::block_on(retained_fixed_binding_array::run_suite_on_adapter(
+            GpuBackendFamily::Metal,
+            None,
+            context.adapter_facts(),
+        ));
+    let proof_disposition = |exercised: bool| {
+        if exercised {
+            "EXERCISED"
+        } else {
+            "UNSUPPORTED"
+        }
+    };
     let vertex8_mask = pollster::block_on(retained_vertex8::run_suite(&context));
     let vertex16_mask = pollster::block_on(retained_vertex16::run_suite(&context));
     let vertex_packed_mask = pollster::block_on(retained_vertex_packed::run_suite(&context));
@@ -549,7 +568,7 @@ fn metal_qualification_records_exact_public_api_evidence() {
     assert_eq!(stats.pending_readbacks(), 0);
 
     let report = json!({
-        "schema_version": 3,
+        "schema_version": 4,
         "qualification_level": mode.report_name(),
         "revision": revision,
         "environment": {
@@ -578,6 +597,7 @@ fn metal_qualification_records_exact_public_api_evidence() {
         "limits": {
             "adapter": limits_report(adapter.adapter_limits().values()),
             "device": limits_report(context.device_facts().device_limits().values()),
+            "workload": limits_report(context.device_facts().workload_budget().limits()),
         },
         "proofs": {
             "prefix_scan_exclusive": "EXERCISED",
@@ -593,6 +613,16 @@ fn metal_qualification_records_exact_public_api_evidence() {
             "transient_attachment": "EXERCISED",
             "transient_depth": "EXERCISED",
             "transient_stencil8": transient_stencil8,
+            "fixed_binding_array_storage_buffer":
+                proof_disposition(fixed_binding_arrays.storage_buffer),
+            "fixed_binding_array_uniform_buffer":
+                proof_disposition(fixed_binding_arrays.uniform_buffer),
+            "fixed_binding_array_sampled_texture":
+                proof_disposition(fixed_binding_arrays.sampled_texture),
+            "fixed_binding_array_sampler":
+                proof_disposition(fixed_binding_arrays.sampler),
+            "fixed_binding_array_storage_texture":
+                proof_disposition(fixed_binding_arrays.storage_texture),
             "timestamp_query": "UNSUPPORTED_SUPPRESSED",
         },
     });

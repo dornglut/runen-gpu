@@ -1,10 +1,11 @@
 use super::contract_diagnostics::{GpuProgramContractCause, GpuProgramContractError};
 use super::entry_point::{GpuEntryPointDescriptor, GpuEntryPointName};
+use super::fixed_array::fixed_array_compilation_capabilities;
 use super::interface::{
-    GpuBindingDeclaration, GpuBindingKey, GpuBindingKind, GpuBindingLayoutRefinement,
-    GpuBindingProvenance, GpuProgramInterfaceDescriptor, GpuSamplerClass, GpuShaderStage,
-    GpuShaderStages, GpuStorageBufferAccess, GpuStorageTextureAccess, GpuTextureSampleClass,
-    GpuTextureViewDimension,
+    GpuBindingClass, GpuBindingDeclaration, GpuBindingKey, GpuBindingKind,
+    GpuBindingLayoutRefinement, GpuBindingProvenance, GpuProgramInterfaceDescriptor,
+    GpuSamplerClass, GpuShaderStage, GpuShaderStages, GpuStorageBufferAccess,
+    GpuStorageTextureAccess, GpuTextureSampleClass, GpuTextureViewDimension,
 };
 use super::source::GpuAdmittedProgramSource;
 use super::stage_io::{
@@ -72,7 +73,7 @@ pub(crate) fn analyze_program(
     let operation = "admit canonical WGSL program";
     let source_label = source.identity().diagnostic_label();
     let baseline_capabilities = baseline_analysis_capabilities();
-    let (module, analysis_capabilities, required_features) = match parse_wgsl(
+    let (module, analysis_capabilities, mut required_features) = match parse_wgsl(
         source.canonical_wgsl(),
         baseline_capabilities,
     ) {
@@ -111,6 +112,44 @@ pub(crate) fn analyze_program(
                     format!("canonical WGSL validation failed: {error}"),
                 )
             })?;
+
+    for (_, global) in module.global_variables.iter() {
+        let Some(binding) = global.binding else {
+            continue;
+        };
+        let (base_type, array_count) =
+            binding_array_type(&module, global.ty).map_err(|detail| {
+                invalid(
+                    operation,
+                    &format!(
+                        "module binding @group({}) @binding({})",
+                        binding.group, binding.binding
+                    ),
+                    GpuProgramContractCause::ProgramInterfaceMismatch,
+                    detail,
+                )
+            })?;
+        if array_count.is_none() {
+            continue;
+        }
+        let binding_class = fixed_array_compilation_class(&module, global.space, base_type)
+            .map_err(|detail| {
+                invalid(
+                    operation,
+                    &format!(
+                        "module binding @group({}) @binding({})",
+                        binding.group, binding.binding
+                    ),
+                    GpuProgramContractCause::ProgramInterfaceMismatch,
+                    detail,
+                )
+            })?;
+        for feature in fixed_array_compilation_capabilities(binding_class) {
+            if !required_features.contains(feature) {
+                required_features.push(*feature);
+            }
+        }
+    }
 
     let mut selected_names = selected_entry_points.into_iter().collect::<Vec<_>>();
     if selected_names.is_empty() {
@@ -567,6 +606,34 @@ fn binding_array_type(
             }
         },
         _ => Ok((ty, None)),
+    }
+}
+
+fn fixed_array_compilation_class(
+    module: &naga::Module,
+    space: AddressSpace,
+    ty: naga::Handle<naga::Type>,
+) -> Result<GpuBindingClass, &'static str> {
+    match space {
+        AddressSpace::Uniform => Ok(GpuBindingClass::UniformBuffer),
+        AddressSpace::Storage { .. } => Ok(GpuBindingClass::StorageBuffer),
+        AddressSpace::Handle => match module.types[ty].inner {
+            TypeInner::Sampler { .. } => Ok(GpuBindingClass::Sampler),
+            TypeInner::Image {
+                class: ImageClass::Sampled { .. } | ImageClass::Depth { .. },
+                ..
+            } => Ok(GpuBindingClass::SampledTexture),
+            TypeInner::Image {
+                class: ImageClass::Storage { .. },
+                ..
+            } => Ok(GpuBindingClass::StorageTexture),
+            TypeInner::Image {
+                class: ImageClass::External,
+                ..
+            } => Err("external textures are outside fixed binding-array compilation authority"),
+            _ => Err("handle-space fixed binding array has an unsupported WGSL resource type"),
+        },
+        _ => Err("fixed binding arrays require uniform, storage, sampler, or texture resources"),
     }
 }
 
