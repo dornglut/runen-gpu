@@ -386,14 +386,15 @@ fn scan_non_uniform_binding_array_accesses(
             continue;
         };
         let global = &module.global_variables[global_handle];
-        let (element_type, array_count) = binding_array_type(module, global.ty).map_err(|detail| {
-            invalid(
-                "admit canonical WGSL program",
-                source_label,
-                GpuProgramContractCause::ProgramInterfaceMismatch,
-                detail,
-            )
-        })?;
+        let (element_type, array_count) =
+            binding_array_type(module, global.ty).map_err(|detail| {
+                invalid(
+                    "admit canonical WGSL program",
+                    source_label,
+                    GpuProgramContractCause::ProgramInterfaceMismatch,
+                    detail,
+                )
+            })?;
         if array_count.is_none() {
             continue;
         }
