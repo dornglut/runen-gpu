@@ -192,7 +192,10 @@ fn assert_pinned_naga_storage_buffer_non_uniformity() {
             continue;
         };
         let global = &module.global_variables[global_handle];
-        if !matches!(module.types[global.ty].inner, naga::TypeInner::BindingArray { .. }) {
+        if !matches!(
+            module.types[global.ty].inner,
+            naga::TypeInner::BindingArray { .. }
+        ) {
             continue;
         }
         assert!(
