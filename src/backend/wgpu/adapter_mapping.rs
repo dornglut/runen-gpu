@@ -142,6 +142,9 @@ pub(super) fn normalized_features(
     if !unknown_flags && flags.contains(DownlevelFlags::DEPTH_BIAS_CLAMP) {
         supported.push(GpuCapabilityFeature::DepthBiasClamp);
     }
+    if features.contains(Features::DEPTH_CLIP_CONTROL) {
+        supported.push(GpuCapabilityFeature::DepthClipControl);
+    }
     // The current WGPU Metal timestamp surface is not sufficient proof of RunenGPU's ordered
     // marker semantics. Keep the normalized capability conservative until Apple-native
     // marker + resolve/readback evidence proves the backend path truthful.
@@ -426,6 +429,35 @@ mod tests {
         assert!(!unknown.contains(&GpuCapabilityFeature::Copy));
         assert!(!unknown.contains(&GpuCapabilityFeature::DepthBiasClamp));
         assert!(unknown.contains(&GpuCapabilityFeature::Presentation));
+    }
+
+    #[test]
+    fn depth_clip_control_requires_the_exact_advertised_feature() {
+        for backend in [Backend::Vulkan, Backend::BrowserWebGpu, Backend::Metal] {
+            let supported = normalized_features(
+                backend,
+                Features::DEPTH_CLIP_CONTROL,
+                DownlevelFlags::empty(),
+                false,
+                false,
+            );
+            assert!(
+                supported.contains(&GpuCapabilityFeature::DepthClipControl),
+                "{backend:?}"
+            );
+
+            let unsupported = normalized_features(
+                backend,
+                Features::empty(),
+                DownlevelFlags::empty(),
+                false,
+                false,
+            );
+            assert!(
+                !unsupported.contains(&GpuCapabilityFeature::DepthClipControl),
+                "{backend:?}"
+            );
+        }
     }
 
     #[test]

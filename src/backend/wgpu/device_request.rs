@@ -432,6 +432,7 @@ fn wgpu_features_for(feature: GpuCapabilityFeature) -> Features {
         }
         GpuCapabilityFeature::UniformBufferBindingArray => Features::UNIFORM_BUFFER_BINDING_ARRAYS,
         GpuCapabilityFeature::ShaderF16 => Features::SHADER_F16,
+        GpuCapabilityFeature::DepthClipControl => Features::DEPTH_CLIP_CONTROL,
         GpuCapabilityFeature::DepthBiasClamp => Features::empty(),
         _ => Features::empty(),
     }
@@ -911,6 +912,20 @@ mod tests {
         assert_eq!(
             wgpu_features_for(GpuCapabilityFeature::ShaderF16),
             Features::SHADER_F16
+        );
+    }
+
+    #[test]
+    fn depth_clip_control_requests_the_exact_wgpu_feature() {
+        assert_eq!(
+            wgpu_features_for(GpuCapabilityFeature::DepthClipControl),
+            Features::DEPTH_CLIP_CONTROL
+        );
+        assert_eq!(
+            requested_features(&candidate_with_enabled_features([
+                GpuCapabilityFeature::DepthClipControl,
+            ])),
+            Features::DEPTH_CLIP_CONTROL
         );
     }
 

@@ -11,6 +11,8 @@ mod readback_wait;
 mod retained_blend;
 #[path = "gpu_r2_depth_bias.rs"]
 mod retained_depth_bias;
+#[path = "gpu_r2_depth_clip_control.rs"]
+mod retained_depth_clip_control;
 #[path = "gpu_fixed_binding_array/mod.rs"]
 mod retained_fixed_binding_array;
 #[path = "gpu_compute_generated_indirect_native.rs"]
@@ -30,7 +32,7 @@ mod retained_vertex8;
 #[path = "gpu_r1_vertex_packed_formats.rs"]
 mod retained_vertex_packed;
 
-const FEATURES: [GpuCapabilityFeature; 14] = [
+const FEATURES: [GpuCapabilityFeature; 15] = [
     GpuCapabilityFeature::Compute,
     GpuCapabilityFeature::RenderPipeline,
     GpuCapabilityFeature::Copy,
@@ -42,6 +44,7 @@ const FEATURES: [GpuCapabilityFeature; 14] = [
     GpuCapabilityFeature::UniformBufferBindingArray,
     GpuCapabilityFeature::DepthAttachment,
     GpuCapabilityFeature::DepthBiasClamp,
+    GpuCapabilityFeature::DepthClipControl,
     GpuCapabilityFeature::ShaderF16,
     GpuCapabilityFeature::TimestampQuery,
     GpuCapabilityFeature::Presentation,
@@ -508,6 +511,19 @@ fn metal_qualification_records_exact_public_api_evidence() {
     let vertex_packed_mask = pollster::block_on(retained_vertex_packed::run_suite(&context));
     let blend_mask = pollster::block_on(retained_blend::run_suite(&context));
     let depth_bias_mask = pollster::block_on(retained_depth_bias::run_baseline(&context));
+    pollster::block_on(retained_depth_clip_control::run_case(
+        &context,
+        GpuDepthClipMode::Clip,
+    ));
+    let depth_clip = pollster::block_on(retained_depth_clip_control::run_on_adapter(
+        GpuBackendFamily::Metal,
+        None,
+        context.adapter_facts(),
+    ));
+    assert!(
+        depth_clip.supported && depth_clip.exercised,
+        "qualified Metal adapter advertises DepthClipControl and must execute the public oracle"
+    );
     retained_sampler_anisotropy::realize_anisotropic_sampler(&context);
     let (transient_graph, transient_readback_id) = retained_transient_attachment::graph();
     let transient_prepared =
@@ -568,7 +584,7 @@ fn metal_qualification_records_exact_public_api_evidence() {
     assert_eq!(stats.pending_readbacks(), 0);
 
     let report = json!({
-        "schema_version": 4,
+        "schema_version": 5,
         "qualification_level": mode.report_name(),
         "revision": revision,
         "environment": {
@@ -609,6 +625,7 @@ fn metal_qualification_records_exact_public_api_evidence() {
             "vertex_packed_mask": vertex_packed_mask,
             "blend_state_mask": blend_mask,
             "depth_bias_baseline_mask": depth_bias_mask,
+            "depth_clip_control": "EXERCISED",
             "sampler_anisotropy": "EXERCISED",
             "transient_attachment": "EXERCISED",
             "transient_depth": "EXERCISED",

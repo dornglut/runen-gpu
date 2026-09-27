@@ -333,7 +333,7 @@ fn lower_primitive(primitive: GpuPrimitiveStateDescriptor) -> PrimitiveState {
             .map(render_mapping::index_format),
         front_face: render_mapping::front_face(primitive.front_face()),
         cull_mode: render_mapping::cull_mode(primitive.cull_mode()),
-        unclipped_depth: false,
+        unclipped_depth: primitive.depth_clip_mode() == crate::GpuDepthClipMode::Unclipped,
         polygon_mode: PolygonMode::Fill,
         conservative: false,
     }
@@ -367,6 +367,22 @@ fn incompatible(request: &str, detail: &'static str) -> GpuPipelineRealizationEr
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn primitive_lowering_maps_depth_clip_mode_exactly() {
+        let clipped = GpuPrimitiveStateDescriptor::default();
+        assert!(!lower_primitive(clipped).unclipped_depth);
+
+        let unclipped = GpuPrimitiveStateDescriptor::new(
+            crate::GpuPrimitiveTopology::TriangleList,
+            None,
+            crate::GpuFrontFace::CounterClockwise,
+            crate::GpuCullMode::None,
+            crate::GpuDepthClipMode::Unclipped,
+        )
+        .unwrap();
+        assert!(lower_primitive(unclipped).unclipped_depth);
+    }
 
     #[test]
     fn alpha_blending_requires_a_blendable_color_format() {

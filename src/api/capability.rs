@@ -17,6 +17,7 @@ pub enum GpuCapabilityFeature {
     UniformBufferBindingArray,
     DepthAttachment,
     DepthBiasClamp,
+    DepthClipControl,
     ShaderF16,
     TimestampQuery,
     Presentation,
