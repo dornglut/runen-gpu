@@ -4,11 +4,10 @@ use runen_gpu::{
     GpuColorWriteMask, GpuComputePipelineDescriptor, GpuEntryPointName,
     GpuFragmentOutputStateDescriptor, GpuMultisampleStateDescriptor, GpuPipelineConfiguration,
     GpuPrimitiveStateDescriptor, GpuProgramContractCause, GpuProgramDescriptor,
-    GpuProgramSourceIdentity,
-    GpuProgramSourceKey, GpuProgramSourceOwnerId, GpuProgramSourceProvenance,
-    GpuProgramSourceRegistry, GpuProgramSourceRevision, GpuRenderEntryPoints,
-    GpuRenderPipelineDescriptor, GpuRenderPipelineStateDescriptor, GpuSamplerClass,
-    GpuTextureFormat, GpuTextureSampleClass, GpuVertexInputStateDescriptor,
+    GpuProgramSourceIdentity, GpuProgramSourceKey, GpuProgramSourceOwnerId,
+    GpuProgramSourceProvenance, GpuProgramSourceRegistry, GpuProgramSourceRevision,
+    GpuRenderEntryPoints, GpuRenderPipelineDescriptor, GpuRenderPipelineStateDescriptor,
+    GpuSamplerClass, GpuTextureFormat, GpuTextureSampleClass, GpuVertexInputStateDescriptor,
 };
 
 const FIXED_ARRAY_WGSL: &str = r#"
@@ -185,7 +184,6 @@ fn render_pipeline_inherits_program_interface_requirements() {
     assert_fixed_array_requirements(pipeline.requirements());
 }
 
-
 const STORAGE_NON_UNIFORM_WGSL: &str = r#"
 enable wgpu_binding_array;
 
@@ -325,8 +323,7 @@ fn compute_main(@builtin(local_invocation_index) index: u32) {
 
 #[test]
 fn storage_buffer_non_uniform_indexing_derives_the_resource_family_capability() {
-    let (_registry, source) =
-        admitted_source_from("storage.non-uniform", STORAGE_NON_UNIFORM_WGSL);
+    let (_registry, source) = admitted_source_from("storage.non-uniform", STORAGE_NON_UNIFORM_WGSL);
     let program = GpuProgramDescriptor::new(
         source,
         [entry_point("compute_main")],
@@ -383,8 +380,10 @@ fn dynamic_uniform_binding_array_indexing_derives_no_non_uniform_capability() {
 
 #[test]
 fn unused_non_uniform_binding_array_access_is_whole_module_authority_not_selected_interface() {
-    let (_registry, source) =
-        admitted_source_from("storage.unused-non-uniform", UNUSED_STORAGE_NON_UNIFORM_WGSL);
+    let (_registry, source) = admitted_source_from(
+        "storage.unused-non-uniform",
+        UNUSED_STORAGE_NON_UNIFORM_WGSL,
+    );
     let program = GpuProgramDescriptor::new(
         source,
         [entry_point("compute_main")],
@@ -409,8 +408,7 @@ fn unused_non_uniform_binding_array_access_is_whole_module_authority_not_selecte
 
 #[test]
 fn texture_and_sampler_non_uniform_indexing_share_one_normalized_capability() {
-    let (_registry, source) =
-        admitted_source_from("texture.non-uniform", TEXTURE_NON_UNIFORM_WGSL);
+    let (_registry, source) = admitted_source_from("texture.non-uniform", TEXTURE_NON_UNIFORM_WGSL);
     let refinements = [
         GpuBindingLayoutRefinement::new(binding_key(0))
             .with_texture_sample_class(GpuTextureSampleClass::FloatFilterable),
@@ -432,8 +430,10 @@ fn texture_and_sampler_non_uniform_indexing_share_one_normalized_capability() {
 
 #[test]
 fn storage_texture_non_uniform_indexing_derives_its_independent_capability() {
-    let (_registry, source) =
-        admitted_source_from("storage-texture.non-uniform", STORAGE_TEXTURE_NON_UNIFORM_WGSL);
+    let (_registry, source) = admitted_source_from(
+        "storage-texture.non-uniform",
+        STORAGE_TEXTURE_NON_UNIFORM_WGSL,
+    );
     let program = GpuProgramDescriptor::new(
         source,
         [entry_point("compute_main")],
@@ -457,8 +457,10 @@ fn storage_texture_non_uniform_indexing_derives_its_independent_capability() {
 
 #[test]
 fn uniform_buffer_non_uniform_indexing_is_explicitly_deferred() {
-    let (_registry, source) =
-        admitted_source_from("uniform-buffer.non-uniform", UNIFORM_BUFFER_NON_UNIFORM_WGSL);
+    let (_registry, source) = admitted_source_from(
+        "uniform-buffer.non-uniform",
+        UNIFORM_BUFFER_NON_UNIFORM_WGSL,
+    );
     let error = GpuProgramDescriptor::new(
         source,
         [entry_point("compute_main")],
