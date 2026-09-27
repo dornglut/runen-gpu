@@ -310,7 +310,7 @@ pub(crate) fn evaluate_validated_candidate(
         }
     }
 
-    let workload_budget = effective_workload_budget(descriptor)?;
+    let workload_budget = effective_workload_budget(descriptor, &enabled_features)?;
     for kind in ALL_LIMIT_KINDS {
         let observed = limit_value(adapter.adapter_limits().values(), kind);
         let required_minimum = limit_value(workload_budget.limits(), kind);
@@ -429,7 +429,10 @@ pub(crate) fn admitted_device_facts(
     ))
 }
 
-const ALL_LIMIT_KINDS: [GpuLimitKind; 17] = [
+const FIXED_BINDING_ARRAY_ELEMENT_BASELINE: u32 = 500_000;
+const FIXED_BINDING_ARRAY_SAMPLER_ELEMENT_BASELINE: u32 = 1_000;
+
+const ALL_LIMIT_KINDS: [GpuLimitKind; 19] = [
     GpuLimitKind::MaxUniformBufferBindingSize,
     GpuLimitKind::MaxStorageBufferBindingSize,
     GpuLimitKind::MaxColorAttachments,
@@ -447,6 +450,8 @@ const ALL_LIMIT_KINDS: [GpuLimitKind; 17] = [
     GpuLimitKind::MaxTextureArrayLayers,
     GpuLimitKind::MaxVertexAttributes,
     GpuLimitKind::MaxVertexBufferArrayStride,
+    GpuLimitKind::MaxBindingArrayElementsPerShaderStage,
+    GpuLimitKind::MaxBindingArraySamplerElementsPerShaderStage,
 ];
 
 const ALL_ALIGNMENT_KINDS: [GpuAlignmentKind; 5] = [
@@ -481,8 +486,26 @@ pub(crate) const fn normalized_limit_baseline() -> GpuLimits {
 
 fn effective_workload_budget(
     descriptor: &GpuContextDescriptor,
+    enabled_features: &BTreeSet<GpuCapabilityFeature>,
 ) -> Result<GpuWorkloadBudget, GpuContextRequestError> {
-    let baseline = normalized_limit_baseline();
+    let general_binding_array_baseline = if enabled_features
+        .contains(&GpuCapabilityFeature::TextureBindingArray)
+        || enabled_features.contains(&GpuCapabilityFeature::BufferBindingArray)
+    {
+        FIXED_BINDING_ARRAY_ELEMENT_BASELINE
+    } else {
+        0
+    };
+    let sampler_binding_array_baseline =
+        if enabled_features.contains(&GpuCapabilityFeature::TextureBindingArray) {
+            FIXED_BINDING_ARRAY_SAMPLER_ELEMENT_BASELINE
+        } else {
+            0
+        };
+    let baseline = normalized_limit_baseline().with_binding_array_limits(
+        general_binding_array_baseline,
+        sampler_binding_array_baseline,
+    );
     let value = |kind| {
         descriptor
             .limits
@@ -523,6 +546,10 @@ fn effective_workload_budget(
             u32_value(GpuLimitKind::MaxTextureArrayLayers)?,
             u32_value(GpuLimitKind::MaxVertexAttributes)?,
             u32_value(GpuLimitKind::MaxVertexBufferArrayStride)?,
+        )
+        .with_binding_array_limits(
+            u32_value(GpuLimitKind::MaxBindingArrayElementsPerShaderStage)?,
+            u32_value(GpuLimitKind::MaxBindingArraySamplerElementsPerShaderStage)?,
         ),
         descriptor.alignments.clone(),
     ))
@@ -555,6 +582,12 @@ pub(crate) const fn limit_value(limits: GpuLimits, kind: GpuLimitKind) -> u64 {
         GpuLimitKind::MaxTextureArrayLayers => limits.max_texture_array_layers() as u64,
         GpuLimitKind::MaxVertexAttributes => limits.max_vertex_attributes() as u64,
         GpuLimitKind::MaxVertexBufferArrayStride => limits.max_vertex_buffer_array_stride() as u64,
+        GpuLimitKind::MaxBindingArrayElementsPerShaderStage => {
+            limits.max_binding_array_elements_per_shader_stage() as u64
+        }
+        GpuLimitKind::MaxBindingArraySamplerElementsPerShaderStage => {
+            limits.max_binding_array_sampler_elements_per_shader_stage() as u64
+        }
     }
 }
 
@@ -706,20 +739,35 @@ mod tests {
         features: impl IntoIterator<Item = GpuCapabilityFeature>,
         fallback: GpuFallbackStatus,
     ) -> GpuAdapterFacts {
+        let features = features.into_iter().collect::<Vec<_>>();
+        let array_limits = limits().with_binding_array_limits(
+            if features.contains(&GpuCapabilityFeature::TextureBindingArray)
+                || features.contains(&GpuCapabilityFeature::BufferBindingArray)
+            {
+                FIXED_BINDING_ARRAY_ELEMENT_BASELINE
+            } else {
+                0
+            },
+            if features.contains(&GpuCapabilityFeature::TextureBindingArray) {
+                FIXED_BINDING_ARRAY_SAMPLER_ELEMENT_BASELINE
+            } else {
+                0
+            },
+        );
         GpuAdapterFacts::new(
             GpuBackendFamily::Vulkan,
             GpuAdapterClass::Discrete,
             GpuSoftwareStatus::Hardware,
             fallback,
             GpuCapabilities::from_normalized_facts(
-                features,
-                limits(),
+                features.iter().copied(),
+                array_limits,
                 [(
                     GpuTextureFormat::Rgba8Unorm,
                     GpuTextureFormatCapabilities::none(),
                 )],
             ),
-            GpuAdapterLimits::new(limits()),
+            GpuAdapterLimits::new(array_limits),
             alignments(),
         )
     }
@@ -946,6 +994,232 @@ mod tests {
         )
         .unwrap();
         assert!(!device.is_enabled(GpuCapabilityFeature::TextureBindingArray));
+    }
+
+    #[test]
+    fn binding_array_features_activate_only_their_scoped_default_budgets() {
+        let ordinary = evaluate_candidate(
+            &GpuContextDescriptor::new(GpuCapabilityRequirements::new()),
+            adapter([]),
+            true,
+        )
+        .unwrap();
+        assert_eq!(
+            ordinary
+                .workload_budget()
+                .limits()
+                .max_binding_array_elements_per_shader_stage(),
+            0
+        );
+        assert_eq!(
+            ordinary
+                .workload_budget()
+                .limits()
+                .max_binding_array_sampler_elements_per_shader_stage(),
+            0
+        );
+
+        let mut buffer_requirements = GpuCapabilityRequirements::new();
+        buffer_requirements
+            .insert(GpuCapabilityRequirement::Required(
+                GpuCapabilityFeature::BufferBindingArray,
+            ))
+            .unwrap();
+        let buffer = evaluate_candidate(
+            &GpuContextDescriptor::new(buffer_requirements),
+            adapter([GpuCapabilityFeature::BufferBindingArray]),
+            true,
+        )
+        .unwrap();
+        assert_eq!(
+            buffer
+                .workload_budget()
+                .limits()
+                .max_binding_array_elements_per_shader_stage(),
+            500_000
+        );
+        assert_eq!(
+            buffer
+                .workload_budget()
+                .limits()
+                .max_binding_array_sampler_elements_per_shader_stage(),
+            0
+        );
+
+        let mut texture_requirements = GpuCapabilityRequirements::new();
+        texture_requirements
+            .insert(GpuCapabilityRequirement::Required(
+                GpuCapabilityFeature::TextureBindingArray,
+            ))
+            .unwrap();
+        let texture = evaluate_candidate(
+            &GpuContextDescriptor::new(texture_requirements),
+            adapter([GpuCapabilityFeature::TextureBindingArray]),
+            true,
+        )
+        .unwrap();
+        assert_eq!(
+            texture
+                .workload_budget()
+                .limits()
+                .max_binding_array_elements_per_shader_stage(),
+            500_000
+        );
+        assert_eq!(
+            texture
+                .workload_budget()
+                .limits()
+                .max_binding_array_sampler_elements_per_shader_stage(),
+            1_000
+        );
+    }
+
+    #[test]
+    fn explicit_array_limit_policy_caps_or_raises_the_feature_scoped_budget() {
+        let mut requirements = GpuCapabilityRequirements::new();
+        requirements
+            .insert(GpuCapabilityRequirement::Required(
+                GpuCapabilityFeature::TextureBindingArray,
+            ))
+            .unwrap();
+
+        let capped = evaluate_candidate(
+            &GpuContextDescriptor::new(requirements.clone())
+                .permit_limit(GpuLimitKind::MaxBindingArrayElementsPerShaderStage, 64)
+                .permit_limit(
+                    GpuLimitKind::MaxBindingArraySamplerElementsPerShaderStage,
+                    16,
+                ),
+            adapter([GpuCapabilityFeature::TextureBindingArray]),
+            true,
+        )
+        .unwrap();
+        assert_eq!(
+            capped
+                .workload_budget()
+                .limits()
+                .max_binding_array_elements_per_shader_stage(),
+            64
+        );
+        assert_eq!(
+            capped
+                .workload_budget()
+                .limits()
+                .max_binding_array_sampler_elements_per_shader_stage(),
+            16
+        );
+
+        let raised_limits = limits().with_binding_array_limits(600_000, 2_000);
+        let raised_adapter = GpuAdapterFacts::new(
+            GpuBackendFamily::Vulkan,
+            GpuAdapterClass::Discrete,
+            GpuSoftwareStatus::Hardware,
+            GpuFallbackStatus::ConfirmedNotFallback,
+            GpuCapabilities::from_normalized_facts(
+                [GpuCapabilityFeature::TextureBindingArray],
+                raised_limits,
+                [(
+                    GpuTextureFormat::Rgba8Unorm,
+                    GpuTextureFormatCapabilities::none(),
+                )],
+            ),
+            GpuAdapterLimits::new(raised_limits),
+            alignments(),
+        );
+        let raised = evaluate_candidate(
+            &GpuContextDescriptor::new(requirements)
+                .require_limit(GpuLimitKind::MaxBindingArrayElementsPerShaderStage, 600_000)
+                .require_limit(
+                    GpuLimitKind::MaxBindingArraySamplerElementsPerShaderStage,
+                    2_000,
+                ),
+            raised_adapter,
+            true,
+        )
+        .unwrap();
+        assert_eq!(
+            raised
+                .workload_budget()
+                .limits()
+                .max_binding_array_elements_per_shader_stage(),
+            600_000
+        );
+        assert_eq!(
+            raised
+                .workload_budget()
+                .limits()
+                .max_binding_array_sampler_elements_per_shader_stage(),
+            2_000
+        );
+    }
+
+    #[test]
+    fn binding_array_feature_rejects_adapter_below_its_guaranteed_budget() {
+        let mut requirements = GpuCapabilityRequirements::new();
+        requirements
+            .insert(GpuCapabilityRequirement::Required(
+                GpuCapabilityFeature::TextureBindingArray,
+            ))
+            .unwrap();
+        let below = limits().with_binding_array_limits(499_999, 999);
+        let candidate = GpuAdapterFacts::new(
+            GpuBackendFamily::Vulkan,
+            GpuAdapterClass::Discrete,
+            GpuSoftwareStatus::Hardware,
+            GpuFallbackStatus::ConfirmedNotFallback,
+            GpuCapabilities::from_normalized_facts(
+                [GpuCapabilityFeature::TextureBindingArray],
+                below,
+                [],
+            ),
+            GpuAdapterLimits::new(below),
+            alignments(),
+        );
+        let error = evaluate_candidate(&GpuContextDescriptor::new(requirements), candidate, true)
+            .unwrap_err();
+        assert_eq!(
+            error.limit_rejection(),
+            Some((
+                GpuLimitKind::MaxBindingArrayElementsPerShaderStage,
+                500_000,
+                499_999,
+            ))
+        );
+    }
+
+    #[test]
+    fn texture_binding_array_feature_rejects_sampler_budget_below_guaranteed_minimum() {
+        let mut requirements = GpuCapabilityRequirements::new();
+        requirements
+            .insert(GpuCapabilityRequirement::Required(
+                GpuCapabilityFeature::TextureBindingArray,
+            ))
+            .unwrap();
+        let below = limits().with_binding_array_limits(500_000, 999);
+        let candidate = GpuAdapterFacts::new(
+            GpuBackendFamily::Vulkan,
+            GpuAdapterClass::Discrete,
+            GpuSoftwareStatus::Hardware,
+            GpuFallbackStatus::ConfirmedNotFallback,
+            GpuCapabilities::from_normalized_facts(
+                [GpuCapabilityFeature::TextureBindingArray],
+                below,
+                [],
+            ),
+            GpuAdapterLimits::new(below),
+            alignments(),
+        );
+
+        let error = evaluate_candidate(&GpuContextDescriptor::new(requirements), candidate, true)
+            .unwrap_err();
+        assert_eq!(
+            error.limit_rejection(),
+            Some((
+                GpuLimitKind::MaxBindingArraySamplerElementsPerShaderStage,
+                1_000,
+                999,
+            ))
+        );
     }
 
     #[test]

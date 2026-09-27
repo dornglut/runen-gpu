@@ -3,10 +3,11 @@ use super::{
     GpuValidatedBindGroupBindings,
 };
 use crate::{
-    GpuBindingClass, GpuBindingDeclaration, GpuBufferAccess, GpuBufferAccessKind, GpuBufferRange,
-    GpuPipelineLayoutDescriptor, GpuProgramContractCause, GpuProgramContractError,
-    GpuResourceAccess, GpuSamplerUse, GpuStorageBufferAccess, GpuStorageTextureAccess,
-    GpuTextureAccess, GpuTextureAccessKind, GpuTextureAccessResource,
+    GpuBindGroupLayoutDescriptor, GpuBindingClass, GpuBindingDeclaration, GpuBufferAccess,
+    GpuBufferAccessKind, GpuBufferRange, GpuPipelineLayoutDescriptor, GpuProgramContractCause,
+    GpuProgramContractError, GpuResourceAccess, GpuSamplerUse, GpuShaderStage,
+    GpuStorageBufferAccess, GpuStorageTextureAccess, GpuTextureAccess, GpuTextureAccessKind,
+    GpuTextureAccessResource,
 };
 use core::hash::{Hash, Hasher};
 use std::collections::BTreeMap;
@@ -99,6 +100,20 @@ impl GpuRuntimeBindingSet {
             group.validate_device_facts(device_facts)?;
         }
         Ok(())
+    }
+
+    pub(crate) fn validate_pipeline_layout_device_facts(
+        layout: &GpuPipelineLayoutDescriptor,
+        device_facts: &GpuRuntimeBindingDeviceFacts,
+    ) -> Result<(), GpuProgramContractError> {
+        validate_pipeline_binding_limits(layout, device_facts)
+    }
+
+    pub(crate) fn validate_bind_group_layout_array_limits(
+        layout: &GpuBindGroupLayoutDescriptor,
+        device_facts: &GpuRuntimeBindingDeviceFacts,
+    ) -> Result<(), GpuProgramContractError> {
+        validate_binding_array_limits(core::iter::once(layout), device_facts)
     }
 }
 
@@ -328,7 +343,65 @@ fn validate_pipeline_binding_limits(
             "reduce dynamic storage-buffer declarations to the admitted pipeline-layout limit",
         ));
     }
+
+    validate_binding_array_limits(layout.groups(), device_facts)
+}
+
+fn validate_binding_array_limits<'a>(
+    groups: impl IntoIterator<Item = &'a GpuBindGroupLayoutDescriptor>,
+    device_facts: &GpuRuntimeBindingDeviceFacts,
+) -> Result<(), GpuProgramContractError> {
+    let mut binding_array_elements = [0_u32; 3];
+    let mut binding_array_sampler_elements = [0_u32; 3];
+
+    for group in groups {
+        for declaration in group.bindings() {
+            let Some(count) = declaration.array_count() else {
+                continue;
+            };
+            for stage in declaration.visibility().iter() {
+                let index = shader_stage_index(stage);
+                binding_array_elements[index] =
+                    binding_array_elements[index].saturating_add(count.get());
+                if declaration.kind().class() == GpuBindingClass::Sampler {
+                    binding_array_sampler_elements[index] =
+                        binding_array_sampler_elements[index].saturating_add(count.get());
+                }
+            }
+        }
+    }
+
+    let required_binding_array_elements = binding_array_elements.into_iter().max().unwrap_or(0);
+    if required_binding_array_elements > device_facts.max_binding_array_elements_per_shader_stage()
+    {
+        return Err(device_incompatible(
+            "binding-array elements",
+            "reduce fixed binding-array cardinality or request a larger admitted array-element limit",
+        ));
+    }
+
+    let required_sampler_array_elements = binding_array_sampler_elements
+        .into_iter()
+        .max()
+        .unwrap_or(0);
+    if required_sampler_array_elements
+        > device_facts.max_binding_array_sampler_elements_per_shader_stage()
+    {
+        return Err(device_incompatible(
+            "binding-array sampler elements",
+            "reduce fixed sampler-array cardinality or request a larger admitted sampler-array limit",
+        ));
+    }
+
     Ok(())
+}
+
+const fn shader_stage_index(stage: GpuShaderStage) -> usize {
+    match stage {
+        GpuShaderStage::Vertex => 0,
+        GpuShaderStage::Fragment => 1,
+        GpuShaderStage::Compute => 2,
+    }
 }
 
 fn required_bind_group_slots(layout: &GpuPipelineLayoutDescriptor) -> u64 {

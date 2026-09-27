@@ -50,6 +50,7 @@ pub use operation::{GpuRenderOperation, GpuWorkNodeKind, GpuWorkOperation};
 pub use ordinary::*;
 pub use ordinary_transfer::*;
 pub use pipeline_realization::*;
+pub(crate) use program::fixed_array_layout_capabilities;
 pub use program::*;
 pub use readback_id::*;
 pub use realization::*;
