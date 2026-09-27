@@ -1,9 +1,9 @@
 use runen_gpu::{GpuBackendFamily, GpuSoftwareFallbackPolicy};
 
-#[path = "gpu_fixed_binding_array/mod.rs"]
-mod retained_fixed_binding_array;
 #[path = "gpu_r3_binding_array_non_uniform_indexing/mod.rs"]
 mod proof;
+#[path = "gpu_fixed_binding_array/mod.rs"]
+mod retained_fixed_binding_array;
 
 #[test]
 #[ignore = "requires the retained Vulkan software adapter"]
