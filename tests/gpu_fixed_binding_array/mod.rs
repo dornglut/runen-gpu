@@ -526,7 +526,10 @@ pub(crate) fn texture_binding(binding: u32, view: &GpuTextureViewHandle) -> GpuR
     .unwrap()
 }
 
-pub(crate) fn sampler_array_binding(binding: u32, samplers: [&GpuSamplerHandle; 2]) -> GpuRuntimeBindingValue {
+pub(crate) fn sampler_array_binding(
+    binding: u32,
+    samplers: [&GpuSamplerHandle; 2],
+) -> GpuRuntimeBindingValue {
     GpuRuntimeBindingValue::new(
         GpuBindingKey::try_new(0, u64::from(binding)).unwrap(),
         samplers
