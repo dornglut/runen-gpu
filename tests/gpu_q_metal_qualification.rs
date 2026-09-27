@@ -15,10 +15,10 @@ mod retained_depth_bias;
 mod retained_depth_clip_control;
 #[path = "gpu_fixed_binding_array/mod.rs"]
 mod retained_fixed_binding_array;
-#[path = "gpu_r3_binding_array_non_uniform_indexing/mod.rs"]
-mod retained_non_uniform_binding_array;
 #[path = "gpu_compute_generated_indirect_native.rs"]
 mod retained_indirect;
+#[path = "gpu_r3_binding_array_non_uniform_indexing/mod.rs"]
+mod retained_non_uniform_binding_array;
 #[path = "gpu_offscreen_indexed_native.rs"]
 mod retained_offscreen;
 #[path = "gpu_prefix_scan_native.rs"]
