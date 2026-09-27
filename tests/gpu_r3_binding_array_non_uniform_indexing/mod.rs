@@ -461,6 +461,47 @@ fn supports_all(
         .all(|feature| facts.supported().supports(feature))
 }
 
+fn compute_requirements(
+    features: impl IntoIterator<Item = GpuCapabilityFeature>,
+) -> GpuCapabilityRequirements {
+    let mut requirements = GpuCapabilityProfile::ComputeBaseline.requirements();
+    for feature in features {
+        requirements
+            .insert(GpuCapabilityRequirement::Required(feature))
+            .unwrap();
+    }
+    requirements
+}
+
+async fn assert_non_uniform_requirement_isolated(
+    backend: GpuBackendFamily,
+    fallback: Option<GpuSoftwareFallbackPolicy>,
+    expected_adapter: &GpuAdapterFacts,
+    prerequisite_features: impl IntoIterator<Item = GpuCapabilityFeature>,
+    non_uniform_feature: GpuCapabilityFeature,
+    graph: &GpuPreparedWorkGraph,
+    expectation: &str,
+) {
+    let baseline = fixed::request_proof_context(
+        fixed::context_descriptor(
+            backend,
+            fallback,
+            compute_requirements(prerequisite_features),
+        ),
+        Some(expected_adapter),
+        expectation,
+    )
+    .await;
+    assert!(
+        !baseline.device_facts().is_enabled(non_uniform_feature),
+        "prerequisite-only context must not enable {non_uniform_feature:?}"
+    );
+    assert!(
+        baseline.prepare_submission(graph.clone()).await.is_err(),
+        "work requiring {non_uniform_feature:?} must reject before private realization on a prerequisite-only context"
+    );
+}
+
 pub(crate) async fn run_storage_buffer_proof(
     backend: GpuBackendFamily,
     fallback: Option<GpuSoftwareFallbackPolicy>,
@@ -479,20 +520,19 @@ pub(crate) async fn run_storage_buffer_proof(
     }
 
     let (graph, readback_id) = storage_buffer_graph();
-    let baseline = fixed::request_proof_context(
-        fixed::context_descriptor(
-            backend,
-            fallback,
-            GpuCapabilityProfile::ComputeBaseline.requirements(),
-        ),
-        Some(expected_adapter),
-        "R3 non-uniform storage-buffer baseline context must remain available",
+    assert_non_uniform_requirement_isolated(
+        backend,
+        fallback,
+        expected_adapter,
+        [
+            GpuCapabilityFeature::BufferBindingArray,
+            GpuCapabilityFeature::StorageResourceBindingArray,
+        ],
+        GpuCapabilityFeature::StorageBufferBindingArrayNonUniformIndexing,
+        &graph,
+        "R3 storage-buffer fixed-array prerequisites must admit the qualified adapter",
     )
     .await;
-    assert!(
-        baseline.prepare_submission(graph.clone()).await.is_err(),
-        "non-uniform storage-buffer work must reject before realization on a baseline context"
-    );
 
     let context = fixed::request_proof_context(
         fixed::context_descriptor(backend, fallback, graph.requirements().clone()),
@@ -536,6 +576,17 @@ pub(crate) async fn run_texture_sampler_proof(
     }
 
     let (graph, readback_id) = texture_sampler_graph();
+    assert_non_uniform_requirement_isolated(
+        backend,
+        fallback,
+        expected_adapter,
+        [GpuCapabilityFeature::TextureBindingArray],
+        GpuCapabilityFeature::TextureBindingArrayNonUniformIndexing,
+        &graph,
+        "R3 texture/sampler fixed-array prerequisites must admit the qualified adapter",
+    )
+    .await;
+
     let context = fixed::request_proof_context(
         fixed::context_descriptor_with_roles(
             backend,
@@ -588,6 +639,20 @@ pub(crate) async fn run_storage_texture_proof(
     }
 
     let (graph, readback_ids) = storage_texture_graph();
+    assert_non_uniform_requirement_isolated(
+        backend,
+        fallback,
+        expected_adapter,
+        [
+            GpuCapabilityFeature::TextureBindingArray,
+            GpuCapabilityFeature::StorageResourceBindingArray,
+        ],
+        GpuCapabilityFeature::StorageTextureBindingArrayNonUniformIndexing,
+        &graph,
+        "R3 storage-texture fixed-array prerequisites must admit the qualified adapter",
+    )
+    .await;
+
     let context = fixed::request_proof_context(
         fixed::context_descriptor_with_roles(
             backend,
