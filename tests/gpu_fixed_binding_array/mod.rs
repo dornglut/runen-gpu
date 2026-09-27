@@ -1,7 +1,7 @@
 use runen_gpu::*;
 
 #[path = "../support/readback_wait.rs"]
-mod readback_wait;
+pub(crate) mod readback_wait;
 
 const UNUSED_STORAGE_ARRAY_WGSL: &str = r#"
 enable wgpu_binding_array;
