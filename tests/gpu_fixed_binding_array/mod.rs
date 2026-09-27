@@ -129,15 +129,15 @@ fn cs_main() {
 }
 "#;
 
-fn label(value: impl AsRef<str>) -> GpuResourceLabel {
+pub(crate) fn label(value: impl AsRef<str>) -> GpuResourceLabel {
     GpuResourceLabel::new(value.as_ref()).unwrap()
 }
 
-fn provenance(value: impl AsRef<str>) -> GpuResourceProvenance {
+pub(crate) fn provenance(value: impl AsRef<str>) -> GpuResourceProvenance {
     GpuResourceProvenance::new(label(value), None, None)
 }
 
-fn common(value: impl AsRef<str>) -> GpuResourceCommon {
+pub(crate) fn common(value: impl AsRef<str>) -> GpuResourceCommon {
     let value = value.as_ref();
     GpuResourceCommon::owned(
         label(value),
@@ -149,7 +149,7 @@ fn common(value: impl AsRef<str>) -> GpuResourceCommon {
     .unwrap()
 }
 
-fn prepared_texture(
+pub(crate) fn prepared_texture(
     resources: &mut GpuResourceScope,
     name: &str,
     format: GpuTextureFormat,
@@ -201,7 +201,7 @@ fn prepared_texture(
     (texture, view)
 }
 
-fn sampler_distinguishing_texture(
+pub(crate) fn sampler_distinguishing_texture(
     resources: &mut GpuResourceScope,
 ) -> (GpuTextureHandle, GpuTextureViewHandle) {
     let name = "fixed-array sampler texture";
@@ -252,7 +252,7 @@ fn sampler_distinguishing_texture(
     (texture, view)
 }
 
-fn zeroed_storage_texture(
+pub(crate) fn zeroed_storage_texture(
     resources: &mut GpuResourceScope,
     name: &str,
 ) -> (GpuTextureHandle, GpuTextureViewHandle) {
@@ -292,7 +292,7 @@ fn zeroed_storage_texture(
     (texture, view)
 }
 
-fn filtering_sampler(
+pub(crate) fn filtering_sampler(
     resources: &mut GpuResourceScope,
     name: &str,
     address_u: GpuAddressMode,
@@ -320,7 +320,7 @@ fn filtering_sampler(
         .unwrap()
 }
 
-fn prepared_u32_buffer(
+pub(crate) fn prepared_u32_buffer(
     resources: &mut GpuResourceScope,
     name: &str,
     value: u32,
@@ -443,7 +443,7 @@ fn uniform_buffer_array_pipeline() -> GpuComputePipelineDescriptor {
     )
 }
 
-fn compute_pipeline(
+pub(crate) fn compute_pipeline(
     key: &'static str,
     wgsl: &'static str,
     refinements: impl IntoIterator<Item = GpuBindingLayoutRefinement>,
@@ -483,7 +483,7 @@ fn storage_texture_array_pipeline() -> GpuComputePipelineDescriptor {
     )
 }
 
-fn array_binding(inputs: [&GpuBufferHandle; 2]) -> GpuRuntimeBindingValue {
+pub(crate) fn array_binding(inputs: [&GpuBufferHandle; 2]) -> GpuRuntimeBindingValue {
     GpuRuntimeBindingValue::new(
         GpuBindingKey::try_new(0, 0).unwrap(),
         inputs.into_iter().map(|buffer| {
@@ -503,7 +503,7 @@ fn uniform_array_binding(inputs: [&GpuBufferHandle; 2]) -> GpuRuntimeBindingValu
     .unwrap()
 }
 
-fn texture_array_binding(
+pub(crate) fn texture_array_binding(
     binding: u32,
     views: [&GpuTextureViewHandle; 2],
 ) -> GpuRuntimeBindingValue {
@@ -516,7 +516,7 @@ fn texture_array_binding(
     .unwrap()
 }
 
-fn texture_binding(binding: u32, view: &GpuTextureViewHandle) -> GpuRuntimeBindingValue {
+pub(crate) fn texture_binding(binding: u32, view: &GpuTextureViewHandle) -> GpuRuntimeBindingValue {
     GpuRuntimeBindingValue::new(
         GpuBindingKey::try_new(0, u64::from(binding)).unwrap(),
         [GpuRuntimeBindingResource::TextureView(
@@ -526,7 +526,7 @@ fn texture_binding(binding: u32, view: &GpuTextureViewHandle) -> GpuRuntimeBindi
     .unwrap()
 }
 
-fn sampler_array_binding(binding: u32, samplers: [&GpuSamplerHandle; 2]) -> GpuRuntimeBindingValue {
+pub(crate) fn sampler_array_binding(binding: u32, samplers: [&GpuSamplerHandle; 2]) -> GpuRuntimeBindingValue {
     GpuRuntimeBindingValue::new(
         GpuBindingKey::try_new(0, u64::from(binding)).unwrap(),
         samplers
@@ -774,7 +774,7 @@ fn storage_texture_proof_graph() -> (GpuPreparedWorkGraph, [GpuReadbackId; 2]) {
     )
 }
 
-fn context_descriptor(
+pub(crate) fn context_descriptor(
     backend: GpuBackendFamily,
     fallback: Option<GpuSoftwareFallbackPolicy>,
     requirements: GpuCapabilityRequirements,
@@ -788,7 +788,7 @@ fn context_descriptor(
     descriptor
 }
 
-fn context_descriptor_with_roles(
+pub(crate) fn context_descriptor_with_roles(
     backend: GpuBackendFamily,
     fallback: Option<GpuSoftwareFallbackPolicy>,
     requirements: GpuCapabilityRequirements,
@@ -801,7 +801,7 @@ fn context_descriptor_with_roles(
     descriptor
 }
 
-async fn request_proof_context(
+pub(crate) async fn request_proof_context(
     descriptor: GpuContextDescriptor,
     expected_adapter: Option<&GpuAdapterFacts>,
     expectation: &str,
@@ -846,7 +846,7 @@ fn assert_typed_array_budget_rejection(
     assert_eq!(source.label(), expected_label);
 }
 
-async fn execute_u32_buffer_graph(
+pub(crate) async fn execute_u32_buffer_graph(
     context: &GpuContext,
     graph: GpuPreparedWorkGraph,
     readback_id: GpuReadbackId,
