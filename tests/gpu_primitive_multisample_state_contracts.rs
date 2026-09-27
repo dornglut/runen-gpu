@@ -1,9 +1,10 @@
 use runen_gpu::{
-    GpuCullMode, GpuDepthClipMode, GpuFrontFace, GpuIndexFormat, GpuMemoryIntent, GpuMultisampleStateDescriptor,
-    GpuPrimitiveStateDescriptor, GpuPrimitiveTopology, GpuProgramContractCause, GpuReconstruction,
-    GpuResourceCommon, GpuResourceDescriptorError, GpuResourceLabel, GpuResourceLifetime,
-    GpuResourceProvenance, GpuTextureDescriptor, GpuTextureDimension, GpuTextureExtent,
-    GpuTextureFormat, GpuTextureInitialization, GpuTextureUsage, GpuTextureUsages,
+    GpuCullMode, GpuDepthClipMode, GpuFrontFace, GpuIndexFormat, GpuMemoryIntent,
+    GpuMultisampleStateDescriptor, GpuPrimitiveStateDescriptor, GpuPrimitiveTopology,
+    GpuProgramContractCause, GpuReconstruction, GpuResourceCommon, GpuResourceDescriptorError,
+    GpuResourceLabel, GpuResourceLifetime, GpuResourceProvenance, GpuTextureDescriptor,
+    GpuTextureDimension, GpuTextureExtent, GpuTextureFormat, GpuTextureInitialization,
+    GpuTextureUsage, GpuTextureUsages,
 };
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
