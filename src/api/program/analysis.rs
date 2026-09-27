@@ -379,16 +379,11 @@ fn scan_non_uniform_binding_array_accesses(
         let Expression::Access { base, index } = *expression else {
             continue;
         };
-        if function_info[index]
-            .uniformity
-            .non_uniform_result
-            .is_none()
-        {
+        if function_info[index].uniformity.non_uniform_result.is_none() {
             continue;
         }
         let TypeInner::BindingArray {
-            base: element_type,
-            ..
+            base: element_type, ..
         } = *function_info[base].ty.inner_with(&module.types)
         else {
             continue;
