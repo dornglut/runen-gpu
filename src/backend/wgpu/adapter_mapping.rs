@@ -432,6 +432,35 @@ mod tests {
     }
 
     #[test]
+    fn depth_clip_control_requires_the_exact_advertised_feature() {
+        for backend in [Backend::Vulkan, Backend::BrowserWebGpu, Backend::Metal] {
+            let supported = normalized_features(
+                backend,
+                Features::DEPTH_CLIP_CONTROL,
+                DownlevelFlags::empty(),
+                false,
+                false,
+            );
+            assert!(
+                supported.contains(&GpuCapabilityFeature::DepthClipControl),
+                "{backend:?}"
+            );
+
+            let unsupported = normalized_features(
+                backend,
+                Features::empty(),
+                DownlevelFlags::empty(),
+                false,
+                false,
+            );
+            assert!(
+                !unsupported.contains(&GpuCapabilityFeature::DepthClipControl),
+                "{backend:?}"
+            );
+        }
+    }
+
+    #[test]
     fn shader_f16_mapping_requires_the_exact_advertised_feature() {
         for backend in [Backend::Vulkan, Backend::BrowserWebGpu, Backend::Metal] {
             let supported = normalized_features(
