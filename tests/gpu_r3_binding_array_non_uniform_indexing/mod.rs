@@ -496,9 +496,16 @@ async fn assert_non_uniform_requirement_isolated(
         !baseline.device_facts().is_enabled(non_uniform_feature),
         "prerequisite-only context must not enable {non_uniform_feature:?}"
     );
-    assert!(
-        baseline.prepare_submission(graph.clone()).await.is_err(),
-        "work requiring {non_uniform_feature:?} must reject before private realization on a prerequisite-only context"
+    let error = baseline
+        .prepare_submission(graph.clone())
+        .await
+        .expect_err(
+            "non-uniform work must reject before private realization on a prerequisite-only context",
+        );
+    assert_eq!(
+        error.kind(),
+        GpuSubmissionPreparationErrorKind::CapabilityNotAdmitted,
+        "missing {non_uniform_feature:?} must fail at graph capability admission"
     );
 }
 
