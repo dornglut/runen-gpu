@@ -591,6 +591,51 @@ pub(crate) async fn run_suite_on_adapter(
     }
 }
 
+#[allow(dead_code)]
+pub(crate) async fn run_suite(
+    backend: GpuBackendFamily,
+    fallback: Option<GpuSoftwareFallbackPolicy>,
+) -> NonUniformBindingArrayProof {
+    let anchor = GpuContext::request(fixed::context_descriptor(
+        backend,
+        fallback,
+        GpuCapabilityProfile::ComputeBaseline.requirements(),
+    ))
+    .await
+    .expect("R3 non-uniform suite requires one anchor adapter");
+
+    let retained_lavapipe = backend == GpuBackendFamily::Vulkan
+        && anchor
+            .adapter_facts()
+            .diagnostic_name()
+            .is_some_and(|name| {
+                let name = name.to_ascii_lowercase();
+                name.contains("llvmpipe") || name.contains("lavapipe")
+            });
+    if retained_lavapipe {
+        println!(
+            "R3 non-uniform storage-buffer arrays: UNQUALIFIED (accepted retained Lavapipe fixed-buffer-array driver exception)"
+        );
+        return NonUniformBindingArrayProof {
+            texture_sampler: run_texture_sampler_proof(
+                backend,
+                fallback,
+                anchor.adapter_facts(),
+            )
+            .await,
+            storage_buffer: false,
+            storage_texture: run_storage_texture_proof(
+                backend,
+                fallback,
+                anchor.adapter_facts(),
+            )
+            .await,
+        };
+    }
+
+    run_suite_on_adapter(backend, fallback, anchor.adapter_facts()).await
+}
+
 pub(crate) async fn prove_browser_webgpu_unsupported_contract() {
     let baseline = GpuContext::request(fixed::context_descriptor(
         GpuBackendFamily::BrowserWebGpu,
