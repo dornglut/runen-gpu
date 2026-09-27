@@ -369,6 +369,22 @@ mod tests {
     use super::*;
 
     #[test]
+    fn primitive_lowering_maps_depth_clip_mode_exactly() {
+        let clipped = GpuPrimitiveStateDescriptor::default();
+        assert!(!lower_primitive(clipped).unclipped_depth);
+
+        let unclipped = GpuPrimitiveStateDescriptor::new(
+            crate::GpuPrimitiveTopology::TriangleList,
+            None,
+            crate::GpuFrontFace::CounterClockwise,
+            crate::GpuCullMode::None,
+            crate::GpuDepthClipMode::Unclipped,
+        )
+        .unwrap();
+        assert!(lower_primitive(unclipped).unclipped_depth);
+    }
+
+    #[test]
     fn alpha_blending_requires_a_blendable_color_format() {
         let component = GpuBlendComponent::new(
             crate::GpuBlendFactor::One,
