@@ -168,11 +168,10 @@ fn assert_pinned_naga_storage_buffer_non_uniformity() {
         | naga::valid::Capabilities::BUFFER_BINDING_ARRAY_NON_UNIFORM_INDEXING
         | naga::valid::Capabilities::STORAGE_TEXTURE_BINDING_ARRAY_NON_UNIFORM_INDEXING
         | naga::valid::Capabilities::STORAGE_BUFFER_BINDING_ARRAY_NON_UNIFORM_INDEXING;
-    let mut frontend =
-        naga::front::wgsl::Frontend::new_with_options(naga::front::wgsl::Options {
-            parse_doc_comments: false,
-            capabilities,
-        });
+    let mut frontend = naga::front::wgsl::Frontend::new_with_options(naga::front::wgsl::Options {
+        parse_doc_comments: false,
+        capabilities,
+    });
     let module = frontend.parse(STORAGE_BUFFER_WGSL).unwrap();
     let module_info =
         naga::valid::Validator::new(naga::valid::ValidationFlags::all(), capabilities)
@@ -189,15 +188,21 @@ fn assert_pinned_naga_storage_buffer_non_uniformity() {
         if function_info[index].uniformity.non_uniform_result.is_none() {
             continue;
         }
-        let naga::TypeInner::BindingArray { .. } =
-            *function_info[base].ty.inner_with(&module.types)
-        else {
+        let naga::Expression::GlobalVariable(global_handle) = function.expressions[base] else {
             continue;
         };
-        let naga::Expression::GlobalVariable(global_handle) = function.expressions[base] else {
-            panic!("pinned Naga binding-array base must resolve to a module global");
-        };
-        observed.push(module.global_variables[global_handle].space);
+        let global = &module.global_variables[global_handle];
+        if !matches!(module.types[global.ty].inner, naga::TypeInner::BindingArray { .. }) {
+            continue;
+        }
+        assert!(
+            matches!(
+                function_info[base].ty.inner_with(&module.types),
+                naga::TypeInner::Pointer { base, .. } if *base == global.ty
+            ),
+            "pinned Naga exposes non-handle resource globals as pointers to their declared binding-array type"
+        );
+        observed.push(global.space);
     }
 
     assert_eq!(
@@ -678,6 +683,7 @@ pub(crate) async fn run_suite(
     run_suite_on_adapter(backend, fallback, anchor.adapter_facts()).await
 }
 
+#[allow(dead_code)]
 pub(crate) async fn prove_browser_webgpu_unsupported_contract() {
     let baseline = GpuContext::request(fixed::context_descriptor(
         GpuBackendFamily::BrowserWebGpu,
