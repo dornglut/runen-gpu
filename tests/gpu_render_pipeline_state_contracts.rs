@@ -225,6 +225,7 @@ fn nonzero_depth_bias_is_rejected_for_point_and_line_topologies() {
             None,
             runen_gpu::GpuFrontFace::CounterClockwise,
             runen_gpu::GpuCullMode::None,
+            runen_gpu::GpuDepthClipMode::Clip,
         )
         .unwrap();
         let depth = GpuDepthStencilStateDescriptor::new(
