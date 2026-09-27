@@ -236,7 +236,7 @@ This is intentionally family-level rather than a mirror of WGPU's feature list.
 | Anisotropy and complete portable raster/blend/depth/stencil state | `CORE` | `PLAN` — R2 |
 | Transient attachment content semantics | `ADVANCED` | `PLAN` — R1/R2 boundary; contract investigation precedes delivery |
 | WGSL `f16` and mature standardized optional shader features | `ADVANCED` | `PLAN` — R3 |
-| Fixed binding arrays | `ADVANCED` | `CURRENT`, retain truthful admission |
+| Fixed binding arrays | `ADVANCED` | `CURRENT` |
 | Non-uniform sampled-texture/storage-resource indexing | `ADVANCED` | `PLAN` — R3, capability-gated native-generic path |
 | Partially-bound/sparse binding arrays | `ADVANCED` | `DEFER` until target support and occupancy semantics justify stable authority |
 | Occlusion queries | `CORE` | `PLAN` — R4 |
