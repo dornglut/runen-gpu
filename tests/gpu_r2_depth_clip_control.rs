@@ -145,20 +145,17 @@ fn graph(mode: GpuDepthClipMode) -> (GpuPreparedWorkGraph, GpuReadbackId) {
             GpuTextureDescriptor::new(
                 common(format!("{name} color")),
                 GpuTextureDimension::D2,
-                GpuTextureExtent::new(
-                    &resource_label,
-                    GpuTextureDimension::D2,
-                    WIDTH,
-                    HEIGHT,
-                    1,
-                )
-                .unwrap(),
+                GpuTextureExtent::new(&resource_label, GpuTextureDimension::D2, WIDTH, HEIGHT, 1)
+                    .unwrap(),
                 1,
                 1,
                 GpuTextureFormat::Rgba8Unorm,
                 GpuTextureUsages::new(
                     &resource_label,
-                    [GpuTextureUsage::ColorAttachment, GpuTextureUsage::CopySource],
+                    [
+                        GpuTextureUsage::ColorAttachment,
+                        GpuTextureUsage::CopySource,
+                    ],
                 )
                 .unwrap(),
                 GpuTextureInitialization::Uninitialized,
@@ -342,16 +339,21 @@ pub(crate) async fn run_browser_depth_clip_control() -> u32 {
     const OPTIONAL_SUPPORTED: u32 = 1 << 1;
     const UNCLIPPED_EXERCISED: u32 = 1 << 2;
 
-    let census_context = GpuContext::request(descriptor(GpuBackendFamily::BrowserWebGpu, false, None))
-        .await
-        .expect("actual-browser Conformance must provide baseline WebGPU rendering");
+    let census_context =
+        GpuContext::request(descriptor(GpuBackendFamily::BrowserWebGpu, false, None))
+            .await
+            .expect("actual-browser Conformance must provide baseline WebGPU rendering");
     assert_eq!(
         census_context.adapter_facts().backend(),
         GpuBackendFamily::BrowserWebGpu
     );
     run_case(&census_context, GpuDepthClipMode::Clip).await;
-    let outcome =
-        run_on_adapter(GpuBackendFamily::BrowserWebGpu, None, census_context.adapter_facts()).await;
+    let outcome = run_on_adapter(
+        GpuBackendFamily::BrowserWebGpu,
+        None,
+        census_context.adapter_facts(),
+    )
+    .await;
 
     let mut mask = CLIP_EXERCISED;
     if outcome.supported {
@@ -407,7 +409,10 @@ fn depth_clip_control_native_execution_is_backend_proven_when_advertised() {
         Some(GpuSoftwareFallbackPolicy::Require),
     )))
     .expect("native Conformance must provide the retained Vulkan fallback adapter");
-    assert_eq!(census_context.adapter_facts().backend(), GpuBackendFamily::Vulkan);
+    assert_eq!(
+        census_context.adapter_facts().backend(),
+        GpuBackendFamily::Vulkan
+    );
     assert_eq!(
         census_context.adapter_facts().fallback(),
         GpuFallbackStatus::ConfirmedFallback
