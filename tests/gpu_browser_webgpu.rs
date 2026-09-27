@@ -43,9 +43,8 @@ mod browser {
     use super::{
         retained_bc, retained_blend_state, retained_depth_bias, retained_depth_clip_control,
         retained_fixed_binding_array, retained_offscreen_indexed, retained_prefix_scan,
-        retained_sampler_anisotropy,
-        retained_shader_f16, retained_transient_attachment, retained_vertex_packed,
-        retained_vertex8, retained_vertex16,
+        retained_sampler_anisotropy, retained_shader_f16, retained_transient_attachment,
+        retained_vertex_packed, retained_vertex8, retained_vertex16,
     };
     use runen_gpu::*;
     use std::cell::RefCell;
@@ -2237,8 +2236,7 @@ fn cs_main() {
         BLEND_STATE_EXERCISED_MASK.with(|slot| *slot.borrow_mut() = blend_state_mask);
         let depth_bias_mask = retained_depth_bias::run_browser_depth_bias().await;
         DEPTH_BIAS_EXERCISED_MASK.with(|slot| *slot.borrow_mut() = depth_bias_mask);
-        let depth_clip_mask =
-            retained_depth_clip_control::run_browser_depth_clip_control().await;
+        let depth_clip_mask = retained_depth_clip_control::run_browser_depth_clip_control().await;
         assert_eq!(
             depth_clip_mask & 1,
             1,
