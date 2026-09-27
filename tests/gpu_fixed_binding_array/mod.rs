@@ -1545,25 +1545,13 @@ pub(crate) async fn run_suite(
         let expected_adapter = Some(anchor.adapter_facts());
         return FixedBindingArrayProof {
             storage_buffer: false,
-            uniform_buffer: run_uniform_buffer_array_proof(
-                backend,
-                fallback,
-                expected_adapter,
-            )
-            .await,
-            sampled_texture: run_sampled_texture_array_proof(
-                backend,
-                fallback,
-                expected_adapter,
-            )
-            .await,
+            uniform_buffer: run_uniform_buffer_array_proof(backend, fallback, expected_adapter)
+                .await,
+            sampled_texture: run_sampled_texture_array_proof(backend, fallback, expected_adapter)
+                .await,
             sampler: run_sampler_array_proof(backend, fallback, expected_adapter).await,
-            storage_texture: run_storage_texture_array_proof(
-                backend,
-                fallback,
-                expected_adapter,
-            )
-            .await,
+            storage_texture: run_storage_texture_array_proof(backend, fallback, expected_adapter)
+                .await,
         };
     }
 
