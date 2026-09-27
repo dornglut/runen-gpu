@@ -432,6 +432,7 @@ fn wgpu_features_for(feature: GpuCapabilityFeature) -> Features {
         }
         GpuCapabilityFeature::UniformBufferBindingArray => Features::UNIFORM_BUFFER_BINDING_ARRAYS,
         GpuCapabilityFeature::ShaderF16 => Features::SHADER_F16,
+        GpuCapabilityFeature::DepthClipControl => Features::DEPTH_CLIP_CONTROL,
         GpuCapabilityFeature::DepthBiasClamp => Features::empty(),
         _ => Features::empty(),
     }
