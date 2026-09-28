@@ -5,14 +5,14 @@ mod retained_bc;
 #[path = "gpu_r2_blend_state.rs"]
 mod retained_blend_state;
 #[cfg(target_arch = "wasm32")]
-#[path = "gpu_r2_dual_source_blending.rs"]
-mod retained_dual_source_blending;
-#[cfg(target_arch = "wasm32")]
 #[path = "gpu_r2_depth_bias.rs"]
 mod retained_depth_bias;
 #[cfg(target_arch = "wasm32")]
 #[path = "gpu_r2_depth_clip_control.rs"]
 mod retained_depth_clip_control;
+#[cfg(target_arch = "wasm32")]
+#[path = "gpu_r2_dual_source_blending.rs"]
+mod retained_dual_source_blending;
 #[cfg(target_arch = "wasm32")]
 #[path = "gpu_fixed_binding_array/mod.rs"]
 mod retained_fixed_binding_array;
@@ -51,11 +51,11 @@ mod retained_vertex_packed;
 mod browser {
     use super::{
         retained_bc, retained_blend_state, retained_depth_bias, retained_depth_clip_control,
-        retained_dual_source_blending,
-        retained_fixed_binding_array, retained_indirect_first_instance,
-        retained_non_uniform_binding_array, retained_offscreen_indexed, retained_prefix_scan,
-        retained_sampler_anisotropy, retained_shader_f16, retained_transient_attachment,
-        retained_vertex_packed, retained_vertex8, retained_vertex16,
+        retained_dual_source_blending, retained_fixed_binding_array,
+        retained_indirect_first_instance, retained_non_uniform_binding_array,
+        retained_offscreen_indexed, retained_prefix_scan, retained_sampler_anisotropy,
+        retained_shader_f16, retained_transient_attachment, retained_vertex_packed,
+        retained_vertex8, retained_vertex16,
     };
     use runen_gpu::*;
     use std::cell::RefCell;
