@@ -107,8 +107,7 @@ fn blend_state() -> GpuBlendState {
 }
 
 fn pipeline() -> GpuRenderPipelineDescriptor {
-    let [source] =
-        admit_static_wgsl_sources([("proof.r2.dual-source-blending", 1, WGSL)]).unwrap();
+    let [source] = admit_static_wgsl_sources([("proof.r2.dual-source-blending", 1, WGSL)]).unwrap();
     let vertex = GpuEntryPointName::new("vs_main").unwrap();
     let fragment = GpuEntryPointName::new("fs_main").unwrap();
     let program = GpuProgramDescriptor::new(
