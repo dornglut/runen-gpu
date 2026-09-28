@@ -1,9 +1,8 @@
 use super::{
     GpuAttachmentStore, GpuBlendConstant, GpuColorAttachmentLoad, GpuDrawIntent, GpuDrawRange,
     GpuRenderColorAttachment, GpuRenderDraw, GpuRenderOperation, GpuRenderPassItem,
-    GpuRenderPassSignature,
-    GpuRenderPipelineDescriptor, GpuRuntimeBindingSet, GpuScissorRect, GpuTextureViewHandle,
-    GpuViewport, GpuWorkOperationCause, GpuWorkOperationError,
+    GpuRenderPassSignature, GpuRenderPipelineDescriptor, GpuRuntimeBindingSet, GpuScissorRect,
+    GpuTextureViewHandle, GpuViewport, GpuWorkOperationCause, GpuWorkOperationError,
 };
 
 impl GpuRenderOperation {
