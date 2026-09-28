@@ -1,7 +1,8 @@
 use super::work::{
     GpuBufferTextureLayout, GpuClearOperation, GpuColorAttachmentLoad, GpuComputeOperation,
-    GpuCopyOperation, GpuDepthAttachmentLoad, GpuPresentOperation, GpuQueryResolveOperation,
-    GpuRenderColorAttachment, GpuRenderDepthStencilAttachment, GpuStencilAttachmentLoad,
+    GpuCopyOperation, GpuDepthAttachmentLoad, GpuOcclusionQueryScope, GpuPresentOperation,
+    GpuQueryResolveOperation, GpuRenderColorAttachment, GpuRenderDepthStencilAttachment,
+    GpuStencilAttachmentLoad,
     GpuTextureCopyRegion, GpuTimestampMarkerOperation, GpuTimestampWrites,
 };
 use super::{
@@ -26,12 +27,28 @@ pub enum GpuWorkNodeKind {
     Readback,
 }
 
-/// One logical render pass with ordered execution-complete draws.
+/// One ordered semantic item in a logical render pass.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum GpuRenderPassItem {
+    Draw(GpuRenderDraw),
+    OcclusionQuery(GpuOcclusionQueryScope),
+}
+
+impl GpuRenderPassItem {
+    pub fn draws(&self) -> &[GpuRenderDraw] {
+        match self {
+            Self::Draw(draw) => core::slice::from_ref(draw),
+            Self::OcclusionQuery(scope) => scope.draws(),
+        }
+    }
+}
+
+/// One logical render pass with one ordered semantic item sequence.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct GpuRenderOperation {
     color_attachments: Vec<GpuRenderColorAttachment>,
     depth_stencil_attachment: Option<GpuRenderDepthStencilAttachment>,
-    draws: Vec<GpuRenderDraw>,
+    items: Vec<GpuRenderPassItem>,
     timestamp_writes: Option<GpuTimestampWrites>,
     signature: GpuRenderPassSignature,
     accesses: Vec<GpuResourceAccess>,
@@ -41,11 +58,11 @@ impl GpuRenderOperation {
     pub fn new(
         color_attachments: impl IntoIterator<Item = GpuRenderColorAttachment>,
         depth_stencil_attachment: Option<GpuRenderDepthStencilAttachment>,
-        draws: impl IntoIterator<Item = GpuRenderDraw>,
+        items: impl IntoIterator<Item = GpuRenderPassItem>,
         timestamp_writes: Option<GpuTimestampWrites>,
     ) -> Result<Self, GpuWorkOperationError> {
         let color_attachments = color_attachments.into_iter().collect::<Vec<_>>();
-        let draws = draws.into_iter().collect::<Vec<_>>();
+        let items = items.into_iter().collect::<Vec<_>>();
 
         if color_attachments.is_empty() && depth_stencil_attachment.is_none() {
             return Err(GpuWorkOperationError::invalid(
@@ -70,7 +87,7 @@ impl GpuRenderOperation {
                 .stencil()
                 .is_some_and(|state| matches!(state.load(), GpuStencilAttachmentLoad::Clear(_)))
         });
-        if draws.is_empty()
+        if items.is_empty()
             && !clears_color
             && !clears_depth
             && !clears_stencil
@@ -81,7 +98,7 @@ impl GpuRenderOperation {
                 "render",
                 None,
                 GpuWorkOperationCause::ZeroWork,
-                "add a draw, attachment clear, or timestamp write",
+                "add a render-pass item, attachment clear, or timestamp write",
             ));
         }
 
@@ -90,9 +107,27 @@ impl GpuRenderOperation {
             depth_stencil_attachment.as_ref(),
         )?;
 
-        for draw in &draws {
-            signature.validate_draw(draw)?;
-            validate_depth_stencil_access_for_draw(depth_stencil_attachment.as_ref(), draw)?;
+        let mut occlusion_query_set = None;
+        for item in &items {
+            if let GpuRenderPassItem::OcclusionQuery(scope) = item {
+                match &occlusion_query_set {
+                    Some(bound) if bound != scope.query_set() => {
+                        return Err(GpuWorkOperationError::invalid(
+                            "construct GPU render operation",
+                            "occlusion query sets",
+                            Some(scope.query_set().diagnostic_identity()),
+                            GpuWorkOperationCause::OperationAccessContradiction,
+                            "use exactly one occlusion query set for all scopes in one render pass",
+                        ));
+                    }
+                    None => occlusion_query_set = Some(scope.query_set().clone()),
+                    Some(_) => {}
+                }
+            }
+            for draw in item.draws() {
+                signature.validate_draw(draw)?;
+                validate_depth_stencil_access_for_draw(depth_stencil_attachment.as_ref(), draw)?;
+            }
         }
 
         let mut accesses = Vec::new();
@@ -112,8 +147,13 @@ impl GpuRenderOperation {
                 accesses.push(GpuResourceAccess::Texture(access.clone()));
             }
         }
-        for draw in &draws {
-            accesses.extend(draw.accesses().iter().cloned());
+        for item in &items {
+            for draw in item.draws() {
+                accesses.extend(draw.accesses().iter().cloned());
+            }
+            if let GpuRenderPassItem::OcclusionQuery(scope) = item {
+                accesses.push(GpuResourceAccess::Query(scope.access().clone()));
+            }
         }
         if let Some(timestamp_writes) = &timestamp_writes {
             accesses.extend(
@@ -130,7 +170,7 @@ impl GpuRenderOperation {
         Ok(Self {
             color_attachments,
             depth_stencil_attachment,
-            draws,
+            items,
             timestamp_writes,
             signature,
             accesses,
@@ -145,8 +185,19 @@ impl GpuRenderOperation {
         self.depth_stencil_attachment.as_ref()
     }
 
-    pub fn draws(&self) -> &[GpuRenderDraw] {
-        &self.draws
+    pub fn items(&self) -> &[GpuRenderPassItem] {
+        &self.items
+    }
+
+    pub fn draws(&self) -> impl Iterator<Item = &GpuRenderDraw> {
+        self.items.iter().flat_map(GpuRenderPassItem::draws)
+    }
+
+    pub fn occlusion_query_set(&self) -> Option<&super::GpuQuerySetHandle> {
+        self.items.iter().find_map(|item| match item {
+            GpuRenderPassItem::Draw(_) => None,
+            GpuRenderPassItem::OcclusionQuery(scope) => Some(scope.query_set()),
+        })
     }
 
     pub fn timestamp_writes(&self) -> Option<&GpuTimestampWrites> {
@@ -357,7 +408,8 @@ impl GpuWorkOperation {
             Self::Copy(_) | Self::Clear(_) | Self::Upload(_) | Self::Readback(_) => {
                 GpuCapabilityFeature::Copy
             }
-            Self::Resolve(_) | Self::TimestampMarker(_) => GpuCapabilityFeature::TimestampQuery,
+            Self::TimestampMarker(_) => GpuCapabilityFeature::TimestampQuery,
+            Self::Resolve(_) => GpuCapabilityFeature::Copy,
             Self::Present(_) => GpuCapabilityFeature::Presentation,
         };
         requirements.insert(GpuCapabilityRequirement::Required(primary))?;
