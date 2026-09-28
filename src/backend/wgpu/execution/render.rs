@@ -14,8 +14,8 @@ use crate::{
     GpuDepthAttachmentState, GpuDepthStencilAccess, GpuDrawIntent, GpuIndexFormat,
     GpuRealizedBuffer, GpuRealizedQuerySet, GpuRealizedRenderPipeline, GpuRealizedTextureView,
     GpuRenderDraw, GpuRenderOperation, GpuRenderPassItem, GpuStencilAttachmentLoad,
-    GpuStencilAttachmentState, GpuSubmissionFailure,
-    GpuSubmissionPreparationError, GpuSubmissionPreparationErrorKind, GpuWorkResourceId,
+    GpuStencilAttachmentState, GpuSubmissionFailure, GpuSubmissionPreparationError,
+    GpuSubmissionPreparationErrorKind, GpuWorkResourceId,
 };
 use std::collections::BTreeMap;
 use wgpu::{
