@@ -425,6 +425,7 @@ fn requested_features(candidate: &crate::GpuCandidateAdmissionReport) -> Feature
 fn wgpu_features_for(feature: GpuCapabilityFeature) -> Features {
     match feature {
         GpuCapabilityFeature::TimestampQuery => Features::TIMESTAMP_QUERY,
+        GpuCapabilityFeature::IndirectFirstInstance => Features::INDIRECT_FIRST_INSTANCE,
         GpuCapabilityFeature::TextureBindingArray => Features::TEXTURE_BINDING_ARRAY,
         GpuCapabilityFeature::BufferBindingArray => Features::BUFFER_BINDING_ARRAY,
         GpuCapabilityFeature::StorageResourceBindingArray => {
