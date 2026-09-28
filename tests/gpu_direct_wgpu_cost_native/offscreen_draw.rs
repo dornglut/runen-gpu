@@ -297,7 +297,7 @@ fn runengpu_fragment(pipeline: &GpuRenderPipelineDescriptor, timestamp: bool) ->
     let timestamp_writes = timestamp_resources
         .as_ref()
         .map(|(query_set, _)| GpuTimestampWrites::new(query_set, Some(0), Some(1)).unwrap());
-    let render = GpuRenderOperation::new([attachment], None, [draw], timestamp_writes).unwrap();
+    let render = GpuRenderOperation::new([attachment], None, [GpuRenderPassItem::Draw(draw)], timestamp_writes).unwrap();
 
     let image_region = GpuTextureCopyRegion::new(
         &texture,
