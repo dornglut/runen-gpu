@@ -245,6 +245,7 @@ jobs:
           assert report["proofs"]["depth_bias_baseline_mask"] == 0x7
           assert report["proofs"]["depth_clip_control"] == "EXERCISED"
           assert report["proofs"]["indirect_first_instance"] in {"EXERCISED", "UNSUPPORTED"}
+          assert report["proofs"]["occlusion_query"] == "EXERCISED"
           if report["capabilities"]["IndirectFirstInstance"]["supported"]:
               assert report["proofs"]["indirect_first_instance"] == "EXERCISED"
           else:
