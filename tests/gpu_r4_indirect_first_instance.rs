@@ -463,12 +463,7 @@ pub(crate) async fn run_browser_indirect_first_instance() -> u32 {
         .await
         .expect("actual-browser Conformance must provide baseline indirect execution");
     run_case(&census, GpuIndirectFirstInstanceMode::ZeroOnly).await;
-    let outcome = run_on_adapter(
-        GpuBackendFamily::BrowserWebGpu,
-        None,
-        &census,
-    )
-    .await;
+    let outcome = run_on_adapter(GpuBackendFamily::BrowserWebGpu, None, &census).await;
 
     let mut mask = ZERO_EXERCISED;
     if outcome.supported {
