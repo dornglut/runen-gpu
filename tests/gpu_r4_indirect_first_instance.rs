@@ -404,6 +404,24 @@ pub(crate) async fn run_on_adapter(
         };
     }
 
+    assert!(
+        !census
+            .device_facts()
+            .is_enabled(GpuCapabilityFeature::IndirectFirstInstance),
+        "census context must not enable IndirectFirstInstance implicitly"
+    );
+    let (nonzero_on_census, _) = graph(GpuIndirectFirstInstanceMode::MayBeNonZero);
+    let missing_enablement = census
+        .prepare_submission(nonzero_on_census)
+        .await
+        .expect_err(
+            "MayBeNonZero must reject during normalized admission when the supported feature was not enabled",
+        );
+    assert_eq!(
+        missing_enablement.kind(),
+        GpuSubmissionPreparationErrorKind::CapabilityNotAdmitted
+    );
+
     let context = GpuContext::request(descriptor(backend, true, fallback))
         .await
         .expect("advertised indirect first-instance must admit a feature context");
