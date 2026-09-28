@@ -201,9 +201,7 @@ fn pipelines(
     (compute, render)
 }
 
-fn graph(
-    mode: GpuIndirectFirstInstanceMode,
-) -> (GpuPreparedWorkGraph, GpuReadbackId) {
+fn graph(mode: GpuIndirectFirstInstanceMode) -> (GpuPreparedWorkGraph, GpuReadbackId) {
     let mut scope = GpuResourceScope::new();
     let prepared = PreparedGpuData::<TransferData>::ordinary_pod_transfer(
         "R4 indirect first-instance args",
@@ -237,14 +235,8 @@ fn graph(
             GpuTextureDescriptor::new(
                 common("R4 indirect first-instance target"),
                 GpuTextureDimension::D2,
-                GpuTextureExtent::new(
-                    &target_label,
-                    GpuTextureDimension::D2,
-                    WIDTH,
-                    HEIGHT,
-                    1,
-                )
-                .unwrap(),
+                GpuTextureExtent::new(&target_label, GpuTextureDimension::D2, WIDTH, HEIGHT, 1)
+                    .unwrap(),
                 1,
                 1,
                 GpuTextureFormat::Rgba8Unorm,
@@ -291,13 +283,7 @@ fn graph(
         render_bindings,
         [],
         None,
-        GpuDrawIntent::indirect(
-            &args,
-            GpuBufferRange::whole(&args).unwrap(),
-            false,
-            mode,
-        )
-        .unwrap(),
+        GpuDrawIntent::indirect(&args, GpuBufferRange::whole(&args).unwrap(), false, mode).unwrap(),
         GpuViewport::new(0.0, 0.0, WIDTH as f32, HEIGHT as f32, 0.0, 1.0).unwrap(),
         GpuScissorRect::new(0, 0, WIDTH, HEIGHT).unwrap(),
         GpuBlendConstant::new(0.0, 0.0, 0.0, 0.0).unwrap(),
@@ -306,9 +292,7 @@ fn graph(
     .unwrap();
     let attachment = GpuRenderColorAttachment::new(
         view,
-        GpuColorAttachmentLoad::Clear(
-            GpuColorClearValue::new(0.0, 0.0, 0.0, 1.0).unwrap(),
-        ),
+        GpuColorAttachmentLoad::Clear(GpuColorClearValue::new(0.0, 0.0, 0.0, 1.0).unwrap()),
         GpuAttachmentStore::Store,
         None,
     )
@@ -338,11 +322,8 @@ fn graph(
     })
     .unwrap();
     (
-        GpuPreparedWorkGraph::prepare(
-            label("R4 indirect first-instance proof graph"),
-            [fragment],
-        )
-        .unwrap(),
+        GpuPreparedWorkGraph::prepare(label("R4 indirect first-instance proof graph"), [fragment])
+            .unwrap(),
         readback_id,
     )
 }
@@ -352,18 +333,15 @@ fn pixel_at(bytes: &GpuReadbackBytes, x: u32, y: u32) -> [u8; 4] {
     bytes.as_bytes()[offset..offset + 4].try_into().unwrap()
 }
 
-pub(crate) async fn run_case(
-    context: &GpuContext,
-    mode: GpuIndirectFirstInstanceMode,
-) {
+pub(crate) async fn run_case(context: &GpuContext, mode: GpuIndirectFirstInstanceMode) {
     let (graph, readback_id) = graph(mode);
     let expected_requirement = match mode {
-        GpuIndirectFirstInstanceMode::ZeroOnly => GpuCapabilityRequirement::Disabled(
-            GpuCapabilityFeature::IndirectFirstInstance,
-        ),
-        GpuIndirectFirstInstanceMode::MayBeNonZero => GpuCapabilityRequirement::Required(
-            GpuCapabilityFeature::IndirectFirstInstance,
-        ),
+        GpuIndirectFirstInstanceMode::ZeroOnly => {
+            GpuCapabilityRequirement::Disabled(GpuCapabilityFeature::IndirectFirstInstance)
+        }
+        GpuIndirectFirstInstanceMode::MayBeNonZero => {
+            GpuCapabilityRequirement::Required(GpuCapabilityFeature::IndirectFirstInstance)
+        }
     };
     assert_eq!(
         graph
@@ -441,12 +419,9 @@ pub(crate) async fn run_on_adapter(
     );
 
     let (zero_graph, _) = graph(GpuIndirectFirstInstanceMode::ZeroOnly);
-    let zero_error = context
-        .prepare_submission(zero_graph)
-        .await
-        .expect_err(
-            "ZeroOnly must reject during normalized admission when IndirectFirstInstance is enabled",
-        );
+    let zero_error = context.prepare_submission(zero_graph).await.expect_err(
+        "ZeroOnly must reject during normalized admission when IndirectFirstInstance is enabled",
+    );
     assert_eq!(
         zero_error.kind(),
         GpuSubmissionPreparationErrorKind::CapabilityNotAdmitted
@@ -465,16 +440,16 @@ pub(crate) async fn run_browser_indirect_first_instance() -> u32 {
     const OPTIONAL_SUPPORTED: u32 = 1 << 1;
     const NONZERO_EXERCISED: u32 = 1 << 2;
 
-    let census = GpuContext::request(descriptor(
-        GpuBackendFamily::BrowserWebGpu,
-        false,
-        None,
-    ))
-    .await
-    .expect("actual-browser Conformance must provide baseline indirect execution");
+    let census = GpuContext::request(descriptor(GpuBackendFamily::BrowserWebGpu, false, None))
+        .await
+        .expect("actual-browser Conformance must provide baseline indirect execution");
     run_case(&census, GpuIndirectFirstInstanceMode::ZeroOnly).await;
-    let outcome =
-        run_on_adapter(GpuBackendFamily::BrowserWebGpu, None, census.adapter_facts()).await;
+    let outcome = run_on_adapter(
+        GpuBackendFamily::BrowserWebGpu,
+        None,
+        census.adapter_facts(),
+    )
+    .await;
 
     let mut mask = ZERO_EXERCISED;
     if outcome.supported {
@@ -518,10 +493,7 @@ fn indirect_first_instance_native_execution_is_backend_proven_when_advertised() 
         Some(GpuSoftwareFallbackPolicy::Require),
     )))
     .expect("native Conformance must provide the retained Vulkan fallback adapter");
-    pollster::block_on(run_case(
-        &census,
-        GpuIndirectFirstInstanceMode::ZeroOnly,
-    ));
+    pollster::block_on(run_case(&census, GpuIndirectFirstInstanceMode::ZeroOnly));
     let outcome = pollster::block_on(run_on_adapter(
         GpuBackendFamily::Vulkan,
         Some(GpuSoftwareFallbackPolicy::Require),
