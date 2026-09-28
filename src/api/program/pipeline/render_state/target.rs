@@ -273,22 +273,17 @@ impl GpuFragmentOutputStateDescriptor {
         let locations = if self.references_secondary_source() {
             if self.color_targets.len() != 1 {
                 return Err(invalid_attachment_state(
-                    format!("dual_source_color_target_count={}", self.color_targets.len()),
+                    format!(
+                        "dual_source_color_target_count={}",
+                        self.color_targets.len()
+                    ),
                     "use exactly one color target at location 0 when any blend factor references the secondary source",
                 ));
             }
             let value_type = self.color_targets[0].shader_io_type();
             vec![
-                GpuFragmentOutputLocation::new(
-                    0,
-                    Some(GpuBlendSource::Primary),
-                    value_type,
-                ),
-                GpuFragmentOutputLocation::new(
-                    0,
-                    Some(GpuBlendSource::Secondary),
-                    value_type,
-                ),
+                GpuFragmentOutputLocation::new(0, Some(GpuBlendSource::Primary), value_type),
+                GpuFragmentOutputLocation::new(0, Some(GpuBlendSource::Secondary), value_type),
             ]
         } else {
             self.color_targets
@@ -298,11 +293,7 @@ impl GpuFragmentOutputStateDescriptor {
                 .map(|(index, target)| {
                     u32::try_from(index)
                         .map(|location| {
-                            GpuFragmentOutputLocation::new(
-                                location,
-                                None,
-                                target.shader_io_type(),
-                            )
+                            GpuFragmentOutputLocation::new(location, None, target.shader_io_type())
                         })
                         .map_err(|_| {
                             invalid_attachment_state(
