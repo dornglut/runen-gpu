@@ -1,8 +1,8 @@
 use super::{
-    GpuAccessCause, GpuAccessError, GpuBufferHandle, GpuBufferUsage, GpuQuerySetHandle,
-    GpuResourceAccessIntent, GpuSamplerHandle, GpuTextureAspect, GpuTextureDimension,
-    GpuTextureHandle, GpuTextureSubresourceRange, GpuTextureUsage, GpuTextureViewHandle,
-    GpuWorkResourceId,
+    GpuAccessCause, GpuAccessError, GpuBufferHandle, GpuBufferUsage, GpuQueryKind,
+    GpuQuerySetHandle, GpuResourceAccessIntent, GpuSamplerHandle, GpuTextureAspect,
+    GpuTextureDimension, GpuTextureHandle, GpuTextureSubresourceRange, GpuTextureUsage,
+    GpuTextureViewHandle, GpuWorkResourceId,
 };
 
 /// A descriptor-bounded byte range.
@@ -754,6 +754,28 @@ impl GpuQueryAccess {
         kind: GpuQueryAccessKind,
     ) -> Result<Self, GpuAccessError> {
         GpuQueryRange::new(query_set, range.first(), range.count())?;
+        if kind.writes() && range.count() != 1 {
+            return Err(GpuAccessError::invalid(
+                "construct GPU query access",
+                query_set.descriptor().common().label().as_str(),
+                Some(query_set.diagnostic_identity()),
+                GpuAccessCause::InvalidDescriptorUsage,
+                "use exactly one checked query slot for a query write access",
+            ));
+        }
+        if matches!(
+            (query_set.descriptor().kind(), kind),
+            (GpuQueryKind::Timestamp, GpuQueryAccessKind::WriteOcclusion)
+                | (GpuQueryKind::Occlusion, GpuQueryAccessKind::WriteTimestamp)
+        ) {
+            return Err(GpuAccessError::invalid(
+                "construct GPU query access",
+                query_set.descriptor().common().label().as_str(),
+                Some(query_set.diagnostic_identity()),
+                GpuAccessCause::InvalidDescriptorUsage,
+                "match timestamp writes to timestamp query sets and occlusion writes to occlusion query sets",
+            ));
+        }
         Ok(Self {
             query_set: query_set.clone(),
             range,
