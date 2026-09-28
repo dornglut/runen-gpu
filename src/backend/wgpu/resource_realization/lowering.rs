@@ -275,6 +275,7 @@ pub(super) fn validate_query_set(
         GpuQueryKind::Timestamp => {
             require_feature(context, identity, GpuCapabilityFeature::TimestampQuery)?;
         }
+        GpuQueryKind::Occlusion => {}
     }
     Ok(())
 }
@@ -358,6 +359,7 @@ pub(super) const fn map_compare_function(function: GpuCompareFunction) -> Compar
 pub(super) const fn map_query_kind(kind: GpuQueryKind) -> QueryType {
     match kind {
         GpuQueryKind::Timestamp => QueryType::Timestamp,
+        GpuQueryKind::Occlusion => QueryType::Occlusion,
     }
 }
 
