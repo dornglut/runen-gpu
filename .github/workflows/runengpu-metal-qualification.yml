@@ -131,7 +131,7 @@ jobs:
           report_path, expected_revision = sys.argv[1:3]
           with open(report_path, encoding="utf-8") as handle:
               report = json.load(handle)
-          assert report["schema_version"] == 7
+          assert report["schema_version"] == 8
           assert report["qualification_level"] == "generic_metal"
           assert report["revision"] == expected_revision
           assert report["environment"]["architecture"] == "arm64"
