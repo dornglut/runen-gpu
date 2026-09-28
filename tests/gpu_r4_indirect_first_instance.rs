@@ -374,9 +374,10 @@ pub(crate) async fn run_case(context: &GpuContext, mode: GpuIndirectFirstInstanc
 pub(crate) async fn run_on_adapter(
     backend: GpuBackendFamily,
     fallback: Option<GpuSoftwareFallbackPolicy>,
-    census: &GpuAdapterFacts,
+    census: &GpuContext,
 ) -> IndirectFirstInstanceProofOutcome {
     let supported = census
+        .adapter_facts()
         .supported()
         .supports(GpuCapabilityFeature::IndirectFirstInstance);
     if !supported {
@@ -427,7 +428,7 @@ pub(crate) async fn run_on_adapter(
         .expect("advertised indirect first-instance must admit a feature context");
     assert_eq!(
         context.adapter_facts(),
-        census,
+        census.adapter_facts(),
         "indirect first-instance proof must remain on the exact census adapter"
     );
     assert!(
@@ -465,7 +466,7 @@ pub(crate) async fn run_browser_indirect_first_instance() -> u32 {
     let outcome = run_on_adapter(
         GpuBackendFamily::BrowserWebGpu,
         None,
-        census.adapter_facts(),
+        &census,
     )
     .await;
 
@@ -520,7 +521,7 @@ fn indirect_first_instance_native_execution_is_backend_proven_when_advertised() 
     let outcome = pollster::block_on(run_on_adapter(
         GpuBackendFamily::Vulkan,
         Some(GpuSoftwareFallbackPolicy::Require),
-        census.adapter_facts(),
+        &census,
     ));
     if outcome.supported {
         assert!(outcome.exercised);
