@@ -237,6 +237,7 @@ pub(crate) fn assert_results(bytes: &GpuReadbackBytes) {
     );
     let visible = u64::from_le_bytes(bytes.as_bytes()[0..8].try_into().unwrap());
     let empty = u64::from_le_bytes(bytes.as_bytes()[8..16].try_into().unwrap());
+    println!("R4 occlusion query resolved values: visible={visible}, empty={empty}");
     assert_ne!(
         visible, 0,
         "visible queried draw must resolve a nonzero occlusion result"
