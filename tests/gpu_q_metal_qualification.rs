@@ -19,6 +19,8 @@ mod retained_fixed_binding_array;
 mod retained_indirect;
 #[path = "gpu_r4_indirect_first_instance.rs"]
 mod retained_indirect_first_instance;
+#[path = "gpu_r4_occlusion_query.rs"]
+mod retained_occlusion_query;
 #[path = "gpu_r3_binding_array_non_uniform_indexing/mod.rs"]
 mod retained_non_uniform_binding_array;
 #[path = "gpu_offscreen_indexed_native.rs"]
@@ -545,6 +547,7 @@ fn metal_qualification_records_exact_public_api_evidence() {
     let indirect_first_instance = pollster::block_on(
         retained_indirect_first_instance::run_on_adapter(GpuBackendFamily::Metal, None, &context),
     );
+    pollster::block_on(retained_occlusion_query::run_case(&context));
     retained_sampler_anisotropy::realize_anisotropic_sampler(&context);
     let (transient_graph, transient_readback_id) = retained_transient_attachment::graph();
     let transient_prepared =
@@ -649,6 +652,7 @@ fn metal_qualification_records_exact_public_api_evidence() {
             "depth_clip_control": "EXERCISED",
             "indirect_first_instance":
                 proof_disposition(indirect_first_instance.exercised),
+            "occlusion_query": "EXERCISED",
             "sampler_anisotropy": "EXERCISED",
             "transient_attachment": "EXERCISED",
             "transient_depth": "EXERCISED",
