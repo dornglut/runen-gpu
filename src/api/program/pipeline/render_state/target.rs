@@ -1,7 +1,7 @@
 use super::super::super::contract_diagnostics::{GpuProgramContractCause, GpuProgramContractError};
 use super::super::super::{
-    GpuEntryPointName, GpuExpectedFragmentOutputSignature, GpuShaderIoLocation,
-    GpuShaderIoScalarClass, GpuShaderIoValueType,
+    GpuBlendSource, GpuEntryPointName, GpuExpectedFragmentOutputSignature,
+    GpuFragmentOutputLocation, GpuShaderIoScalarClass, GpuShaderIoValueType,
 };
 use crate::api::texture_format::{self, GpuTextureScalarClass};
 use crate::{GpuCompareFunction, GpuTextureFormat};
@@ -21,6 +21,19 @@ pub enum GpuBlendFactor {
     SrcAlphaSaturated,
     Constant,
     OneMinusConstant,
+    Src1,
+    OneMinusSrc1,
+    Src1Alpha,
+    OneMinusSrc1Alpha,
+}
+
+impl GpuBlendFactor {
+    pub const fn references_secondary_source(self) -> bool {
+        matches!(
+            self,
+            Self::Src1 | Self::OneMinusSrc1 | Self::Src1Alpha | Self::OneMinusSrc1Alpha
+        )
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -73,6 +86,11 @@ impl GpuBlendComponent {
     pub const fn operation(self) -> GpuBlendOperation {
         self.operation
     }
+
+    pub const fn references_secondary_source(self) -> bool {
+        self.src_factor.references_secondary_source()
+            || self.dst_factor.references_secondary_source()
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -92,6 +110,10 @@ impl GpuBlendState {
 
     pub const fn alpha(self) -> GpuBlendComponent {
         self.alpha
+    }
+
+    pub const fn references_secondary_source(self) -> bool {
+        self.color.references_secondary_source() || self.alpha.references_secondary_source()
     }
 }
 
@@ -197,6 +219,13 @@ impl GpuColorTargetStateDescriptor {
         texture_format::has_alpha(self.format)
     }
 
+    pub const fn references_secondary_source(self) -> bool {
+        match self.blend {
+            Some(blend) => blend.references_secondary_source(),
+            None => false,
+        }
+    }
+
     pub fn shader_io_type(self) -> GpuShaderIoValueType {
         let class = match texture_format::color_scalar_class(self.format)
             .expect("validated color targets retain a color scalar class")
@@ -230,26 +259,60 @@ impl GpuFragmentOutputStateDescriptor {
         self.color_targets.iter().copied()
     }
 
+    pub fn references_secondary_source(&self) -> bool {
+        self.color_targets
+            .iter()
+            .copied()
+            .any(GpuColorTargetStateDescriptor::references_secondary_source)
+    }
+
     pub fn expected_signature(
         &self,
         entry_point: GpuEntryPointName,
     ) -> Result<GpuExpectedFragmentOutputSignature, GpuProgramContractError> {
-        let locations = self
-            .color_targets
-            .iter()
-            .copied()
-            .enumerate()
-            .map(|(index, target)| {
-                u32::try_from(index)
-                    .map(|location| GpuShaderIoLocation::new(location, target.shader_io_type()))
-                    .map_err(|_| {
-                        invalid_attachment_state(
-                            format!("color_target_count={}", self.color_targets.len()),
-                            "reduce the number of color targets to a u32-representable count",
-                        )
-                    })
-            })
-            .collect::<Result<Vec<_>, _>>()?;
+        let locations = if self.references_secondary_source() {
+            if self.color_targets.len() != 1 {
+                return Err(invalid_attachment_state(
+                    format!("dual_source_color_target_count={}", self.color_targets.len()),
+                    "use exactly one color target at location 0 when any blend factor references the secondary source",
+                ));
+            }
+            let value_type = self.color_targets[0].shader_io_type();
+            vec![
+                GpuFragmentOutputLocation::new(
+                    0,
+                    Some(GpuBlendSource::Primary),
+                    value_type,
+                ),
+                GpuFragmentOutputLocation::new(
+                    0,
+                    Some(GpuBlendSource::Secondary),
+                    value_type,
+                ),
+            ]
+        } else {
+            self.color_targets
+                .iter()
+                .copied()
+                .enumerate()
+                .map(|(index, target)| {
+                    u32::try_from(index)
+                        .map(|location| {
+                            GpuFragmentOutputLocation::new(
+                                location,
+                                None,
+                                target.shader_io_type(),
+                            )
+                        })
+                        .map_err(|_| {
+                            invalid_attachment_state(
+                                format!("color_target_count={}", self.color_targets.len()),
+                                "reduce the number of color targets to a u32-representable count",
+                            )
+                        })
+                })
+                .collect::<Result<Vec<_>, _>>()?
+        };
         GpuExpectedFragmentOutputSignature::new(entry_point, locations)
     }
 }
