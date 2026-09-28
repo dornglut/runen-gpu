@@ -490,6 +490,7 @@ pub enum GpuCompareFunction {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum GpuQueryKind {
     Timestamp,
+    Occlusion,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
