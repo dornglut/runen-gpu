@@ -1,6 +1,6 @@
 use super::{
     GpuCapabilityFeature, GpuCapabilityRequirement, GpuCapabilityRequirementError,
-    GpuCapabilityRequirements, GpuQueryAccessKind, GpuResourceAccess, GpuTextureAccessKind,
+    GpuCapabilityRequirements, GpuQueryKind, GpuResourceAccess, GpuTextureAccessKind,
     GpuTextureDimension, GpuTextureHandle,
 };
 
@@ -68,7 +68,9 @@ pub(crate) fn add_access_requirements(
                 GpuCapabilityFeature::StorageTexture,
             ))?;
         }
-        GpuResourceAccess::Query(access) if access.kind() == GpuQueryAccessKind::WriteTimestamp => {
+        GpuResourceAccess::Query(access)
+            if access.query_set().descriptor().kind() == GpuQueryKind::Timestamp =>
+        {
             requirements.insert(GpuCapabilityRequirement::Required(
                 GpuCapabilityFeature::TimestampQuery,
             ))?;
