@@ -631,6 +631,34 @@ mod tests {
     }
 
     #[test]
+    fn indirect_first_instance_maps_only_from_the_exact_wgpu_feature() {
+        let absent = normalized_features(
+            Backend::Vulkan,
+            Features::empty(),
+            DownlevelFlags::empty(),
+            false,
+            false,
+        );
+        assert!(!absent.contains(&GpuCapabilityFeature::IndirectFirstInstance));
+
+        let present = normalized_features(
+            Backend::Vulkan,
+            Features::INDIRECT_FIRST_INSTANCE,
+            DownlevelFlags::empty(),
+            false,
+            false,
+        );
+        assert!(present.contains(&GpuCapabilityFeature::IndirectFirstInstance));
+        assert_eq!(
+            present
+                .into_iter()
+                .filter(|feature| *feature == GpuCapabilityFeature::IndirectFirstInstance)
+                .count(),
+            1
+        );
+    }
+
+    #[test]
     fn refreshed_backend_rejects_unadmitted_uniform_buffer_array_capability() {
         let capabilities = GpuCapabilities::from_normalized_facts(
             normalized_features(
