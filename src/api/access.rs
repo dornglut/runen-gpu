@@ -466,6 +466,7 @@ impl GpuTextureAccessKind {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum GpuQueryAccessKind {
     WriteTimestamp,
+    WriteOcclusion,
     ResolveSource,
 }
 
@@ -475,7 +476,7 @@ impl GpuQueryAccessKind {
     }
 
     pub const fn writes(self) -> bool {
-        matches!(self, Self::WriteTimestamp)
+        matches!(self, Self::WriteTimestamp | Self::WriteOcclusion)
     }
 }
 
