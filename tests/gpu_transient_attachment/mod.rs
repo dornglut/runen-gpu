@@ -421,7 +421,7 @@ pub(crate) fn depth_graph() -> (GpuPreparedWorkGraph, GpuReadbackId) {
     let render = GpuRenderOperation::new(
         [color_attachment],
         Some(depth_attachment),
-        [depth_draw()],
+        [GpuRenderPassItem::Draw(depth_draw())],
         None,
     )
     .unwrap();
@@ -594,7 +594,7 @@ pub(crate) fn stencil_graph() -> (GpuPreparedWorkGraph, GpuReadbackId) {
     let stencil_render = GpuRenderOperation::new(
         [color_attachment],
         Some(stencil_attachment),
-        [stencil_draw()],
+        [GpuRenderPassItem::Draw(stencil_draw())],
         None,
     )
     .unwrap();
