@@ -235,7 +235,7 @@ fn render_graph() -> (GpuPreparedWorkGraph, GpuReadbackId) {
         None,
     )
     .unwrap();
-    let render = GpuRenderOperation::new([attachment], None, [draw], None).unwrap();
+    let render = GpuRenderOperation::new([attachment], None, [GpuRenderPassItem::Draw(draw)], None).unwrap();
     let readback_region = GpuTextureCopyRegion::new(
         &texture,
         0,
