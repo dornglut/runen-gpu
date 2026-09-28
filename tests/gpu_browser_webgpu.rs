@@ -11,6 +11,9 @@ mod retained_depth_bias;
 #[path = "gpu_r2_depth_clip_control.rs"]
 mod retained_depth_clip_control;
 #[cfg(target_arch = "wasm32")]
+#[path = "gpu_r4_indirect_first_instance.rs"]
+mod retained_indirect_first_instance;
+#[cfg(target_arch = "wasm32")]
 #[path = "gpu_fixed_binding_array/mod.rs"]
 mod retained_fixed_binding_array;
 #[cfg(target_arch = "wasm32")]
@@ -45,7 +48,8 @@ mod retained_vertex_packed;
 mod browser {
     use super::{
         retained_bc, retained_blend_state, retained_depth_bias, retained_depth_clip_control,
-        retained_fixed_binding_array, retained_non_uniform_binding_array,
+        retained_fixed_binding_array, retained_indirect_first_instance,
+        retained_non_uniform_binding_array,
         retained_offscreen_indexed, retained_prefix_scan, retained_sampler_anisotropy,
         retained_shader_f16, retained_transient_attachment, retained_vertex_packed,
         retained_vertex8, retained_vertex16,
@@ -2246,6 +2250,13 @@ fn cs_main() {
             depth_clip_mask & 1,
             1,
             "actual-browser depth-clip baseline must execute"
+        );
+        let indirect_first_instance_mask =
+            retained_indirect_first_instance::run_browser_indirect_first_instance().await;
+        assert_eq!(
+            indirect_first_instance_mask & 1,
+            1,
+            "actual-browser zero-first-instance baseline must execute"
         );
         let sampler_anisotropy =
             retained_sampler_anisotropy::run_browser_sampler_anisotropy().await;
