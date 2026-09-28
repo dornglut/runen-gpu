@@ -17,6 +17,9 @@ mod retained_fixed_binding_array;
 #[path = "gpu_r4_indirect_first_instance.rs"]
 mod retained_indirect_first_instance;
 #[cfg(target_arch = "wasm32")]
+#[path = "gpu_r4_occlusion_query.rs"]
+mod retained_occlusion_query;
+#[cfg(target_arch = "wasm32")]
 #[path = "gpu_r3_binding_array_non_uniform_indexing/mod.rs"]
 mod retained_non_uniform_binding_array;
 #[cfg(target_arch = "wasm32")]
@@ -49,7 +52,8 @@ mod browser {
     use super::{
         retained_bc, retained_blend_state, retained_depth_bias, retained_depth_clip_control,
         retained_fixed_binding_array, retained_indirect_first_instance,
-        retained_non_uniform_binding_array, retained_offscreen_indexed, retained_prefix_scan,
+        retained_non_uniform_binding_array, retained_occlusion_query, retained_offscreen_indexed,
+        retained_prefix_scan,
         retained_sampler_anisotropy, retained_shader_f16, retained_transient_attachment,
         retained_vertex_packed, retained_vertex8, retained_vertex16,
     };
@@ -2257,6 +2261,7 @@ fn cs_main() {
             1,
             "actual-browser zero-first-instance baseline must execute"
         );
+        retained_occlusion_query::run_browser_occlusion_query().await;
         let sampler_anisotropy =
             retained_sampler_anisotropy::run_browser_sampler_anisotropy().await;
         SAMPLER_ANISOTROPY_EXERCISED.with(|slot| *slot.borrow_mut() = sampler_anisotropy);
