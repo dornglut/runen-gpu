@@ -2,8 +2,8 @@ use super::work::{
     GpuBufferTextureLayout, GpuClearOperation, GpuColorAttachmentLoad, GpuComputeOperation,
     GpuCopyOperation, GpuDepthAttachmentLoad, GpuOcclusionQueryScope, GpuPresentOperation,
     GpuQueryResolveOperation, GpuRenderColorAttachment, GpuRenderDepthStencilAttachment,
-    GpuStencilAttachmentLoad,
-    GpuTextureCopyRegion, GpuTimestampMarkerOperation, GpuTimestampWrites,
+    GpuStencilAttachmentLoad, GpuTextureCopyRegion, GpuTimestampMarkerOperation,
+    GpuTimestampWrites,
 };
 use super::{
     GpuBufferAccess, GpuBufferAccessKind, GpuBufferRange, GpuCapabilityFeature,
