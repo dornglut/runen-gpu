@@ -328,10 +328,7 @@ fn graph(mode: GpuIndirectFirstInstanceMode) -> (GpuPreparedWorkGraph, GpuReadba
     )
 }
 
-fn render_only_operation(
-    mode: GpuIndirectFirstInstanceMode,
-    suffix: &str,
-) -> GpuRenderOperation {
+fn render_only_operation(mode: GpuIndirectFirstInstanceMode, suffix: &str) -> GpuRenderOperation {
     let mut scope = GpuResourceScope::new();
     let prepared = PreparedGpuData::<TransferData>::ordinary_pod_transfer(
         format!("R4 mixed-mode {suffix} args"),
@@ -346,10 +343,7 @@ fn render_only_operation(
                 prepared.layout().byte_len(),
                 GpuBufferUsages::new(
                     &args_label,
-                    [
-                        GpuBufferUsage::Indirect,
-                        GpuBufferUsage::CopyDestination,
-                    ],
+                    [GpuBufferUsage::Indirect, GpuBufferUsage::CopyDestination],
                 )
                 .unwrap(),
                 GpuBufferInitialization::Prepared(prepared),
@@ -364,14 +358,8 @@ fn render_only_operation(
             GpuTextureDescriptor::new(
                 common(format!("R4 mixed-mode {suffix} target")),
                 GpuTextureDimension::D2,
-                GpuTextureExtent::new(
-                    &target_label,
-                    GpuTextureDimension::D2,
-                    WIDTH,
-                    HEIGHT,
-                    1,
-                )
-                .unwrap(),
+                GpuTextureExtent::new(&target_label, GpuTextureDimension::D2, WIDTH, HEIGHT, 1)
+                    .unwrap(),
                 1,
                 1,
                 GpuTextureFormat::Rgba8Unorm,
@@ -595,8 +583,7 @@ fn indirect_first_instance_requirements_are_exact_and_conflicting_modes_reject()
 #[test]
 fn mixed_indirect_first_instance_modes_reject_during_graph_requirement_merge() {
     let zero = render_only_operation(GpuIndirectFirstInstanceMode::ZeroOnly, "zero");
-    let nonzero =
-        render_only_operation(GpuIndirectFirstInstanceMode::MayBeNonZero, "nonzero");
+    let nonzero = render_only_operation(GpuIndirectFirstInstanceMode::MayBeNonZero, "nonzero");
     let fragment = GpuWorkFragment::build("R4 mixed indirect first-instance modes", |builder| {
         builder.operation("zero-only indirect draw", zero)?;
         builder.operation("may-be-nonzero indirect draw", nonzero)?;
