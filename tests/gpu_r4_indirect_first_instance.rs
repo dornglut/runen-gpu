@@ -297,7 +297,7 @@ fn graph(mode: GpuIndirectFirstInstanceMode) -> (GpuPreparedWorkGraph, GpuReadba
         None,
     )
     .unwrap();
-    let render = GpuRenderOperation::new([attachment], None, [draw], None).unwrap();
+    let render = GpuRenderOperation::new([attachment], None, [GpuRenderPassItem::Draw(draw)], None).unwrap();
 
     let readback_id = GpuReadbackId::allocate().unwrap();
     let readback = GpuReadbackOperation::new(
@@ -403,7 +403,7 @@ fn render_only_operation(mode: GpuIndirectFirstInstanceMode, suffix: &str) -> Gp
         None,
     )
     .unwrap();
-    GpuRenderOperation::new([attachment], None, [draw], None).unwrap()
+    GpuRenderOperation::new([attachment], None, [GpuRenderPassItem::Draw(draw)], None).unwrap()
 }
 
 fn pixel_at(bytes: &GpuReadbackBytes, x: u32, y: u32) -> [u8; 4] {
