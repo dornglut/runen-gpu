@@ -380,11 +380,7 @@ impl GpuWorkOperation {
             Self::Render(operation) => {
                 for draw in operation.draws() {
                     requirements = requirements.merge(draw.requirements())?;
-                    if matches!(draw.draw(), GpuDrawIntent::Indirect { .. }) {
-                        requirements.insert(GpuCapabilityRequirement::Required(
-                            GpuCapabilityFeature::IndirectExecution,
-                        ))?;
-                    }
+                    requirements = requirements.merge(&draw.draw().derived_requirements()?)?;
                 }
                 if operation.depth_stencil_attachment().is_some() {
                     requirements.insert(GpuCapabilityRequirement::Required(
