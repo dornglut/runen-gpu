@@ -7,7 +7,7 @@ use super::{
 #[cfg(test)]
 use crate::{
     GpuAttachmentStore, GpuBufferAccessKind, GpuBufferHandle, GpuBufferRange,
-    GpuDepthStencilAccess, GpuQueryAccess, GpuQueryKind, GpuQueryRange, GpuTextureAspect,
+    GpuDepthStencilAccess, GpuQueryAccess, GpuQueryAccessKind, GpuQueryRange, GpuTextureAspect,
     GpuTextureFormat, GpuTextureSubresourceRange, GpuTextureViewHandle, GpuWorkOperationCause,
 };
 
