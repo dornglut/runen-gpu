@@ -230,13 +230,19 @@ fn graph() -> (GpuPreparedWorkGraph, GpuReadbackId) {
     (graph, readback_id)
 }
 
-pub(crate) fn assert_results(bytes: &GpuReadbackBytes) {
+fn resolved_values(bytes: &GpuReadbackBytes) -> (u64, u64) {
     assert_eq!(
         bytes.as_bytes().len(),
         usize::try_from(RESOLVE_BYTES).unwrap()
     );
-    let visible = u64::from_le_bytes(bytes.as_bytes()[0..8].try_into().unwrap());
-    let empty = u64::from_le_bytes(bytes.as_bytes()[8..16].try_into().unwrap());
+    (
+        u64::from_le_bytes(bytes.as_bytes()[0..8].try_into().unwrap()),
+        u64::from_le_bytes(bytes.as_bytes()[8..16].try_into().unwrap()),
+    )
+}
+
+pub(crate) fn assert_results(bytes: &GpuReadbackBytes) {
+    let (visible, empty) = resolved_values(bytes);
     println!("R4 occlusion query resolved values: visible={visible}, empty={empty}");
     assert_ne!(
         visible, 0,
@@ -245,27 +251,36 @@ pub(crate) fn assert_results(bytes: &GpuReadbackBytes) {
     assert_eq!(empty, 0, "empty queried scope must resolve zero");
 }
 
-pub(crate) async fn run_case(context: &GpuContext) {
+async fn run_case_bytes(context: &GpuContext) -> GpuReadbackBytes {
     let (graph, readback_id) = graph();
     let prepared = context.prepare_submission(graph).await.unwrap();
     let submission = context.submit_prepared(prepared).unwrap();
-    let bytes = readback_wait::wait_for_readback(
+    readback_wait::wait_for_readback(
         context,
         &submission,
         readback_id,
         "R4 occlusion query proof",
     )
-    .await;
+    .await
+}
+
+pub(crate) async fn run_case(context: &GpuContext) {
+    let bytes = run_case_bytes(context).await;
     assert_results(&bytes);
 }
 
 #[cfg(target_arch = "wasm32")]
-pub(crate) async fn run_browser_occlusion_query() {
+pub(crate) async fn run_browser_occlusion_query() -> u32 {
     let context = GpuContext::request(descriptor(GpuBackendFamily::BrowserWebGpu, None))
         .await
         .expect("actual-browser Conformance must admit baseline occlusion queries");
-    run_case(&context).await;
-    println!("OcclusionQuery BrowserWebGpu: EXERCISED");
+    let bytes = run_case_bytes(&context).await;
+    let (visible, empty) = resolved_values(&bytes);
+    let mask = u32::from(visible != 0) | (u32::from(empty == 0) << 1);
+    println!(
+        "OcclusionQuery BrowserWebGpu: result_mask={mask}, visible={visible}, empty={empty}"
+    );
+    mask
 }
 
 #[test]
