@@ -34,11 +34,12 @@ mod retained_vertex8;
 #[path = "gpu_r1_vertex_packed_formats.rs"]
 mod retained_vertex_packed;
 
-const FEATURES: [GpuCapabilityFeature; 18] = [
+const FEATURES: [GpuCapabilityFeature; 19] = [
     GpuCapabilityFeature::Compute,
     GpuCapabilityFeature::RenderPipeline,
     GpuCapabilityFeature::Copy,
     GpuCapabilityFeature::IndirectExecution,
+    GpuCapabilityFeature::IndirectFirstInstance,
     GpuCapabilityFeature::StorageTexture,
     GpuCapabilityFeature::TextureBindingArray,
     GpuCapabilityFeature::BufferBindingArray,
