@@ -293,7 +293,7 @@ fn seed_render(color: GpuTextureViewHandle, depth: GpuTextureViewHandle) -> GpuR
     GpuRenderOperation::new(
         [color_attachment],
         Some(depth_attachment),
-        [draw(pipeline)],
+        [GpuRenderPassItem::Draw(draw(pipeline))],
         None,
     )
     .unwrap()
@@ -351,7 +351,7 @@ fn biased_render(
     GpuRenderOperation::new(
         [color_attachment],
         Some(depth_attachment),
-        [draw(pipeline)],
+        [GpuRenderPassItem::Draw(draw(pipeline))],
         None,
     )
     .unwrap()
