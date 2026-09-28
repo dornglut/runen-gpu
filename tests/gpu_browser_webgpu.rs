@@ -1337,11 +1337,11 @@ fn vs_main(@builtin(vertex_index) index: u32) -> @builtin(position) vec4f {
         let write_render = GpuRenderOperation::new(
             [],
             Some(write_attachment),
-            [browser_stencil_draw(
+            [GpuRenderPassItem::Draw(browser_stencil_draw(
                 browser_stencil_pipeline(true),
                 width,
                 REFERENCE,
-            )],
+            ))],
             None,
         )
         .unwrap();
@@ -1357,11 +1357,11 @@ fn vs_main(@builtin(vertex_index) index: u32) -> @builtin(position) vec4f {
         let read_render = GpuRenderOperation::new(
             [],
             Some(read_attachment),
-            [browser_stencil_draw(
+            [GpuRenderPassItem::Draw(browser_stencil_draw(
                 browser_stencil_pipeline(false),
                 width,
                 REFERENCE,
-            )],
+            ))],
             None,
         )
         .unwrap();
@@ -1801,7 +1801,7 @@ fn cs_main() {
         let seed = GpuRenderOperation::new(
             [],
             Some(browser_combined_seed_attachment(source_view.clone())),
-            [browser_stencil_draw(
+            [GpuRenderPassItem::Draw(browser_stencil_draw(
                 browser_combined_pipeline(
                     &seed_key,
                     proof_label,
@@ -1811,14 +1811,14 @@ fn cs_main() {
                 ),
                 width,
                 FIRST_REFERENCE,
-            )],
+            ))],
             None,
         )
         .unwrap();
         let mixed = GpuRenderOperation::new(
             [],
             Some(browser_combined_mixed_attachment(source_view.clone())),
-            [browser_stencil_draw(
+            [GpuRenderPassItem::Draw(browser_stencil_draw(
                 browser_combined_pipeline(
                     &mixed_key,
                     proof_label,
@@ -1828,7 +1828,7 @@ fn cs_main() {
                 ),
                 width,
                 MIXED_REFERENCE,
-            )],
+            ))],
             None,
         )
         .unwrap();
@@ -1873,7 +1873,7 @@ fn cs_main() {
         let copied_depth_gate = GpuRenderOperation::new(
             [],
             Some(browser_combined_mixed_attachment(destination_view.clone())),
-            [browser_stencil_draw(
+            [GpuRenderPassItem::Draw(browser_stencil_draw(
                 browser_combined_pipeline(
                     &copied_depth_key,
                     proof_label,
@@ -1883,7 +1883,7 @@ fn cs_main() {
                 ),
                 width,
                 COPIED_DEPTH_REFERENCE,
-            )],
+            ))],
             None,
         )
         .unwrap();
