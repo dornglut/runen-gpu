@@ -27,11 +27,7 @@ fn fragment_location(
     scalar_class: GpuShaderIoScalarClass,
     vector_width: u8,
 ) -> GpuFragmentOutputLocation {
-    GpuFragmentOutputLocation::new(
-        location,
-        blend_source,
-        io_type(scalar_class, vector_width),
-    )
+    GpuFragmentOutputLocation::new(location, blend_source, io_type(scalar_class, vector_width))
 }
 
 #[test]
