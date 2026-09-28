@@ -139,6 +139,9 @@ pub(super) fn normalized_features(
     {
         supported.push(GpuCapabilityFeature::IndirectExecution);
     }
+    if features.contains(Features::INDIRECT_FIRST_INSTANCE) {
+        supported.push(GpuCapabilityFeature::IndirectFirstInstance);
+    }
     if !unknown_flags && flags.contains(DownlevelFlags::DEPTH_BIAS_CLAMP) {
         supported.push(GpuCapabilityFeature::DepthBiasClamp);
     }
