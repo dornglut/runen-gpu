@@ -277,9 +277,7 @@ pub(crate) async fn run_browser_occlusion_query() -> u32 {
     let bytes = run_case_bytes(&context).await;
     let (visible, empty) = resolved_values(&bytes);
     let mask = u32::from(visible != 0) | (u32::from(empty == 0) << 1);
-    println!(
-        "OcclusionQuery BrowserWebGpu: result_mask={mask}, visible={visible}, empty={empty}"
-    );
+    println!("OcclusionQuery BrowserWebGpu: result_mask={mask}, visible={visible}, empty={empty}");
     mask
 }
 
