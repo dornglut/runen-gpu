@@ -455,7 +455,7 @@ fn run_native_combined(width: u32) {
     let seed_render = GpuRenderOperation::new(
         [],
         Some(seed_attachment(source_view.clone())),
-        [draw(
+        [GpuRenderPassItem::Draw(draw(
             combined_pipeline(
                 "proof.depth24plus-stencil8.seed",
                 true,
@@ -464,7 +464,7 @@ fn run_native_combined(width: u32) {
             ),
             width,
             FIRST_REFERENCE,
-        )],
+        ))],
         None,
     )
     .unwrap();
@@ -472,7 +472,7 @@ fn run_native_combined(width: u32) {
     let mixed_render = GpuRenderOperation::new(
         [],
         Some(mixed_attachment(source_view.clone())),
-        [draw(
+        [GpuRenderPassItem::Draw(draw(
             combined_pipeline(
                 "proof.depth24plus-stencil8.mixed",
                 false,
@@ -481,7 +481,7 @@ fn run_native_combined(width: u32) {
             ),
             width,
             MIXED_REFERENCE,
-        )],
+        ))],
         None,
     )
     .unwrap();
@@ -515,7 +515,7 @@ fn run_native_combined(width: u32) {
     let copied_depth_render = GpuRenderOperation::new(
         [],
         Some(mixed_attachment(destination_view.clone())),
-        [draw(
+        [GpuRenderPassItem::Draw(draw(
             combined_pipeline(
                 "proof.depth24plus-stencil8.copied-depth",
                 false,
@@ -524,7 +524,7 @@ fn run_native_combined(width: u32) {
             ),
             width,
             COPIED_DEPTH_REFERENCE,
-        )],
+        ))],
         None,
     )
     .unwrap();
@@ -684,7 +684,7 @@ fn combined_pipeline_cannot_use_an_attachment_aspect_that_was_omitted() {
         GpuRenderOperation::new(
             [],
             Some(depth_only),
-            [draw(pipeline.clone(), 8, FIRST_REFERENCE)],
+            [GpuRenderPassItem::Draw(draw(pipeline.clone(), 8, FIRST_REFERENCE))],
             None,
         )
         .is_err()
@@ -701,7 +701,7 @@ fn combined_pipeline_cannot_use_an_attachment_aspect_that_was_omitted() {
         GpuRenderOperation::new(
             [],
             Some(stencil_only),
-            [draw(pipeline, 8, FIRST_REFERENCE)],
+            [GpuRenderPassItem::Draw(draw(pipeline, 8, FIRST_REFERENCE))],
             None,
         )
         .is_err()
