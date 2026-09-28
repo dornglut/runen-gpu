@@ -1001,11 +1001,7 @@ fn collect_io<L, B>(
     ty: naga::Handle<naga::Type>,
     binding: Option<&Binding>,
     locations: &mut Vec<L>,
-    map_location: &mut impl FnMut(
-        u32,
-        Option<u32>,
-        GpuShaderIoValueType,
-    ) -> Result<L, String>,
+    map_location: &mut impl FnMut(u32, Option<u32>, GpuShaderIoValueType) -> Result<L, String>,
     map_builtin: &mut impl FnMut(BuiltIn) -> Result<B, &'static str>,
     builtins: &mut Vec<B>,
 ) -> Result<(), String> {
