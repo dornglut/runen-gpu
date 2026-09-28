@@ -2,8 +2,7 @@ use super::super::operation::{GpuRenderOperation, GpuRenderPassItem, GpuWorkOper
 use super::*;
 use crate::{
     GpuAccessCause, GpuBufferDescriptor, GpuBufferInitialization, GpuBufferUsage, GpuBufferUsages,
-    GpuMemoryIntent,
-    GpuQuerySetDescriptor, GpuReconstruction, GpuResourceCommon, GpuResourceLabel,
+    GpuMemoryIntent, GpuQuerySetDescriptor, GpuReconstruction, GpuResourceCommon, GpuResourceLabel,
     GpuResourceLifetime, GpuResourceProvenance, GpuTextureDescriptor, GpuTextureExtent,
     GpuTextureInitialization, GpuTextureUsage, GpuTextureUsages, GpuTextureViewDescriptor,
     GpuTextureViewDimension, GpuWorkResourceIdAllocator,
