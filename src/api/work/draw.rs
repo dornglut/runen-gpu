@@ -155,12 +155,12 @@ impl GpuDrawIntent {
             GpuCapabilityFeature::IndirectExecution,
         ))?;
         requirements.insert(match first_instance_mode {
-            GpuIndirectFirstInstanceMode::ZeroOnly => GpuCapabilityRequirement::Disabled(
-                GpuCapabilityFeature::IndirectFirstInstance,
-            ),
-            GpuIndirectFirstInstanceMode::MayBeNonZero => GpuCapabilityRequirement::Required(
-                GpuCapabilityFeature::IndirectFirstInstance,
-            ),
+            GpuIndirectFirstInstanceMode::ZeroOnly => {
+                GpuCapabilityRequirement::Disabled(GpuCapabilityFeature::IndirectFirstInstance)
+            }
+            GpuIndirectFirstInstanceMode::MayBeNonZero => {
+                GpuCapabilityRequirement::Required(GpuCapabilityFeature::IndirectFirstInstance)
+            }
         })?;
         Ok(requirements)
     }
