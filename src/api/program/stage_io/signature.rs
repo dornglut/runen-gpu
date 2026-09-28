@@ -1,10 +1,10 @@
 use super::super::contract_diagnostics::{GpuProgramContractCause, GpuProgramContractError};
 use super::super::entry_point::GpuEntryPointName;
-use super::{GpuBlendSource, GpuFragmentOutputLocation, GpuShaderIoLocation};
 use super::builtin::{
     GpuFragmentOutputBuiltin, GpuVertexInputBuiltin, normalize_fragment_output_builtins,
     normalize_vertex_input_builtins,
 };
+use super::{GpuBlendSource, GpuFragmentOutputLocation, GpuShaderIoLocation};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 struct GpuShaderIoSignature {
@@ -51,7 +51,10 @@ impl GpuFragmentOutputSignature {
         let mut locations = locations.into_iter().collect::<Vec<_>>();
         locations.sort_by_key(|location| (location.location(), location.blend_source()));
 
-        if locations.iter().any(|location| location.blend_source().is_some()) {
+        if locations
+            .iter()
+            .any(|location| location.blend_source().is_some())
+        {
             let valid_pair = locations.len() == 2
                 && locations[0].location() == 0
                 && locations[1].location() == 0
