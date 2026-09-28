@@ -193,7 +193,7 @@ fn timestamp_fragment(
                         let timestamped = GpuRenderOperation::new(
                             operation.color_attachments().iter().cloned(),
                             operation.depth_stencil_attachment().cloned(),
-                            operation.draws().iter().cloned(),
+                            operation.draws().cloned().map(GpuRenderPassItem::Draw),
                             Some(writes),
                         )
                         .unwrap();
