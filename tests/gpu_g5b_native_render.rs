@@ -344,7 +344,7 @@ fn oversized_texture(
                 1,
                 1,
                 GpuTextureFormat::Rgba8Unorm,
-                GpuTextureUsages::new(&texture_label, [GpuTextureUsage::ColorAttachment]).unwrap(),
+                GpuTextureUsages::new(&texture_label, [GpuTextureUsage::CopySource]).unwrap(),
                 GpuTextureInitialization::Uninitialized,
             )
             .unwrap(),
