@@ -953,6 +953,130 @@ fn timestamp_resolve_and_copy_form_one_initialized_dependency_chain() {
 }
 
 #[test]
+fn occlusion_scope_initializes_exact_query_slot_for_resolve() {
+    let mut allocator = allocator();
+    let queries = allocator
+        .allocate_query_set_handle(
+            GpuQuerySetDescriptor::new(common("occlusion queries"), GpuQueryKind::Occlusion, 2)
+                .unwrap(),
+        )
+        .unwrap();
+    let destination = buffer(
+        &mut allocator,
+        "occlusion resolve",
+        GpuBufferInitialization::Uninitialized,
+        [GpuBufferUsage::QueryResolve],
+    );
+    let written_range = GpuQueryRange::new(&queries, 0, 1).unwrap();
+    let unwritten_range = GpuQueryRange::new(&queries, 1, 1).unwrap();
+
+    let unresolved =
+        GpuQueryResolveOperation::new(&queries, unwritten_range, &destination, 0).unwrap();
+    let mut fragment = builder("unwritten occlusion query");
+    for resource in [
+        GpuResourceRef::QuerySet(queries.clone()),
+        GpuResourceRef::Buffer(destination.clone()),
+    ] {
+        fragment.declare_resource(resource).unwrap();
+    }
+    fragment
+        .add_node(
+            label("resolve unwritten occlusion"),
+            GpuWorkOperation::Resolve(unresolved),
+            [],
+            GpuCapabilityRequirements::new(),
+            GpuExecutionPreference::TransferPreferred,
+            provenance("resolve unwritten occlusion"),
+        )
+        .unwrap();
+    assert_eq!(
+        GpuPreparedWorkGraph::prepare(
+            label("unwritten occlusion graph"),
+            [fragment.finish().unwrap()],
+        )
+        .unwrap_err()
+        .cause(),
+        GpuWorkGraphCause::ReadBeforeInitialization
+    );
+
+    let target = texture(
+        &mut allocator,
+        "occlusion target",
+        GpuTextureInitialization::Uninitialized,
+        1,
+        1,
+        [GpuTextureUsage::ColorAttachment],
+    );
+    let target_view = texture_view(
+        &mut allocator,
+        &target,
+        "occlusion target view",
+        GpuTextureSubresourceRange::whole(&target).unwrap(),
+    );
+    let scope = GpuOcclusionQueryScope::new(&queries, 0, []).unwrap();
+    let render = GpuRenderOperation::new(
+        [GpuRenderColorAttachment::new(
+            target_view.clone(),
+            GpuColorAttachmentLoad::Clear(GpuColorClearValue::new(0.0, 0.0, 0.0, 1.0).unwrap()),
+            GpuAttachmentStore::Store,
+            None,
+        )
+        .unwrap()],
+        None,
+        [GpuRenderPassItem::OcclusionQuery(scope)],
+        None,
+    )
+    .unwrap();
+    let resolve =
+        GpuQueryResolveOperation::new(&queries, written_range, &destination, 0).unwrap();
+
+    let mut fragment = builder("written occlusion query");
+    for resource in [
+        GpuResourceRef::QuerySet(queries),
+        GpuResourceRef::Buffer(destination),
+        GpuResourceRef::Texture(target),
+        GpuResourceRef::TextureView(target_view),
+    ] {
+        fragment.declare_resource(resource).unwrap();
+    }
+    fragment
+        .add_node(
+            label("write empty occlusion scope"),
+            GpuWorkOperation::Render(render),
+            [],
+            GpuCapabilityRequirements::new(),
+            GpuExecutionPreference::GraphicsRequired,
+            provenance("write empty occlusion scope"),
+        )
+        .unwrap();
+    fragment
+        .add_node(
+            label("resolve written occlusion"),
+            GpuWorkOperation::Resolve(resolve),
+            [],
+            GpuCapabilityRequirements::new(),
+            GpuExecutionPreference::TransferPreferred,
+            provenance("resolve written occlusion"),
+        )
+        .unwrap();
+
+    let graph = GpuPreparedWorkGraph::prepare(
+        label("written occlusion graph"),
+        [fragment.finish().unwrap()],
+    )
+    .unwrap();
+    assert!(
+        graph
+            .requirements()
+            .get(GpuCapabilityFeature::TimestampQuery)
+            .is_none()
+    );
+    assert!(graph.dependencies().iter().any(|dependency| {
+        dependency.before().local_node() == 1 && dependency.after().local_node() == 2
+    }));
+}
+
+#[test]
 fn generic_timestamp_access_does_not_initialize_query_state() {
     let mut allocator = allocator();
     let queries = allocator
