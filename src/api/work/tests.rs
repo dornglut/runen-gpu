@@ -635,22 +635,14 @@ fn occlusion_scope_and_resolve_requirements_are_typed() {
     let mut allocator = allocator();
     let timestamp_queries = allocator
         .allocate_query_set_handle(
-            GpuQuerySetDescriptor::new(
-                common("timestamp queries"),
-                GpuQueryKind::Timestamp,
-                2,
-            )
-            .unwrap(),
+            GpuQuerySetDescriptor::new(common("timestamp queries"), GpuQueryKind::Timestamp, 2)
+                .unwrap(),
         )
         .unwrap();
     let occlusion_queries = allocator
         .allocate_query_set_handle(
-            GpuQuerySetDescriptor::new(
-                common("occlusion queries"),
-                GpuQueryKind::Occlusion,
-                2,
-            )
-            .unwrap(),
+            GpuQuerySetDescriptor::new(common("occlusion queries"), GpuQueryKind::Occlusion, 2)
+                .unwrap(),
         )
         .unwrap();
     let other_occlusion_queries = allocator
@@ -748,15 +740,20 @@ fn occlusion_scope_and_resolve_requirements_are_typed() {
         0,
     )
     .unwrap();
-    let timestamp_requirements =
-        GpuWorkOperation::Resolve(timestamp_resolve).derived_requirements().unwrap();
+    let timestamp_requirements = GpuWorkOperation::Resolve(timestamp_resolve)
+        .derived_requirements()
+        .unwrap();
     assert_eq!(
         timestamp_requirements.get(GpuCapabilityFeature::TimestampQuery),
         Some(GpuCapabilityRequirement::Required(
             GpuCapabilityFeature::TimestampQuery
         ))
     );
-    assert!(timestamp_requirements.get(GpuCapabilityFeature::Copy).is_none());
+    assert!(
+        timestamp_requirements
+            .get(GpuCapabilityFeature::Copy)
+            .is_none()
+    );
 
     let occlusion_resolve = GpuQueryResolveOperation::new(
         &occlusion_queries,
@@ -765,14 +762,19 @@ fn occlusion_scope_and_resolve_requirements_are_typed() {
         0,
     )
     .unwrap();
-    let occlusion_requirements =
-        GpuWorkOperation::Resolve(occlusion_resolve).derived_requirements().unwrap();
+    let occlusion_requirements = GpuWorkOperation::Resolve(occlusion_resolve)
+        .derived_requirements()
+        .unwrap();
     assert!(
         occlusion_requirements
             .get(GpuCapabilityFeature::TimestampQuery)
             .is_none()
     );
-    assert!(occlusion_requirements.get(GpuCapabilityFeature::Copy).is_none());
+    assert!(
+        occlusion_requirements
+            .get(GpuCapabilityFeature::Copy)
+            .is_none()
+    );
 }
 
 #[test]
