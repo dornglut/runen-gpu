@@ -329,7 +329,8 @@ fn graph(case: Vertex8Case) -> (GpuPreparedWorkGraph, GpuReadbackId) {
         None,
     )
     .unwrap();
-    let render = GpuRenderOperation::new([attachment], None, [GpuRenderPassItem::Draw(draw)], None).unwrap();
+    let render =
+        GpuRenderOperation::new([attachment], None, [GpuRenderPassItem::Draw(draw)], None).unwrap();
     let readback_id = GpuReadbackId::allocate().unwrap();
     let readback = GpuReadbackOperation::new(
         GpuTextureCopyRegion::new(
