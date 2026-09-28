@@ -256,7 +256,7 @@ fn run_native_stencil8(width: u32) {
     let write_render = GpuRenderOperation::new(
         [],
         Some(write_attachment),
-        [draw(stencil_pipeline(true), width, REFERENCE)],
+        [GpuRenderPassItem::Draw(draw(stencil_pipeline(true), width, REFERENCE))],
         None,
     )
     .unwrap();
@@ -272,7 +272,7 @@ fn run_native_stencil8(width: u32) {
     let read_render = GpuRenderOperation::new(
         [],
         Some(read_attachment),
-        [draw(stencil_pipeline(false), width, REFERENCE)],
+        [GpuRenderPassItem::Draw(draw(stencil_pipeline(false), width, REFERENCE))],
         None,
     )
     .unwrap();
