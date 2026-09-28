@@ -1,7 +1,7 @@
 use super::super::{
     GpuAccessCause, GpuBufferAccess, GpuBufferAccessKind, GpuBufferHandle, GpuBufferRange,
     GpuQueryAccess, GpuQueryAccessKind, GpuQueryKind, GpuQueryRange, GpuQuerySetHandle,
-    GpuWorkOperationCause, GpuWorkOperationError,
+    GpuRenderDraw, GpuWorkOperationCause, GpuWorkOperationError,
 };
 
 /// Explicit backend-neutral timestamp writes for one compute or render pass.
@@ -164,6 +164,73 @@ impl GpuTimestampMarkerOperation {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct GpuOcclusionQueryScope {
+    query_set: GpuQuerySetHandle,
+    query_index: u32,
+    draws: Vec<GpuRenderDraw>,
+    access: GpuQueryAccess,
+}
+
+impl GpuOcclusionQueryScope {
+    pub fn new(
+        query_set: &GpuQuerySetHandle,
+        query_index: u32,
+        draws: impl IntoIterator<Item = GpuRenderDraw>,
+    ) -> Result<Self, GpuWorkOperationError> {
+        if query_set.descriptor().kind() != GpuQueryKind::Occlusion {
+            return Err(GpuWorkOperationError::invalid(
+                "construct GPU occlusion query scope",
+                query_set.descriptor().common().label().as_str(),
+                Some(query_set.diagnostic_identity()),
+                GpuWorkOperationCause::InvalidQueryRange,
+                "use an occlusion query set for an occlusion query scope",
+            ));
+        }
+        let range = GpuQueryRange::new(query_set, query_index, 1).map_err(|source| {
+            GpuWorkOperationError::from_access(
+                "construct GPU occlusion query scope range",
+                query_set.descriptor().common().label().as_str(),
+                GpuWorkOperationCause::InvalidQueryRange,
+                "keep the occlusion query index inside the occlusion query set",
+                source,
+            )
+        })?;
+        let access = GpuQueryAccess::new(query_set, range, GpuQueryAccessKind::WriteOcclusion)
+            .map_err(|source| {
+                GpuWorkOperationError::from_access(
+                    "construct GPU occlusion query scope access",
+                    query_set.descriptor().common().label().as_str(),
+                    GpuWorkOperationCause::InvalidQueryRange,
+                    "retain a checked one-slot occlusion query write access",
+                    source,
+                )
+            })?;
+        Ok(Self {
+            query_set: query_set.clone(),
+            query_index,
+            draws: draws.into_iter().collect(),
+            access,
+        })
+    }
+
+    pub fn query_set(&self) -> &GpuQuerySetHandle {
+        &self.query_set
+    }
+
+    pub const fn query_index(&self) -> u32 {
+        self.query_index
+    }
+
+    pub fn draws(&self) -> &[GpuRenderDraw] {
+        &self.draws
+    }
+
+    pub fn access(&self) -> &GpuQueryAccess {
+        &self.access
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct GpuQueryResolveOperation {
     source: GpuQuerySetHandle,
@@ -182,15 +249,6 @@ impl GpuQueryResolveOperation {
         destination: &GpuBufferHandle,
         destination_offset: u64,
     ) -> Result<Self, GpuWorkOperationError> {
-        if source.descriptor().kind() != GpuQueryKind::Timestamp {
-            return Err(GpuWorkOperationError::invalid(
-                "construct GPU query resolve operation",
-                source.descriptor().common().label().as_str(),
-                Some(source.diagnostic_identity()),
-                GpuWorkOperationCause::InvalidQueryResolution,
-                "use a timestamp query set for the current G3 resolve operation",
-            ));
-        }
         let byte_len = u64::from(source_range.count())
             .checked_mul(8)
             .ok_or_else(|| {
