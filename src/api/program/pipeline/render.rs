@@ -119,6 +119,17 @@ impl GpuRenderPipelineDescriptor {
                 GpuCapabilityRequirement::Required(GpuCapabilityFeature::DepthClipControl),
             )?;
         }
+        if state
+            .fragment_output()
+            .is_some_and(|output| output.references_secondary_source())
+        {
+            insert_pipeline_requirement(
+                operation,
+                entry_points.diagnostic_label(),
+                &mut requirements,
+                GpuCapabilityRequirement::Required(GpuCapabilityFeature::DualSourceBlending),
+            )?;
+        }
         if let Some(depth_stencil) = state.depth_stencil() {
             insert_pipeline_requirement(
                 operation,
