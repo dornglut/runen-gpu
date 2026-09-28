@@ -52,10 +52,7 @@ pub(crate) fn descriptor(
 ) -> GpuContextDescriptor {
     let mut descriptor =
         GpuContextDescriptor::new(GpuCapabilityProfile::OffscreenGraphicsBaseline.requirements())
-            .require_format_role(
-                GpuTextureFormat::Rgba8Unorm,
-                GpuFormatRole::ColorAttachment,
-            )
+            .require_format_role(GpuTextureFormat::Rgba8Unorm, GpuFormatRole::ColorAttachment)
             .with_allowed_backends([backend])
             .with_label("R4 occlusion query proof");
     if let Some(fallback) = fallback {
@@ -65,7 +62,8 @@ pub(crate) fn descriptor(
 }
 
 fn render_pipeline() -> GpuRenderPipelineDescriptor {
-    let [source] = admit_static_wgsl_sources([("proof.r4.occlusion-query", 1, RENDER_WGSL)]).unwrap();
+    let [source] =
+        admit_static_wgsl_sources([("proof.r4.occlusion-query", 1, RENDER_WGSL)]).unwrap();
     let vertex = GpuEntryPointName::new("vs_main").unwrap();
     let fragment = GpuEntryPointName::new("fs_main").unwrap();
     let program = GpuProgramDescriptor::new(
@@ -134,14 +132,8 @@ fn graph() -> (GpuPreparedWorkGraph, GpuReadbackId) {
             GpuTextureDescriptor::new(
                 common("R4 occlusion query target"),
                 GpuTextureDimension::D2,
-                GpuTextureExtent::new(
-                    &target_label,
-                    GpuTextureDimension::D2,
-                    WIDTH,
-                    HEIGHT,
-                    1,
-                )
-                .unwrap(),
+                GpuTextureExtent::new(&target_label, GpuTextureDimension::D2, WIDTH, HEIGHT, 1)
+                    .unwrap(),
                 1,
                 1,
                 GpuTextureFormat::Rgba8Unorm,
@@ -239,7 +231,10 @@ fn graph() -> (GpuPreparedWorkGraph, GpuReadbackId) {
 }
 
 pub(crate) fn assert_results(bytes: &GpuReadbackBytes) {
-    assert_eq!(bytes.as_bytes().len(), usize::try_from(RESOLVE_BYTES).unwrap());
+    assert_eq!(
+        bytes.as_bytes().len(),
+        usize::try_from(RESOLVE_BYTES).unwrap()
+    );
     let visible = u64::from_le_bytes(bytes.as_bytes()[0..8].try_into().unwrap());
     let empty = u64::from_le_bytes(bytes.as_bytes()[8..16].try_into().unwrap());
     assert_eq!(visible, 1, "visible queried draw must resolve true");
@@ -262,12 +257,9 @@ pub(crate) async fn run_case(context: &GpuContext) {
 
 #[cfg(target_arch = "wasm32")]
 pub(crate) async fn run_browser_occlusion_query() {
-    let context = GpuContext::request(descriptor(
-        GpuBackendFamily::BrowserWebGpu,
-        None,
-    ))
-    .await
-    .expect("actual-browser Conformance must admit baseline occlusion queries");
+    let context = GpuContext::request(descriptor(GpuBackendFamily::BrowserWebGpu, None))
+        .await
+        .expect("actual-browser Conformance must admit baseline occlusion queries");
     run_case(&context).await;
     println!("OcclusionQuery BrowserWebGpu: EXERCISED");
 }
