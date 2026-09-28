@@ -1,6 +1,6 @@
 use runen_gpu::{
-    GpuAdmittedProgramSource, GpuBindingKey, GpuBindingLayoutRefinement, GpuCapabilityFeature,
-    GpuBlendComponent, GpuBlendFactor, GpuBlendOperation, GpuBlendState,
+    GpuAdmittedProgramSource, GpuBindingKey, GpuBindingLayoutRefinement, GpuBlendComponent,
+    GpuBlendFactor, GpuBlendOperation, GpuBlendState, GpuCapabilityFeature,
     GpuCapabilityRequirement, GpuCapabilityRequirements, GpuColorTargetStateDescriptor,
     GpuColorWriteMask, GpuComputePipelineDescriptor, GpuEntryPointName,
     GpuFragmentOutputStateDescriptor, GpuMultisampleStateDescriptor, GpuPipelineConfiguration,
