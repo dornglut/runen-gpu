@@ -403,16 +403,18 @@ impl GpuWorkOperation {
     ) -> Result<GpuCapabilityRequirements, GpuCapabilityRequirementError> {
         let mut requirements = GpuCapabilityRequirements::new();
         let primary = match self {
-            Self::Compute(_) => GpuCapabilityFeature::Compute,
-            Self::Render(_) => GpuCapabilityFeature::RenderPipeline,
+            Self::Compute(_) => Some(GpuCapabilityFeature::Compute),
+            Self::Render(_) => Some(GpuCapabilityFeature::RenderPipeline),
             Self::Copy(_) | Self::Clear(_) | Self::Upload(_) | Self::Readback(_) => {
-                GpuCapabilityFeature::Copy
+                Some(GpuCapabilityFeature::Copy)
             }
-            Self::TimestampMarker(_) => GpuCapabilityFeature::TimestampQuery,
-            Self::Resolve(_) => GpuCapabilityFeature::Copy,
-            Self::Present(_) => GpuCapabilityFeature::Presentation,
+            Self::TimestampMarker(_) => Some(GpuCapabilityFeature::TimestampQuery),
+            Self::Resolve(_) => None,
+            Self::Present(_) => Some(GpuCapabilityFeature::Presentation),
         };
-        requirements.insert(GpuCapabilityRequirement::Required(primary))?;
+        if let Some(primary) = primary {
+            requirements.insert(GpuCapabilityRequirement::Required(primary))?;
+        }
 
         match self {
             Self::Compute(operation) => {
