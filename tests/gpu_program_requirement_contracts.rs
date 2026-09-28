@@ -725,9 +725,9 @@ fn dual_source_blending_rejects_multiple_color_targets_before_realization() {
         GpuMultisampleStateDescriptor::default(),
     )
     .expect_err("dual-source MRT must reject structurally");
-    assert!(
-        error
-            .detail()
-            .is_some_and(|detail| detail.contains("dual_source_color_target_count"))
+    assert_eq!(
+        error.cause(),
+        GpuProgramContractCause::RenderPipelineStateInvalid
     );
+    assert_eq!(error.label(), "dual_source_color_target_count=2");
 }
