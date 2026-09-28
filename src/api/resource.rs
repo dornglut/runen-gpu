@@ -1302,12 +1302,12 @@ impl GpuSamplerDescriptor {
                 "use surface-acquired ownership only for texture or texture-view descriptors",
             ));
         }
-        if !lod_min.is_finite() || !lod_max.is_finite() || lod_min > lod_max {
+        if !lod_min.is_finite() || !lod_max.is_finite() || lod_min < 0.0 || lod_min > lod_max {
             return Err(GpuResourceDescriptorError::invalid(
                 "construct GPU sampler descriptor",
                 common.label().as_str(),
                 GpuResourceDescriptorCause::InvalidLodRange,
-                "provide finite LOD bounds with minimum not greater than maximum",
+                "provide finite LOD bounds with 0 <= minimum <= maximum",
             ));
         }
         Ok(Self {
@@ -2007,25 +2007,72 @@ mod tests {
 
     #[test]
     fn sampler_and_query_validation_is_fallible() {
+        let nearest = GpuSamplerFilterState::new(
+            GpuFilterMode::Nearest,
+            GpuFilterMode::Nearest,
+            GpuFilterMode::Nearest,
+            1,
+        )
+        .unwrap();
+        let negative_minimum = GpuSamplerDescriptor::new(
+            common("negative sampler minimum"),
+            GpuAddressMode::ClampToEdge,
+            GpuAddressMode::ClampToEdge,
+            GpuAddressMode::ClampToEdge,
+            nearest,
+            -0.5,
+            1.0,
+            None,
+        )
+        .unwrap_err();
+        assert_eq!(
+            negative_minimum.cause(),
+            GpuResourceDescriptorCause::InvalidLodRange
+        );
         assert!(
             GpuSamplerDescriptor::new(
-                common("sampler"),
+                common("zero sampler minimum"),
                 GpuAddressMode::ClampToEdge,
                 GpuAddressMode::ClampToEdge,
                 GpuAddressMode::ClampToEdge,
-                GpuSamplerFilterState::new(
-                    GpuFilterMode::Nearest,
-                    GpuFilterMode::Nearest,
-                    GpuFilterMode::Nearest,
-                    1,
-                )
-                .unwrap(),
-                2.0,
+                nearest,
+                0.0,
                 1.0,
                 None,
             )
-            .is_err()
+            .is_ok()
         );
+        assert!(
+            GpuSamplerDescriptor::new(
+                common("positive sampler minimum"),
+                GpuAddressMode::ClampToEdge,
+                GpuAddressMode::ClampToEdge,
+                GpuAddressMode::ClampToEdge,
+                nearest,
+                0.5,
+                2.0,
+                None,
+            )
+            .is_ok()
+        );
+        for (label, lod_min, lod_max) in [
+            ("non-finite sampler minimum", f32::NEG_INFINITY, 1.0),
+            ("non-finite sampler maximum", 0.0, f32::INFINITY),
+            ("reversed sampler range", 2.0, 1.0),
+        ] {
+            let error = GpuSamplerDescriptor::new(
+                common(label),
+                GpuAddressMode::ClampToEdge,
+                GpuAddressMode::ClampToEdge,
+                GpuAddressMode::ClampToEdge,
+                nearest,
+                lod_min,
+                lod_max,
+                None,
+            )
+            .unwrap_err();
+            assert_eq!(error.cause(), GpuResourceDescriptorCause::InvalidLodRange);
+        }
         let zero = GpuQuerySetDescriptor::new(common("zero queries"), GpuQueryKind::Timestamp, 0)
             .unwrap_err();
         assert_eq!(zero.cause(), GpuResourceDescriptorCause::InvalidQueryCount);

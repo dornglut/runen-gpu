@@ -288,14 +288,7 @@ pub(super) fn validate_sampler(
     identity: GpuWorkResourceId,
     descriptor: &GpuSamplerDescriptor,
 ) -> Result<(), GpuResourceRealizationError> {
-    validate_resource_ownership(identity, descriptor.common())?;
-    if descriptor.lod_range().0 < 0.0 {
-        return Err(incompatible(
-            identity,
-            "sampler minimum LOD must be nonnegative for the private backend",
-        ));
-    }
-    Ok(())
+    validate_resource_ownership(identity, descriptor.common())
 }
 
 pub(super) fn validate_query_set(
