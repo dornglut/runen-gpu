@@ -66,3 +66,42 @@ impl GpuShaderIoLocation {
         self.value_type
     }
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum GpuBlendSource {
+    Primary,
+    Secondary,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct GpuFragmentOutputLocation {
+    location: u32,
+    blend_source: Option<GpuBlendSource>,
+    value_type: GpuShaderIoValueType,
+}
+
+impl GpuFragmentOutputLocation {
+    pub const fn new(
+        location: u32,
+        blend_source: Option<GpuBlendSource>,
+        value_type: GpuShaderIoValueType,
+    ) -> Self {
+        Self {
+            location,
+            blend_source,
+            value_type,
+        }
+    }
+
+    pub const fn location(self) -> u32 {
+        self.location
+    }
+
+    pub const fn blend_source(self) -> Option<GpuBlendSource> {
+        self.blend_source
+    }
+
+    pub const fn value_type(self) -> GpuShaderIoValueType {
+        self.value_type
+    }
+}
