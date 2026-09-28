@@ -1,6 +1,6 @@
 use super::work::{
     GpuBufferTextureLayout, GpuClearOperation, GpuColorAttachmentLoad, GpuComputeOperation,
-    GpuCopyOperation, GpuDepthAttachmentLoad, GpuDrawIntent, GpuPresentOperation,
+    GpuCopyOperation, GpuDepthAttachmentLoad, GpuPresentOperation,
     GpuQueryResolveOperation, GpuRenderColorAttachment, GpuRenderDepthStencilAttachment,
     GpuStencilAttachmentLoad, GpuTextureCopyRegion, GpuTimestampMarkerOperation,
     GpuTimestampWrites,
