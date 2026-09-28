@@ -309,12 +309,6 @@ pub(super) fn validate_query_set(
             require_feature(context, identity, GpuCapabilityFeature::TimestampQuery)?;
         }
     }
-    if descriptor.count() > wgpu::QUERY_SET_MAX_QUERIES {
-        return Err(incompatible(
-            identity,
-            "query count exceeds the pinned backend's maximum query-set size",
-        ));
-    }
     Ok(())
 }
 
@@ -568,6 +562,10 @@ mod tests {
 
     #[test]
     fn normalized_mappings_cover_every_current_resource_enum() {
+        assert_eq!(
+            GpuQuerySetDescriptor::MAX_QUERIES,
+            wgpu::QUERY_SET_MAX_QUERIES
+        );
         assert_eq!(
             map_buffer_usage(GpuBufferUsage::Uniform),
             BufferUsages::UNIFORM

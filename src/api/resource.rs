@@ -1347,6 +1347,8 @@ pub struct GpuQuerySetDescriptor {
 }
 
 impl GpuQuerySetDescriptor {
+    pub const MAX_QUERIES: u32 = 4096;
+
     pub fn new(
         common: GpuResourceCommon,
         kind: GpuQueryKind,
@@ -1368,12 +1370,12 @@ impl GpuQuerySetDescriptor {
                 "use surface-acquired ownership only for texture or texture-view descriptors",
             ));
         }
-        if count == 0 {
+        if count == 0 || count > Self::MAX_QUERIES {
             return Err(GpuResourceDescriptorError::invalid(
                 "construct GPU query-set descriptor",
                 common.label().as_str(),
                 GpuResourceDescriptorCause::InvalidQueryCount,
-                "provide a nonzero query count",
+                "provide a query count in the normalized range 1..=4096",
             ));
         }
         Ok(Self {
@@ -2024,7 +2026,30 @@ mod tests {
             )
             .is_err()
         );
-        assert!(GpuQuerySetDescriptor::new(common("queries"), GpuQueryKind::Timestamp, 0).is_err());
+        let zero = GpuQuerySetDescriptor::new(common("zero queries"), GpuQueryKind::Timestamp, 0)
+            .unwrap_err();
+        assert_eq!(zero.cause(), GpuResourceDescriptorCause::InvalidQueryCount);
+        assert!(
+            GpuQuerySetDescriptor::new(common("one query"), GpuQueryKind::Timestamp, 1).is_ok()
+        );
+        assert!(
+            GpuQuerySetDescriptor::new(
+                common("maximum queries"),
+                GpuQueryKind::Timestamp,
+                GpuQuerySetDescriptor::MAX_QUERIES,
+            )
+            .is_ok()
+        );
+        let oversized = GpuQuerySetDescriptor::new(
+            common("oversized queries"),
+            GpuQueryKind::Timestamp,
+            GpuQuerySetDescriptor::MAX_QUERIES + 1,
+        )
+        .unwrap_err();
+        assert_eq!(
+            oversized.cause(),
+            GpuResourceDescriptorCause::InvalidQueryCount
+        );
 
         let upload_sampler = GpuResourceCommon::owned(
             label("upload sampler"),
