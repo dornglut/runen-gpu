@@ -33,6 +33,25 @@ impl GpuRenderPipelineStateDescriptor {
             ));
         }
 
+        if fragment_output
+            .as_ref()
+            .is_some_and(GpuFragmentOutputStateDescriptor::references_secondary_source)
+            && fragment_output
+                .as_ref()
+                .map_or(0, |output| output.color_targets().len())
+                != 1
+        {
+            return Err(invalid_render_pipeline_state(
+                format!(
+                    "dual_source_color_target_count={}",
+                    fragment_output
+                        .as_ref()
+                        .map_or(0, |output| output.color_targets().len())
+                ),
+                "use exactly one color target at location 0 when any blend factor references the secondary source",
+            ));
+        }
+
         if depth_stencil.is_some_and(|state| !state.bias().is_zero())
             && !matches!(
                 primitive.topology(),
