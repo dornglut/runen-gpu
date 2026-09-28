@@ -66,10 +66,10 @@ pub use work::{
     GpuColorClearValue, GpuComputeOperation, GpuCopyExtent, GpuCopyOperation,
     GpuDepthAttachmentLoad, GpuDepthAttachmentState, GpuDepthClearValue, GpuDispatchSize,
     GpuDrawIntent, GpuDrawRange, GpuIndirectFirstInstanceMode, GpuMultisampleResolveTarget,
-    GpuOcclusionQueryScope, GpuPresentOperation, GpuQueryResolveOperation, GpuRenderColorAttachment,
-    GpuRenderDepthStencilAttachment, GpuStencilAttachmentLoad, GpuStencilAttachmentState,
-    GpuStencilClearValue, GpuTextureCopyRegion, GpuTextureOrigin, GpuTimestampMarkerOperation,
-    GpuTimestampWrites,
+    GpuOcclusionQueryScope, GpuPresentOperation, GpuQueryResolveOperation,
+    GpuRenderColorAttachment, GpuRenderDepthStencilAttachment, GpuStencilAttachmentLoad,
+    GpuStencilAttachmentState, GpuStencilClearValue, GpuTextureCopyRegion, GpuTextureOrigin,
+    GpuTimestampMarkerOperation, GpuTimestampWrites,
 };
 pub use work_resource_id::{
     GpuWorkResourceId, GpuWorkResourceIdAllocationError, GpuWorkResourceIdAllocator,
