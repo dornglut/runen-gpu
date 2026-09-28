@@ -13,6 +13,7 @@ use super::{
     GpuUploadOperation, GpuWorkOperationCause, GpuWorkOperationError,
     render_pass_usage::validate_render_pass_usage_scope,
 };
+use std::collections::BTreeSet;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum GpuWorkNodeKind {
@@ -112,6 +113,7 @@ impl GpuRenderOperation {
         )?;
 
         let mut occlusion_query_set = None;
+        let mut occlusion_query_indices = BTreeSet::new();
         for item in &items {
             if let GpuRenderPassItem::OcclusionQuery(scope) = item {
                 match &occlusion_query_set {
@@ -126,6 +128,15 @@ impl GpuRenderOperation {
                     }
                     None => occlusion_query_set = Some(scope.query_set().clone()),
                     Some(_) => {}
+                }
+                if !occlusion_query_indices.insert(scope.query_index()) {
+                    return Err(GpuWorkOperationError::invalid(
+                        "construct GPU render operation",
+                        "occlusion query index",
+                        Some(scope.query_set().diagnostic_identity()),
+                        GpuWorkOperationCause::OperationAccessContradiction,
+                        "use each occlusion query slot at most once within one render pass",
+                    ));
                 }
             }
             for draw in item.draws() {
