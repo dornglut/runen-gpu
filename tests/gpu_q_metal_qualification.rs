@@ -608,7 +608,7 @@ fn metal_qualification_records_exact_public_api_evidence() {
     assert_eq!(stats.pending_readbacks(), 0);
 
     let report = json!({
-        "schema_version": 7,
+        "schema_version": 8,
         "qualification_level": mode.report_name(),
         "revision": revision,
         "environment": {
