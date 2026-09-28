@@ -4,8 +4,8 @@ use super::super::{
     GpuCopyOperation, GpuDepthAttachmentLoad, GpuQueryRange, GpuResourceAccess, GpuResourceRef,
     GpuRetainedInitializationSeed, GpuTextureAspect, GpuTextureCopyRegion, GpuTextureDimension,
     GpuTextureHandle, GpuTextureInitialization, GpuTextureSubresourceRange, GpuWorkGraphCause,
-    GpuWorkGraphError, GpuWorkGraphErrorContext, GpuWorkGraphErrorSource, GpuWorkOperation,
-    GpuWorkResourceId,
+    GpuRenderPassItem, GpuWorkGraphError, GpuWorkGraphErrorContext, GpuWorkGraphErrorSource,
+    GpuWorkOperation, GpuWorkResourceId,
 };
 use super::{
     authoring::{GpuWorkFragment, GpuWorkNode},
@@ -1076,6 +1076,11 @@ fn operation_initialization(
             for draw in render.draws() {
                 for access in draw.accesses().iter().filter(|access| access.reads()) {
                     require(access);
+                }
+            }
+            for item in render.items() {
+                if let GpuRenderPassItem::OcclusionQuery(scope) = item {
+                    effect(&GpuResourceAccess::Query(scope.access().clone()));
                 }
             }
             if let Some(timestamp_writes) = render.timestamp_writes() {
