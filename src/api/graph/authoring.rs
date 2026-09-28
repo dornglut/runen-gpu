@@ -972,7 +972,7 @@ fn validate_indexed_draw_access(
     let GpuWorkOperation::Render(render) = operation else {
         return Ok(());
     };
-    if render.draws().iter().any(|draw| draw.draw().is_indexed())
+    if render.draws().any(|draw| draw.draw().is_indexed())
         && !accesses.iter().any(|access| {
             matches!(
                 access,
