@@ -546,7 +546,7 @@ fn metal_qualification_records_exact_public_api_evidence() {
         pollster::block_on(retained_indirect_first_instance::run_on_adapter(
             GpuBackendFamily::Metal,
             None,
-            context.adapter_facts(),
+            &context,
         ));
     retained_sampler_anisotropy::realize_anisotropic_sampler(&context);
     let (transient_graph, transient_readback_id) = retained_transient_attachment::graph();
