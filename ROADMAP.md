@@ -118,10 +118,12 @@ one-off framework expansion.
 - preserve per-format sampled/storage/render/copy role admission from actual
   device facts.
 
-Transient attachment content semantics are a planned `ADVANCED` R1/R2-boundary
-capability. They remain distinct from logical resource lifetime and may permit
-private tile-local, memoryless, or ordinary backing. A bounded investigation must
-settle the exact resource-versus-attachment authority before delivery.
+The first normalized transient-attachment content slice is `CURRENT` at the R1/R2
+boundary. It remains distinct from logical resource lifetime and permits private
+tile-local, memoryless, lazily allocated, or ordinary backing while preserving
+the same public content semantics. The accepted first slice is deliberately
+limited to owned D2 single-layer attachment resources; broader transient array,
+multiview, imported/external, and aliasing semantics require separate authority.
 
 ### R2 — Sampling and raster completeness
 
@@ -236,7 +238,7 @@ This is intentionally family-level rather than a mirror of WGPU's feature list.
 | Portable texture/view/vertex/depth-stencil vocabulary | `CORE` | `PLAN` — R1 |
 | BC/ETC2/ASTC compression | `ADVANCED` | `PLAN` — R1, capability-gated |
 | Anisotropy and complete portable raster/blend/depth/stencil state | `CORE` | `PLAN` — R2 |
-| Transient attachment content semantics | `ADVANCED` | `PLAN` — R1/R2 boundary; contract investigation precedes delivery |
+| Transient attachment content semantics | `ADVANCED` | `CURRENT` — first owned D2 single-layer R1/R2 slice; broader layered/external/aliasing forms require separate authority |
 | WGSL `f16` and mature standardized optional shader features | `ADVANCED` | `PLAN` — R3 |
 | Fixed binding arrays | `ADVANCED` | `CURRENT` |
 | Non-uniform sampled-texture/storage-resource indexing | `ADVANCED` | `CURRENT` — fixed fully populated texture/sampler, storage-buffer, and storage-texture families; uniform-buffer and sparse/partial forms remain separately deferred |
