@@ -9,12 +9,12 @@ use std::process::Command;
 mod readback_wait;
 #[path = "gpu_r2_blend_state.rs"]
 mod retained_blend;
-#[path = "gpu_r2_dual_source_blending.rs"]
-mod retained_dual_source_blending;
 #[path = "gpu_r2_depth_bias.rs"]
 mod retained_depth_bias;
 #[path = "gpu_r2_depth_clip_control.rs"]
 mod retained_depth_clip_control;
+#[path = "gpu_r2_dual_source_blending.rs"]
+mod retained_dual_source_blending;
 #[path = "gpu_fixed_binding_array/mod.rs"]
 mod retained_fixed_binding_array;
 #[path = "gpu_compute_generated_indirect_native.rs"]
@@ -528,13 +528,11 @@ fn metal_qualification_records_exact_public_api_evidence() {
     let vertex16_mask = pollster::block_on(retained_vertex16::run_suite(&context));
     let vertex_packed_mask = pollster::block_on(retained_vertex_packed::run_suite(&context));
     let blend_mask = pollster::block_on(retained_blend::run_suite(&context));
-    let dual_source_blending = pollster::block_on(
-        retained_dual_source_blending::run_on_adapter(
-            GpuBackendFamily::Metal,
-            None,
-            &context,
-        ),
-    );
+    let dual_source_blending = pollster::block_on(retained_dual_source_blending::run_on_adapter(
+        GpuBackendFamily::Metal,
+        None,
+        &context,
+    ));
     let depth_bias_mask = pollster::block_on(retained_depth_bias::run_baseline(&context));
     pollster::block_on(retained_depth_clip_control::run_case(
         &context,
