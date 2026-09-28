@@ -924,6 +924,20 @@ mod tests {
     }
 
     #[test]
+    fn indirect_first_instance_requests_the_exact_wgpu_feature() {
+        assert_eq!(
+            wgpu_features_for(GpuCapabilityFeature::IndirectFirstInstance),
+            Features::INDIRECT_FIRST_INSTANCE
+        );
+        assert_eq!(
+            requested_features(&candidate_with_enabled_features([
+                GpuCapabilityFeature::IndirectFirstInstance,
+            ])),
+            Features::INDIRECT_FIRST_INSTANCE
+        );
+    }
+
+    #[test]
     fn depth_clip_control_requests_the_exact_wgpu_feature() {
         assert_eq!(
             wgpu_features_for(GpuCapabilityFeature::DepthClipControl),
