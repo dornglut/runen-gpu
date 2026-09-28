@@ -28,6 +28,10 @@ pub enum GpuWorkNodeKind {
 }
 
 /// One ordered semantic item in a logical render pass.
+///
+/// The direct `Draw(GpuRenderDraw)` shape is part of the normalized public contract; boxing it
+/// solely to equalize enum variant sizes would add heap-indirection to ordinary render-pass items.
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum GpuRenderPassItem {
     Draw(GpuRenderDraw),
