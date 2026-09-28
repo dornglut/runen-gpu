@@ -6,6 +6,7 @@ pub enum GpuProgramContractCause {
     EntryPointMissing,
     DuplicateEntryPoint,
     CanonicalWgslInvalid,
+    ProgramCapabilityUnsupported,
     InvalidBindingKey,
     EmptyStageVisibility,
     BindingDeclarationInvalid,

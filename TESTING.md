@@ -40,6 +40,7 @@ The retained proof mapping is intentionally successor-local:
 | Render/runtime | G5 transfer and G5R initial-content tests, indexed offscreen known-pattern output, generated indirect drawing, depth-clip control with a color-only clipped-vs-unclipped exact-readback oracle, transient-attachment color/MSAA-resolve/depth execution with conditional Stencil8 coverage, and G7A2 native surface presentation |
 | Characterization | The direct-WGPU cost portfolio and graph-preparation scale report remain explicitly direct-WGPU/CPU measurements, separate from the public API contract |
 | Fixed binding arrays | Generic Metal qualification is the retained capability-bearing public execution target and records per-resource-class outcomes on the correlated adapter; actual-browser WebGPU proves the native fixed-array features unsupported with zero normalized array limits and typed admission rejection. `gpu_fixed_binding_array_native` is ignored by default but explicitly invoked by retained Conformance: real Vulkan adapters run the full capability-gated suite, while the pinned llvmpipe/Lavapipe target records storage-buffer arrays as `UNQUALIFIED` after an observed driver-level device loss and continues the sampled-texture/sampler/storage-texture families where advertised. |
+| Non-uniform fixed binding-array indexing | `gpu_r3_binding_array_non_uniform_indexing` derives requirements from Naga structured uniformity analysis and retains full fixed-array occupancy. Generic Metal qualification executes divergent texture/sampler, storage-buffer, and storage-texture routing on the correlated adapter when the normalized prerequisite sets are advertised. Actual-browser WebGPU proves the native non-uniform capabilities unsupported through typed context-admission rejection. Retained Vulkan Conformance executes capability-gated families and inherits the narrow accepted llvmpipe/Lavapipe fixed storage-buffer-array qualification exception without changing public capability facts. |
 | Browser/Wasm | `gpu_browser_webgpu` compiles for `wasm32-unknown-unknown` and executes the compute/offscreen plus transient-attachment color/MSAA-resolve/depth proof in Chrome WebGPU, proves native fixed binding arrays unsupported with zero normalized array limits and typed admission rejection, and exercises transient Stencil8 when the normalized role is advertised |
 | Downstream | `conformance/downstream` uses only the public crate API for the 4097-element prefix scan |
 
@@ -78,7 +79,10 @@ color-only depth-clip-control semantic oracle on the correlated Metal adapter, r
 anisotropic sampling, executes the retained transient-attachment color/MSAA-resolve/depth
 suite plus transient Stencil8 when the normalized role is advertised, records fixed-array
 storage-buffer/uniform-buffer/sampled-texture/sampler/storage-texture outcomes as
-`EXERCISED` or `UNSUPPORTED`, and retains a JSON report. It also preserves the current conservative Metal `TimestampQuery` suppression.
+`EXERCISED` or `UNSUPPORTED`. It also executes the normalized non-uniform fixed binding-array
+texture/sampler, storage-buffer, and storage-texture oracles on the correlated adapter and requires
+each advertised family to report `EXERCISED`, then retains the JSON report. It also preserves the
+current conservative Metal `TimestampQuery` suppression.
 
 Generic hosted Metal evidence is not Apple M3 evidence. The trusted owner-run
 actual-M3 path is:

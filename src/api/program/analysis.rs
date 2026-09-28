@@ -1,6 +1,8 @@
 use super::contract_diagnostics::{GpuProgramContractCause, GpuProgramContractError};
 use super::entry_point::{GpuEntryPointDescriptor, GpuEntryPointName};
-use super::fixed_array::fixed_array_compilation_capabilities;
+use super::fixed_array::{
+    fixed_array_compilation_capabilities, fixed_array_non_uniform_indexing_capability,
+};
 use super::interface::{
     GpuBindingClass, GpuBindingDeclaration, GpuBindingKey, GpuBindingKind,
     GpuBindingLayoutRefinement, GpuBindingProvenance, GpuProgramInterfaceDescriptor,
@@ -15,8 +17,8 @@ use super::stage_io::{
 use crate::{GpuCapabilityFeature, GpuTextureFormat};
 use core::num::{NonZeroU32, NonZeroU64};
 use naga::{
-    AddressSpace, ArraySize, Binding, BuiltIn, ImageClass, ImageDimension, ScalarKind, ShaderStage,
-    StorageAccess, StorageFormat, TypeInner, VectorSize,
+    AddressSpace, ArraySize, Binding, BuiltIn, Expression, ImageClass, ImageDimension, ScalarKind,
+    ShaderStage, StorageAccess, StorageFormat, TypeInner, VectorSize,
 };
 
 pub(crate) struct ProgramAnalysis {
@@ -101,8 +103,10 @@ pub(crate) fn analyze_program(
         }
     };
     reject_f16_overrides(&module, &source_label)?;
+    let validator_capabilities =
+        analysis_capabilities | non_uniform_binding_array_analysis_capabilities();
     let module_info =
-        naga::valid::Validator::new(naga::valid::ValidationFlags::all(), analysis_capabilities)
+        naga::valid::Validator::new(naga::valid::ValidationFlags::all(), validator_capabilities)
             .validate(&module)
             .map_err(|error| {
                 invalid(
@@ -112,6 +116,13 @@ pub(crate) fn analyze_program(
                     format!("canonical WGSL validation failed: {error}"),
                 )
             })?;
+
+    derive_non_uniform_binding_array_requirements(
+        &module,
+        &module_info,
+        &source_label,
+        &mut required_features,
+    )?;
 
     for (_, global) in module.global_variables.iter() {
         let Some(binding) = global.binding else {
@@ -318,6 +329,107 @@ pub(crate) fn analyze_program(
         fragment_outputs,
         required_features,
     })
+}
+
+fn non_uniform_binding_array_analysis_capabilities() -> naga::valid::Capabilities {
+    naga::valid::Capabilities::TEXTURE_AND_SAMPLER_BINDING_ARRAY_NON_UNIFORM_INDEXING
+        | naga::valid::Capabilities::BUFFER_BINDING_ARRAY_NON_UNIFORM_INDEXING
+        | naga::valid::Capabilities::STORAGE_TEXTURE_BINDING_ARRAY_NON_UNIFORM_INDEXING
+        | naga::valid::Capabilities::STORAGE_BUFFER_BINDING_ARRAY_NON_UNIFORM_INDEXING
+}
+
+fn derive_non_uniform_binding_array_requirements(
+    module: &naga::Module,
+    module_info: &naga::valid::ModuleInfo,
+    source_label: &str,
+    required_features: &mut Vec<GpuCapabilityFeature>,
+) -> Result<(), GpuProgramContractError> {
+    for (handle, function) in module.functions.iter() {
+        scan_non_uniform_binding_array_accesses(
+            module,
+            function,
+            &module_info[handle],
+            function.name.as_deref().unwrap_or("<anonymous function>"),
+            source_label,
+            required_features,
+        )?;
+    }
+    for (index, entry_point) in module.entry_points.iter().enumerate() {
+        scan_non_uniform_binding_array_accesses(
+            module,
+            &entry_point.function,
+            module_info.get_entry_point(index),
+            entry_point.name.as_str(),
+            source_label,
+            required_features,
+        )?;
+    }
+    Ok(())
+}
+
+fn scan_non_uniform_binding_array_accesses(
+    module: &naga::Module,
+    function: &naga::Function,
+    function_info: &naga::valid::FunctionInfo,
+    function_label: &str,
+    source_label: &str,
+    required_features: &mut Vec<GpuCapabilityFeature>,
+) -> Result<(), GpuProgramContractError> {
+    for (_, expression) in function.expressions.iter() {
+        let Expression::Access { base, index } = *expression else {
+            continue;
+        };
+        if function_info[index].uniformity.non_uniform_result.is_none() {
+            continue;
+        }
+        let Expression::GlobalVariable(global_handle) = function.expressions[base] else {
+            continue;
+        };
+        let global = &module.global_variables[global_handle];
+        let (element_type, array_count) =
+            binding_array_type(module, global.ty).map_err(|detail| {
+                invalid(
+                    "admit canonical WGSL program",
+                    source_label,
+                    GpuProgramContractCause::ProgramInterfaceMismatch,
+                    detail,
+                )
+            })?;
+        if array_count.is_none() {
+            continue;
+        }
+        let class = fixed_array_compilation_class(module, global.space, element_type).map_err(
+            |detail| {
+                invalid(
+                    "admit canonical WGSL program",
+                    source_label,
+                    GpuProgramContractCause::ProgramInterfaceMismatch,
+                    detail,
+                )
+            },
+        )?;
+        let feature = fixed_array_non_uniform_indexing_capability(class).map_err(|detail| {
+            GpuProgramContractError::invalid_with_detail(
+                "admit canonical WGSL program",
+                global
+                    .binding
+                    .map(|binding| {
+                        format!(
+                            "module binding @group({}) @binding({}) in {function_label}",
+                            binding.group, binding.binding
+                        )
+                    })
+                    .unwrap_or_else(|| function_label.to_string()),
+                GpuProgramContractCause::ProgramCapabilityUnsupported,
+                detail,
+                "use dynamically uniform indexing or a supported non-uniform binding-array resource class",
+            )
+        })?;
+        if !required_features.contains(&feature) {
+            required_features.push(feature);
+        }
+    }
+    Ok(())
 }
 
 fn baseline_analysis_capabilities() -> naga::valid::Capabilities {

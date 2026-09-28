@@ -160,6 +160,25 @@ pub(super) fn normalized_features(
     if features.contains(Features::STORAGE_RESOURCE_BINDING_ARRAY) {
         supported.push(GpuCapabilityFeature::StorageResourceBindingArray);
     }
+    if features.contains(Features::TEXTURE_BINDING_ARRAY)
+        && features
+            .contains(Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING)
+    {
+        supported.push(GpuCapabilityFeature::TextureBindingArrayNonUniformIndexing);
+    }
+    if features.contains(Features::BUFFER_BINDING_ARRAY)
+        && features.contains(Features::STORAGE_RESOURCE_BINDING_ARRAY)
+        && features
+            .contains(Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING)
+    {
+        supported.push(GpuCapabilityFeature::StorageBufferBindingArrayNonUniformIndexing);
+    }
+    if features.contains(Features::TEXTURE_BINDING_ARRAY)
+        && features.contains(Features::STORAGE_RESOURCE_BINDING_ARRAY)
+        && features.contains(Features::STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING)
+    {
+        supported.push(GpuCapabilityFeature::StorageTextureBindingArrayNonUniformIndexing);
+    }
     if features.contains(Features::SHADER_F16) {
         supported.push(GpuCapabilityFeature::ShaderF16);
     }
@@ -529,6 +548,82 @@ mod tests {
         assert!(
             !normalized.contains(&GpuCapabilityFeature::UniformBufferBindingArray),
             "the backend refresh must not expand the normalized profile without RunenGPU authority"
+        );
+    }
+
+    #[test]
+    fn non_uniform_binding_array_features_require_complete_normalized_prerequisites() {
+        let non_uniform = Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING
+            | Features::STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING;
+
+        let raw_only = normalized_features(
+            Backend::Vulkan,
+            non_uniform,
+            DownlevelFlags::empty(),
+            false,
+            false,
+        );
+        assert!(!raw_only.contains(&GpuCapabilityFeature::TextureBindingArrayNonUniformIndexing));
+        assert!(
+            !raw_only.contains(&GpuCapabilityFeature::StorageBufferBindingArrayNonUniformIndexing)
+        );
+        assert!(
+            !raw_only.contains(&GpuCapabilityFeature::StorageTextureBindingArrayNonUniformIndexing)
+        );
+
+        let complete = normalized_features(
+            Backend::Vulkan,
+            non_uniform
+                | Features::TEXTURE_BINDING_ARRAY
+                | Features::BUFFER_BINDING_ARRAY
+                | Features::STORAGE_RESOURCE_BINDING_ARRAY,
+            DownlevelFlags::empty(),
+            false,
+            false,
+        );
+        assert!(complete.contains(&GpuCapabilityFeature::TextureBindingArrayNonUniformIndexing));
+        assert!(
+            complete.contains(&GpuCapabilityFeature::StorageBufferBindingArrayNonUniformIndexing)
+        );
+        assert!(
+            complete.contains(&GpuCapabilityFeature::StorageTextureBindingArrayNonUniformIndexing)
+        );
+
+        let texture_without_texture_array = normalized_features(
+            Backend::Vulkan,
+            Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
+            DownlevelFlags::empty(),
+            false,
+            false,
+        );
+        assert!(
+            !texture_without_texture_array
+                .contains(&GpuCapabilityFeature::TextureBindingArrayNonUniformIndexing)
+        );
+
+        let storage_buffer_without_storage_resource = normalized_features(
+            Backend::Vulkan,
+            Features::BUFFER_BINDING_ARRAY
+                | Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
+            DownlevelFlags::empty(),
+            false,
+            false,
+        );
+        assert!(
+            !storage_buffer_without_storage_resource
+                .contains(&GpuCapabilityFeature::StorageBufferBindingArrayNonUniformIndexing)
+        );
+
+        let storage_texture_without_storage_resource = normalized_features(
+            Backend::Vulkan,
+            Features::TEXTURE_BINDING_ARRAY | Features::STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
+            DownlevelFlags::empty(),
+            false,
+            false,
+        );
+        assert!(
+            !storage_texture_without_storage_resource
+                .contains(&GpuCapabilityFeature::StorageTextureBindingArrayNonUniformIndexing)
         );
     }
 

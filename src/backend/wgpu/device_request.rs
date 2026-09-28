@@ -431,6 +431,13 @@ fn wgpu_features_for(feature: GpuCapabilityFeature) -> Features {
             Features::STORAGE_RESOURCE_BINDING_ARRAY
         }
         GpuCapabilityFeature::UniformBufferBindingArray => Features::UNIFORM_BUFFER_BINDING_ARRAYS,
+        GpuCapabilityFeature::TextureBindingArrayNonUniformIndexing
+        | GpuCapabilityFeature::StorageBufferBindingArrayNonUniformIndexing => {
+            Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING
+        }
+        GpuCapabilityFeature::StorageTextureBindingArrayNonUniformIndexing => {
+            Features::STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING
+        }
         GpuCapabilityFeature::ShaderF16 => Features::SHADER_F16,
         GpuCapabilityFeature::DepthClipControl => Features::DEPTH_CLIP_CONTROL,
         GpuCapabilityFeature::DepthBiasClamp => Features::empty(),
@@ -964,6 +971,23 @@ mod tests {
             wgpu_features_for(GpuCapabilityFeature::UniformBufferBindingArray),
             Features::UNIFORM_BUFFER_BINDING_ARRAYS
         );
+    }
+
+    #[test]
+    fn non_uniform_binding_array_capabilities_request_only_the_exact_backend_bits() {
+        let candidate = candidate_with_enabled_features([
+            GpuCapabilityFeature::TextureBindingArrayNonUniformIndexing,
+            GpuCapabilityFeature::StorageBufferBindingArrayNonUniformIndexing,
+            GpuCapabilityFeature::StorageTextureBindingArrayNonUniformIndexing,
+        ]);
+
+        let requested = requested_features(&candidate);
+        assert_eq!(
+            requested,
+            Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING
+                | Features::STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING
+        );
+        assert!(!requested.contains(Features::PARTIALLY_BOUND_BINDING_ARRAY));
     }
 
     #[test]

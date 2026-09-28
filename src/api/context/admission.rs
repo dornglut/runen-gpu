@@ -666,6 +666,9 @@ fn is_declared_extension(feature: GpuCapabilityFeature) -> bool {
             | GpuCapabilityFeature::BufferBindingArray
             | GpuCapabilityFeature::StorageResourceBindingArray
             | GpuCapabilityFeature::UniformBufferBindingArray
+            | GpuCapabilityFeature::TextureBindingArrayNonUniformIndexing
+            | GpuCapabilityFeature::StorageBufferBindingArrayNonUniformIndexing
+            | GpuCapabilityFeature::StorageTextureBindingArrayNonUniformIndexing
     )
 }
 

@@ -15,6 +15,9 @@ pub enum GpuCapabilityFeature {
     BufferBindingArray,
     StorageResourceBindingArray,
     UniformBufferBindingArray,
+    TextureBindingArrayNonUniformIndexing,
+    StorageBufferBindingArrayNonUniformIndexing,
+    StorageTextureBindingArrayNonUniformIndexing,
     DepthAttachment,
     DepthBiasClamp,
     DepthClipControl,
@@ -929,6 +932,9 @@ mod tests {
             GpuCapabilityFeature::BufferBindingArray,
             GpuCapabilityFeature::StorageResourceBindingArray,
             GpuCapabilityFeature::UniformBufferBindingArray,
+            GpuCapabilityFeature::TextureBindingArrayNonUniformIndexing,
+            GpuCapabilityFeature::StorageBufferBindingArrayNonUniformIndexing,
+            GpuCapabilityFeature::StorageTextureBindingArrayNonUniformIndexing,
         ];
 
         for profile in [
