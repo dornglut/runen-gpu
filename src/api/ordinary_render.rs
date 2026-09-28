@@ -1,6 +1,7 @@
 use super::{
     GpuAttachmentStore, GpuBlendConstant, GpuColorAttachmentLoad, GpuDrawIntent, GpuDrawRange,
-    GpuRenderColorAttachment, GpuRenderDraw, GpuRenderOperation, GpuRenderPassSignature,
+    GpuRenderColorAttachment, GpuRenderDraw, GpuRenderOperation, GpuRenderPassItem,
+    GpuRenderPassSignature,
     GpuRenderPipelineDescriptor, GpuRuntimeBindingSet, GpuScissorRect, GpuTextureViewHandle,
     GpuViewport, GpuWorkOperationCause, GpuWorkOperationError,
 };
@@ -60,7 +61,7 @@ impl GpuRenderOperation {
             GpuBlendConstant::new(0.0, 0.0, 0.0, 0.0)?,
             0,
         )?;
-        Self::new([attachment], None, [draw], None)
+        Self::new([attachment], None, [GpuRenderPassItem::Draw(draw)], None)
     }
 }
 
