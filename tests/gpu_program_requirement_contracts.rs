@@ -478,3 +478,260 @@ fn uniform_buffer_non_uniform_indexing_is_explicitly_deferred() {
             .is_some_and(|detail| detail.contains("uniform-buffer binding-array indexing"))
     );
 }
+
+
+const DUAL_SOURCE_WGSL: &str = r#"
+enable dual_source_blending;
+
+struct DualSourceOutput {
+    @location(0) @blend_src(0) primary: vec4<f32>,
+    @location(0) @blend_src(1) secondary: vec4<f32>,
+}
+
+@vertex
+fn dual_vs() -> @builtin(position) vec4<f32> {
+    return vec4<f32>(0.0, 0.0, 0.0, 1.0);
+}
+
+@fragment
+fn dual_fs() -> DualSourceOutput {
+    var output: DualSourceOutput;
+    output.primary = vec4<f32>(1.0, 0.0, 0.0, 1.0);
+    output.secondary = vec4<f32>(0.0, 1.0, 0.0, 0.0);
+    return output;
+}
+"#;
+
+const DUAL_SOURCE_UNUSED_WGSL: &str = r#"
+enable dual_source_blending;
+
+struct DualSourceOutput {
+    @location(0) @blend_src(0) primary: vec4<f32>,
+    @location(0) @blend_src(1) secondary: vec4<f32>,
+}
+
+@fragment
+fn unused_dual_fs() -> DualSourceOutput {
+    var output: DualSourceOutput;
+    output.primary = vec4<f32>(1.0);
+    output.secondary = vec4<f32>(0.0);
+    return output;
+}
+
+@compute @workgroup_size(1)
+fn compute_main() {}
+"#;
+
+const F16_DUAL_SOURCE_WGSL: &str = r#"
+enable f16;
+enable dual_source_blending;
+
+struct DualSourceOutput {
+    @location(0) @blend_src(0) primary: vec4<f32>,
+    @location(0) @blend_src(1) secondary: vec4<f32>,
+}
+
+@fragment
+fn dual_fs() -> DualSourceOutput {
+    let half_value = f16(1.0);
+    var output: DualSourceOutput;
+    output.primary = vec4<f32>(f32(half_value), 0.0, 0.0, 1.0);
+    output.secondary = vec4<f32>(0.0, 1.0, 0.0, 0.0);
+    return output;
+}
+"#;
+
+const ORDINARY_RENDER_WGSL: &str = r#"
+@vertex
+fn ordinary_vs() -> @builtin(position) vec4<f32> {
+    return vec4<f32>(0.0, 0.0, 0.0, 1.0);
+}
+
+@fragment
+fn ordinary_fs() -> @location(0) vec4<f32> {
+    return vec4<f32>(1.0, 0.0, 0.0, 1.0);
+}
+"#;
+
+fn dual_source_blend() -> GpuBlendState {
+    GpuBlendState::new(
+        GpuBlendComponent::new(
+            GpuBlendFactor::Zero,
+            GpuBlendFactor::Src1,
+            GpuBlendOperation::Add,
+        )
+        .unwrap(),
+        GpuBlendComponent::new(
+            GpuBlendFactor::Zero,
+            GpuBlendFactor::Src1Alpha,
+            GpuBlendOperation::Add,
+        )
+        .unwrap(),
+    )
+}
+
+fn render_state_with_blend(blend: Option<GpuBlendState>) -> GpuRenderPipelineStateDescriptor {
+    let target = GpuColorTargetStateDescriptor::new(
+        GpuTextureFormat::Rgba8Unorm,
+        blend,
+        GpuColorWriteMask::ALL,
+    )
+    .unwrap();
+    GpuRenderPipelineStateDescriptor::new(
+        GpuVertexInputStateDescriptor::new([]).unwrap(),
+        Some(GpuFragmentOutputStateDescriptor::new([target])),
+        GpuPrimitiveStateDescriptor::default(),
+        None,
+        GpuMultisampleStateDescriptor::default(),
+    )
+    .unwrap()
+}
+
+#[test]
+fn dual_source_extension_is_whole_module_requirement_even_when_selected_entry_point_is_unrelated() {
+    let (_registry, source) =
+        admitted_source_from("dual-source.unused-entry-point", DUAL_SOURCE_UNUSED_WGSL);
+    let program = GpuProgramDescriptor::new(
+        source,
+        [entry_point("compute_main")],
+        std::iter::empty::<GpuBindingLayoutRefinement>(),
+    )
+    .expect("dual-source extension should admit through its normalized parse profile");
+
+    assert_required(
+        program.requirements(),
+        GpuCapabilityFeature::DualSourceBlending,
+    );
+    assert_eq!(
+        program.requirements().get(GpuCapabilityFeature::ShaderF16),
+        None
+    );
+}
+
+#[test]
+fn combined_f16_and_dual_source_profile_derives_both_requirements() {
+    let (_registry, source) =
+        admitted_source_from("dual-source.f16-combined", F16_DUAL_SOURCE_WGSL);
+    let program = GpuProgramDescriptor::new(
+        source,
+        [entry_point("dual_fs")],
+        std::iter::empty::<GpuBindingLayoutRefinement>(),
+    )
+    .expect("combined optional WGSL profile should admit");
+
+    assert_required(program.requirements(), GpuCapabilityFeature::ShaderF16);
+    assert_required(
+        program.requirements(),
+        GpuCapabilityFeature::DualSourceBlending,
+    );
+}
+
+#[test]
+fn malformed_wgsl_remains_canonical_wgsl_invalid_across_optional_profiles() {
+    let (_registry, source) = admitted_source_from(
+        "dual-source.invalid-wgsl",
+        "enable dual_source_blending; @compute @workgroup_size(1) fn broken(",
+    );
+    let error = GpuProgramDescriptor::new(
+        source,
+        [entry_point("broken")],
+        std::iter::empty::<GpuBindingLayoutRefinement>(),
+    )
+    .expect_err("syntax-invalid WGSL must not become valid under a broader capability profile");
+
+    assert_eq!(
+        error.cause(),
+        GpuProgramContractCause::CanonicalWgslInvalid
+    );
+}
+
+#[test]
+fn dual_source_pipeline_derives_capability_and_requires_exact_shader_parity() {
+    let (_registry, dual_source) = admitted_source_from("dual-source.pipeline", DUAL_SOURCE_WGSL);
+    let dual_program = GpuProgramDescriptor::new(
+        dual_source,
+        [entry_point("dual_vs"), entry_point("dual_fs")],
+        std::iter::empty::<GpuBindingLayoutRefinement>(),
+    )
+    .unwrap();
+
+    let pipeline = GpuRenderPipelineDescriptor::new(
+        dual_program,
+        GpuRenderEntryPoints::new(entry_point("dual_vs"), Some(entry_point("dual_fs"))),
+        render_state_with_blend(Some(dual_source_blend())),
+        GpuPipelineConfiguration::default(),
+    )
+    .expect("exact dual-source shader and blend state should agree");
+    assert_required(
+        pipeline.requirements(),
+        GpuCapabilityFeature::DualSourceBlending,
+    );
+
+    let (_registry, ordinary_source) =
+        admitted_source_from("dual-source.ordinary-shader", ORDINARY_RENDER_WGSL);
+    let ordinary_program = GpuProgramDescriptor::new(
+        ordinary_source,
+        [entry_point("ordinary_vs"), entry_point("ordinary_fs")],
+        std::iter::empty::<GpuBindingLayoutRefinement>(),
+    )
+    .unwrap();
+    let ordinary_error = GpuRenderPipelineDescriptor::new(
+        ordinary_program,
+        GpuRenderEntryPoints::new(
+            entry_point("ordinary_vs"),
+            Some(entry_point("ordinary_fs")),
+        ),
+        render_state_with_blend(Some(dual_source_blend())),
+        GpuPipelineConfiguration::default(),
+    )
+    .expect_err("Src1 blend state with ordinary fragment output must reject");
+    assert_eq!(
+        ordinary_error.cause(),
+        GpuProgramContractCause::PipelineStageIoMismatch
+    );
+
+    let (_registry, dual_source) =
+        admitted_source_from("dual-source.unconsumed-secondary", DUAL_SOURCE_WGSL);
+    let dual_program = GpuProgramDescriptor::new(
+        dual_source,
+        [entry_point("dual_vs"), entry_point("dual_fs")],
+        std::iter::empty::<GpuBindingLayoutRefinement>(),
+    )
+    .unwrap();
+    let dual_error = GpuRenderPipelineDescriptor::new(
+        dual_program,
+        GpuRenderEntryPoints::new(entry_point("dual_vs"), Some(entry_point("dual_fs"))),
+        render_state_with_blend(None),
+        GpuPipelineConfiguration::default(),
+    )
+    .expect_err("dual-source output without Src1 blend consumption must reject under strict parity");
+    assert_eq!(
+        dual_error.cause(),
+        GpuProgramContractCause::PipelineStageIoMismatch
+    );
+}
+
+#[test]
+fn dual_source_blending_rejects_multiple_color_targets_before_realization() {
+    let target = || {
+        GpuColorTargetStateDescriptor::new(
+            GpuTextureFormat::Rgba8Unorm,
+            Some(dual_source_blend()),
+            GpuColorWriteMask::ALL,
+        )
+        .unwrap()
+    };
+    let error = GpuRenderPipelineStateDescriptor::new(
+        GpuVertexInputStateDescriptor::new([]).unwrap(),
+        Some(GpuFragmentOutputStateDescriptor::new([target(), target()])),
+        GpuPrimitiveStateDescriptor::default(),
+        None,
+        GpuMultisampleStateDescriptor::default(),
+    )
+    .expect_err("dual-source MRT must reject structurally");
+    assert!(
+        error
+            .detail()
+            .is_some_and(|detail| detail.contains("dual_source_color_target_count"))
+    );
+}
