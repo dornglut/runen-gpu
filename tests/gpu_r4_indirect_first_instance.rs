@@ -458,6 +458,11 @@ pub(crate) async fn run_browser_indirect_first_instance() -> u32 {
     if outcome.exercised {
         mask |= NONZERO_EXERCISED;
     }
+    if outcome.supported {
+        println!("IndirectFirstInstance BrowserWebGpu: EXERCISED");
+    } else {
+        println!("IndirectFirstInstance BrowserWebGpu: UNSUPPORTED");
+    }
     mask
 }
 
