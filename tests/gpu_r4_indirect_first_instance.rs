@@ -328,6 +328,96 @@ fn graph(mode: GpuIndirectFirstInstanceMode) -> (GpuPreparedWorkGraph, GpuReadba
     )
 }
 
+fn render_only_operation(
+    mode: GpuIndirectFirstInstanceMode,
+    suffix: &str,
+) -> GpuRenderOperation {
+    let mut scope = GpuResourceScope::new();
+    let prepared = PreparedGpuData::<TransferData>::ordinary_pod_transfer(
+        format!("R4 mixed-mode {suffix} args"),
+        &[DrawIndirectArgs::zeroed()],
+    )
+    .unwrap();
+    let args_label = label(format!("R4 mixed-mode {suffix} args"));
+    let args = scope
+        .buffer(
+            GpuBufferDescriptor::new(
+                common(format!("R4 mixed-mode {suffix} args")),
+                prepared.layout().byte_len(),
+                GpuBufferUsages::new(
+                    &args_label,
+                    [
+                        GpuBufferUsage::Indirect,
+                        GpuBufferUsage::CopyDestination,
+                    ],
+                )
+                .unwrap(),
+                GpuBufferInitialization::Prepared(prepared),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+
+    let target_label = label(format!("R4 mixed-mode {suffix} target"));
+    let target = scope
+        .texture(
+            GpuTextureDescriptor::new(
+                common(format!("R4 mixed-mode {suffix} target")),
+                GpuTextureDimension::D2,
+                GpuTextureExtent::new(
+                    &target_label,
+                    GpuTextureDimension::D2,
+                    WIDTH,
+                    HEIGHT,
+                    1,
+                )
+                .unwrap(),
+                1,
+                1,
+                GpuTextureFormat::Rgba8Unorm,
+                GpuTextureUsages::new(&target_label, [GpuTextureUsage::ColorAttachment]).unwrap(),
+                GpuTextureInitialization::Uninitialized,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+    let view = scope
+        .texture_view(
+            GpuTextureViewDescriptor::new(
+                common(format!("R4 mixed-mode {suffix} target view")),
+                &target,
+                None,
+                GpuTextureViewDimension::D2,
+                GpuTextureSubresourceRange::whole(&target).unwrap(),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+
+    let (_, render_pipeline) = pipelines(mode);
+    let render_bindings = GpuRuntimeBindingSet::new(render_pipeline.layout().clone(), []).unwrap();
+    let draw = GpuRenderDraw::new(
+        render_pipeline,
+        render_bindings,
+        [],
+        None,
+        GpuDrawIntent::indirect(&args, GpuBufferRange::whole(&args).unwrap(), false, mode).unwrap(),
+        GpuViewport::new(0.0, 0.0, WIDTH as f32, HEIGHT as f32, 0.0, 1.0).unwrap(),
+        GpuScissorRect::new(0, 0, WIDTH, HEIGHT).unwrap(),
+        GpuBlendConstant::new(0.0, 0.0, 0.0, 0.0).unwrap(),
+        0,
+    )
+    .unwrap();
+    let attachment = GpuRenderColorAttachment::new(
+        view,
+        GpuColorAttachmentLoad::Clear(GpuColorClearValue::new(0.0, 0.0, 0.0, 1.0).unwrap()),
+        GpuAttachmentStore::Store,
+        None,
+    )
+    .unwrap();
+    GpuRenderOperation::new([attachment], None, [draw], None).unwrap()
+}
+
 fn pixel_at(bytes: &GpuReadbackBytes, x: u32, y: u32) -> [u8; 4] {
     let offset = usize::try_from((y * WIDTH + x) * 4).unwrap();
     bytes.as_bytes()[offset..offset + 4].try_into().unwrap()
@@ -500,6 +590,28 @@ fn indirect_first_instance_requirements_are_exact_and_conflicting_modes_reject()
         ))
     );
     assert!(zero.requirements().merge(nonzero.requirements()).is_err());
+}
+
+#[test]
+fn mixed_indirect_first_instance_modes_reject_during_graph_requirement_merge() {
+    let zero = render_only_operation(GpuIndirectFirstInstanceMode::ZeroOnly, "zero");
+    let nonzero =
+        render_only_operation(GpuIndirectFirstInstanceMode::MayBeNonZero, "nonzero");
+    let fragment = GpuWorkFragment::build("R4 mixed indirect first-instance modes", |builder| {
+        builder.operation("zero-only indirect draw", zero)?;
+        builder.operation("may-be-nonzero indirect draw", nonzero)?;
+        Ok(())
+    })
+    .unwrap();
+    let error = GpuPreparedWorkGraph::prepare(
+        label("R4 mixed indirect first-instance mode graph"),
+        [fragment],
+    )
+    .expect_err("mixed first-instance modes must conflict at graph requirement aggregation");
+    assert_eq!(
+        error.cause(),
+        GpuWorkGraphCause::MechanicalCapabilityContradiction
+    );
 }
 
 #[cfg(not(target_arch = "wasm32"))]
