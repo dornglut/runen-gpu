@@ -115,7 +115,8 @@ const done = arguments[arguments.length - 1];
         typeof wasm.runengpu_browser_depth24plus_stencil8_exercised !== "function" ||
         typeof wasm.runengpu_browser_depth24plus_stencil8_sampled_exercised !== "function" ||
         typeof wasm.runengpu_browser_depth32float_stencil8_exercised !== "function" ||
-        typeof wasm.runengpu_browser_depth32float_stencil8_sampled_exercised !== "function") {
+        typeof wasm.runengpu_browser_depth32float_stencil8_sampled_exercised !== "function" ||
+        typeof wasm.runengpu_browser_occlusion_query_result_mask !== "function") {
       throw new Error("RunenGPU browser proof control exports are absent");
     }
     wasm.runengpu_browser_start();
@@ -150,6 +151,7 @@ const done = arguments[arguments.length - 1];
           depth24PlusStencil8SampledExercised: wasm.runengpu_browser_depth24plus_stencil8_sampled_exercised(),
           depth32FloatStencil8Exercised: wasm.runengpu_browser_depth32float_stencil8_exercised(),
           depth32FloatStencil8SampledExercised: wasm.runengpu_browser_depth32float_stencil8_sampled_exercised(),
+          occlusionQueryResultMask: wasm.runengpu_browser_occlusion_query_result_mask(),
         });
         return;
       }
@@ -711,6 +713,17 @@ def main() -> int:
             raise RuntimeError(
                 f"actual-browser RunenGPU proof failed: {value.get('error', value)!s}"
             )
+        occlusion_query_mask = value.get("occlusionQueryResultMask")
+        if occlusion_query_mask != 0b11:
+            raise RuntimeError(
+                "actual-browser occlusion query proof failed: "
+                f"result_mask={occlusion_query_mask!r} "
+                "(bit 0 = visible result nonzero, bit 1 = empty result zero)"
+            )
+        print(
+            "RunenGPU actual-browser occlusion query: EXERCISED "
+            f"(result_mask={occlusion_query_mask})"
+        )
         report_format_family(
             value,
             "rgba16Mask",
