@@ -1027,8 +1027,7 @@ fn occlusion_scope_initializes_exact_query_slot_for_resolve() {
         None,
     )
     .unwrap();
-    let resolve =
-        GpuQueryResolveOperation::new(&queries, written_range, &destination, 0).unwrap();
+    let resolve = GpuQueryResolveOperation::new(&queries, written_range, &destination, 0).unwrap();
 
     let mut fragment = builder("written occlusion query");
     for resource in [
