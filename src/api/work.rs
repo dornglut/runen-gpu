@@ -33,7 +33,10 @@ pub use copy::{
 };
 pub use draw::{GpuDrawIntent, GpuDrawRange, GpuIndirectFirstInstanceMode};
 pub use present::GpuPresentOperation;
-pub use query::{GpuQueryResolveOperation, GpuTimestampMarkerOperation, GpuTimestampWrites};
+pub use query::{
+    GpuOcclusionQueryScope, GpuQueryResolveOperation, GpuTimestampMarkerOperation,
+    GpuTimestampWrites,
+};
 
 fn mip_extent(texture: &GpuTextureHandle, mip_level: u32) -> (u32, u32, u32) {
     let descriptor = texture.descriptor();
