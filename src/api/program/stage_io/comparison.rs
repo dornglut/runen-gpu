@@ -1,7 +1,7 @@
 use super::super::contract_diagnostics::{GpuProgramContractCause, GpuProgramContractError};
 use super::super::entry_point::GpuEntryPointName;
 use super::{
-    GpuExpectedFragmentOutputSignature, GpuExpectedVertexInputSignature,
+    GpuExpectedFragmentOutputSignature, GpuExpectedVertexInputSignature, GpuFragmentOutputLocation,
     GpuObservedFragmentOutputSignature, GpuObservedVertexInputSignature, GpuShaderIoLocation,
 };
 
@@ -14,7 +14,7 @@ pub(crate) fn compare_vertex_input_signatures(
         expected.entry_point(),
         observed.entry_point(),
     )?;
-    compare_locations("vertex input", expected.locations(), observed.locations())
+    compare_vertex_locations("vertex input", expected.locations(), observed.locations())
 }
 
 pub(crate) fn compare_fragment_output_signatures(
@@ -26,11 +26,7 @@ pub(crate) fn compare_fragment_output_signatures(
         expected.entry_point(),
         observed.entry_point(),
     )?;
-    compare_locations(
-        "fragment output",
-        expected.locations(),
-        observed.locations(),
-    )
+    compare_fragment_locations(expected.locations(), observed.locations())
 }
 
 fn compare_entry_points(
@@ -49,7 +45,7 @@ fn compare_entry_points(
     ))
 }
 
-fn compare_locations<'a>(
+fn compare_vertex_locations<'a>(
     role: &'static str,
     expected: impl Iterator<Item = &'a GpuShaderIoLocation>,
     observed: impl Iterator<Item = &'a GpuShaderIoLocation>,
@@ -114,6 +110,23 @@ fn compare_locations<'a>(
             }
         }
     }
+}
+
+fn compare_fragment_locations<'a>(
+    expected: impl Iterator<Item = &'a GpuFragmentOutputLocation>,
+    observed: impl Iterator<Item = &'a GpuFragmentOutputLocation>,
+) -> Result<(), GpuProgramContractError> {
+    let expected = expected.copied().collect::<Vec<_>>();
+    let observed = observed.copied().collect::<Vec<_>>();
+    if expected == observed {
+        return Ok(());
+    }
+    Err(GpuProgramContractError::invalid(
+        "compare GPU shader-stage IO signatures",
+        format!("fragment output expected={expected:?} observed={observed:?}"),
+        GpuProgramContractCause::PipelineStageIoMismatch,
+        "make fragment-output locations, blend-source identities, scalar classes, and vector widths agree exactly",
+    ))
 }
 
 fn mismatch(role: &'static str, location: u32, reason: &'static str) -> GpuProgramContractError {
