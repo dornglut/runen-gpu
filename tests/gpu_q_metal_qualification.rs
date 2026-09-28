@@ -13,6 +13,8 @@ mod retained_blend;
 mod retained_depth_bias;
 #[path = "gpu_r2_depth_clip_control.rs"]
 mod retained_depth_clip_control;
+#[path = "gpu_r4_indirect_first_instance.rs"]
+mod retained_indirect_first_instance;
 #[path = "gpu_fixed_binding_array/mod.rs"]
 mod retained_fixed_binding_array;
 #[path = "gpu_compute_generated_indirect_native.rs"]
@@ -536,6 +538,16 @@ fn metal_qualification_records_exact_public_api_evidence() {
         depth_clip.supported && depth_clip.exercised,
         "qualified Metal adapter advertises DepthClipControl and must execute the public oracle"
     );
+    pollster::block_on(retained_indirect_first_instance::run_case(
+        &context,
+        GpuIndirectFirstInstanceMode::ZeroOnly,
+    ));
+    let indirect_first_instance =
+        pollster::block_on(retained_indirect_first_instance::run_on_adapter(
+            GpuBackendFamily::Metal,
+            None,
+            context.adapter_facts(),
+        ));
     retained_sampler_anisotropy::realize_anisotropic_sampler(&context);
     let (transient_graph, transient_readback_id) = retained_transient_attachment::graph();
     let transient_prepared =
@@ -638,6 +650,8 @@ fn metal_qualification_records_exact_public_api_evidence() {
             "blend_state_mask": blend_mask,
             "depth_bias_baseline_mask": depth_bias_mask,
             "depth_clip_control": "EXERCISED",
+            "indirect_first_instance":
+                proof_disposition(indirect_first_instance.exercised),
             "sampler_anisotropy": "EXERCISED",
             "transient_attachment": "EXERCISED",
             "transient_depth": "EXERCISED",
