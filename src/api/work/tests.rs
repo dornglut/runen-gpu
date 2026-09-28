@@ -736,6 +736,21 @@ fn occlusion_scope_and_resolve_requirements_are_typed() {
         occlusion_queries.diagnostic_identity()
     );
 
+    let duplicate_first = GpuOcclusionQueryScope::new(&occlusion_queries, 0, []).unwrap();
+    let duplicate_second = GpuOcclusionQueryScope::new(&occlusion_queries, 0, []).unwrap();
+    assert!(
+        GpuRenderOperation::new(
+            [load.clone()],
+            None,
+            [
+                GpuRenderPassItem::OcclusionQuery(duplicate_first),
+                GpuRenderPassItem::OcclusionQuery(duplicate_second),
+            ],
+            None,
+        )
+        .is_err()
+    );
+
     let first = GpuOcclusionQueryScope::new(&occlusion_queries, 0, []).unwrap();
     let second = GpuOcclusionQueryScope::new(&other_occlusion_queries, 1, []).unwrap();
     assert!(
