@@ -90,6 +90,7 @@ mod browser {
         static DEPTH24PLUS_STENCIL8_SAMPLED_EXERCISED: RefCell<u32> = RefCell::new(0);
         static DEPTH32FLOAT_STENCIL8_EXERCISED: RefCell<u32> = RefCell::new(0);
         static DEPTH32FLOAT_STENCIL8_SAMPLED_EXERCISED: RefCell<u32> = RefCell::new(0);
+        static OCCLUSION_QUERY_RESULT_MASK: RefCell<u32> = RefCell::new(0);
     }
 
     struct YieldOnce(bool);
@@ -2260,7 +2261,8 @@ fn cs_main() {
             1,
             "actual-browser zero-first-instance baseline must execute"
         );
-        retained_occlusion_query::run_browser_occlusion_query().await;
+        let occlusion_query_mask = retained_occlusion_query::run_browser_occlusion_query().await;
+        OCCLUSION_QUERY_RESULT_MASK.with(|slot| *slot.borrow_mut() = occlusion_query_mask);
         let sampler_anisotropy =
             retained_sampler_anisotropy::run_browser_sampler_anisotropy().await;
         SAMPLER_ANISOTROPY_EXERCISED.with(|slot| *slot.borrow_mut() = sampler_anisotropy);
@@ -2435,6 +2437,11 @@ fn cs_main() {
     #[unsafe(no_mangle)]
     pub extern "C" fn runengpu_browser_depth32float_stencil8_sampled_exercised() -> u32 {
         DEPTH32FLOAT_STENCIL8_SAMPLED_EXERCISED.with(|value| *value.borrow())
+    }
+
+    #[unsafe(no_mangle)]
+    pub extern "C" fn runengpu_browser_occlusion_query_result_mask() -> u32 {
+        OCCLUSION_QUERY_RESULT_MASK.with(|value| *value.borrow())
     }
 }
 
