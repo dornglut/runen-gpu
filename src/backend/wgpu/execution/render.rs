@@ -12,8 +12,9 @@ use super::{
 use crate::{
     GpuAttachmentStore, GpuColorAttachmentLoad, GpuContext, GpuDepthAttachmentLoad,
     GpuDepthAttachmentState, GpuDepthStencilAccess, GpuDrawIntent, GpuIndexFormat,
-    GpuRealizedBuffer, GpuRealizedRenderPipeline, GpuRealizedTextureView, GpuRenderDraw,
-    GpuRenderOperation, GpuStencilAttachmentLoad, GpuStencilAttachmentState, GpuSubmissionFailure,
+    GpuRealizedBuffer, GpuRealizedQuerySet, GpuRealizedRenderPipeline, GpuRealizedTextureView,
+    GpuRenderDraw, GpuRenderOperation, GpuRenderPassItem, GpuStencilAttachmentLoad,
+    GpuStencilAttachmentState, GpuSubmissionFailure,
     GpuSubmissionPreparationError, GpuSubmissionPreparationErrorKind, GpuWorkResourceId,
 };
 use std::collections::BTreeMap;
@@ -27,7 +28,16 @@ pub(super) struct PreparedRenderOperation {
     color_attachments: Vec<PreparedRenderColorAttachment>,
     depth_stencil_attachment: Option<PreparedRenderDepthStencilAttachment>,
     draws: Vec<PreparedRenderDraw>,
+    events: Vec<PreparedRenderPassEvent>,
+    occlusion_query_set: Option<GpuRealizedQuerySet>,
     timestamp_writes: Option<PreparedTimestampWrites>,
+}
+
+#[derive(Debug, Clone)]
+enum PreparedRenderPassEvent {
+    Draw(usize),
+    BeginOcclusion(u32),
+    EndOcclusion,
 }
 
 impl PreparedRenderOperation {
@@ -179,15 +189,38 @@ pub(super) async fn prepare_render_operation(
         })
         .transpose()?;
 
-    let mut draws = Vec::with_capacity(render.draws().len());
-    for draw in render.draws() {
-        draws.push(prepare_render_draw(context, &mut buffer_cache, draw).await?);
+    let occlusion_query_set = render
+        .occlusion_query_set()
+        .map(|query_set| realized_query_set(context, &mut query_set_cache, query_set))
+        .transpose()?;
+
+    let mut draws = Vec::new();
+    let mut events = Vec::new();
+    for item in render.items() {
+        match item {
+            GpuRenderPassItem::Draw(draw) => {
+                let index = draws.len();
+                draws.push(prepare_render_draw(context, &mut buffer_cache, draw).await?);
+                events.push(PreparedRenderPassEvent::Draw(index));
+            }
+            GpuRenderPassItem::OcclusionQuery(scope) => {
+                events.push(PreparedRenderPassEvent::BeginOcclusion(scope.query_index()));
+                for draw in scope.draws() {
+                    let index = draws.len();
+                    draws.push(prepare_render_draw(context, &mut buffer_cache, draw).await?);
+                    events.push(PreparedRenderPassEvent::Draw(index));
+                }
+                events.push(PreparedRenderPassEvent::EndOcclusion);
+            }
+        }
     }
 
     Ok(PreparedRenderOperation {
         color_attachments,
         depth_stencil_attachment,
         draws,
+        events,
+        occlusion_query_set,
         timestamp_writes,
     })
 }
@@ -380,75 +413,97 @@ pub(super) fn encode_render_operation<'a>(
                     color_attachments: &color_attachments,
                     depth_stencil_attachment,
                     timestamp_writes,
-                    occlusion_query_set: None,
+                    occlusion_query_set: render
+                        .occlusion_query_set
+                        .as_ref()
+                        .map(|query_set| &query_set.record.object),
                     multiview_mask: None,
                 });
 
-                for (draw, pipeline_object) in render.draws.iter().zip(pipeline_objects) {
-                    pass.set_pipeline(pipeline_object);
-                    let realized_groups = draw
-                        .bind_groups
-                        .iter()
-                        .map(|group| &group.realization)
-                        .collect::<Vec<_>>();
-                    backend
-                        .program_binding_realization
-                        .with_execution_bind_groups(&realized_groups, |group_objects| {
-                            for (prepared, object) in
-                                draw.bind_groups.iter().zip(group_objects.iter())
-                            {
-                                pass.set_bind_group(
-                                    prepared.index,
-                                    *object,
-                                    &prepared.dynamic_offsets,
+                for event in &render.events {
+                    match event {
+                        PreparedRenderPassEvent::BeginOcclusion(index) => {
+                            pass.begin_occlusion_query(*index);
+                        }
+                        PreparedRenderPassEvent::EndOcclusion => {
+                            pass.end_occlusion_query();
+                        }
+                        PreparedRenderPassEvent::Draw(index) => {
+                            let draw = &render.draws[*index];
+                            let pipeline_object = pipeline_objects[*index];
+                            pass.set_pipeline(pipeline_object);
+                            let realized_groups = draw
+                                .bind_groups
+                                .iter()
+                                .map(|group| &group.realization)
+                                .collect::<Vec<_>>();
+                            backend
+                                .program_binding_realization
+                                .with_execution_bind_groups(&realized_groups, |group_objects| {
+                                    for (prepared, object) in
+                                        draw.bind_groups.iter().zip(group_objects.iter())
+                                    {
+                                        pass.set_bind_group(
+                                            prepared.index,
+                                            *object,
+                                            &prepared.dynamic_offsets,
+                                        );
+                                    }
+                                })
+                                .map_err(submission_program_binding_failure)?;
+
+                            for vertex in &draw.vertex_buffers {
+                                pass.set_vertex_buffer(
+                                    vertex.slot,
+                                    vertex.buffer.record.object.slice(vertex.offset..vertex.end),
                                 );
                             }
-                        })
-                        .map_err(submission_program_binding_failure)?;
+                            if let Some(index) = &draw.index_buffer {
+                                pass.set_index_buffer(
+                                    index.buffer.record.object.slice(index.offset..index.end),
+                                    match index.format {
+                                        GpuIndexFormat::Uint16 => IndexFormat::Uint16,
+                                        GpuIndexFormat::Uint32 => IndexFormat::Uint32,
+                                    },
+                                );
+                            }
 
-                    for vertex in &draw.vertex_buffers {
-                        pass.set_vertex_buffer(
-                            vertex.slot,
-                            vertex.buffer.record.object.slice(vertex.offset..vertex.end),
-                        );
-                    }
-                    if let Some(index) = &draw.index_buffer {
-                        pass.set_index_buffer(
-                            index.buffer.record.object.slice(index.offset..index.end),
-                            match index.format {
-                                GpuIndexFormat::Uint16 => IndexFormat::Uint16,
-                                GpuIndexFormat::Uint32 => IndexFormat::Uint32,
-                            },
-                        );
-                    }
+                            let [x, y, width, height, min_depth, max_depth] = draw.viewport;
+                            pass.set_viewport(x, y, width, height, min_depth, max_depth);
+                            let [x, y, width, height] = draw.scissor;
+                            pass.set_scissor_rect(x, y, width, height);
+                            let [r, g, b, a] = draw.blend_constant;
+                            pass.set_blend_constant(Color { r, g, b, a });
+                            pass.set_stencil_reference(draw.stencil_reference);
 
-                    let [x, y, width, height, min_depth, max_depth] = draw.viewport;
-                    pass.set_viewport(x, y, width, height, min_depth, max_depth);
-                    let [x, y, width, height] = draw.scissor;
-                    pass.set_scissor_rect(x, y, width, height);
-                    let [r, g, b, a] = draw.blend_constant;
-                    pass.set_blend_constant(Color { r, g, b, a });
-                    pass.set_stencil_reference(draw.stencil_reference);
-
-                    match &draw.draw {
-                        PreparedRenderDrawIntent::Direct {
-                            vertices,
-                            instances,
-                        } => pass.draw(vertices.clone(), instances.clone()),
-                        PreparedRenderDrawIntent::Indexed {
-                            indices,
-                            base_vertex,
-                            instances,
-                        } => pass.draw_indexed(indices.clone(), *base_vertex, instances.clone()),
-                        PreparedRenderDrawIntent::Indirect {
-                            arguments,
-                            offset,
-                            indexed,
-                        } => {
-                            if *indexed {
-                                pass.draw_indexed_indirect(&arguments.record.object, *offset);
-                            } else {
-                                pass.draw_indirect(&arguments.record.object, *offset);
+                            match &draw.draw {
+                                PreparedRenderDrawIntent::Direct {
+                                    vertices,
+                                    instances,
+                                } => pass.draw(vertices.clone(), instances.clone()),
+                                PreparedRenderDrawIntent::Indexed {
+                                    indices,
+                                    base_vertex,
+                                    instances,
+                                } => pass.draw_indexed(
+                                    indices.clone(),
+                                    *base_vertex,
+                                    instances.clone(),
+                                ),
+                                PreparedRenderDrawIntent::Indirect {
+                                    arguments,
+                                    offset,
+                                    indexed,
+                                } => {
+                                    if *indexed {
+                                        pass.draw_indexed_indirect(
+                                            &arguments.record.object,
+                                            *offset,
+                                        );
+                                    } else {
+                                        pass.draw_indirect(&arguments.record.object, *offset);
+                                    }
+                                }
                             }
                         }
                     }
