@@ -214,7 +214,9 @@ fn fs_main() -> @location(0) vec4<f32> {
         assert_eq!(operation.timestamp_writes(), None);
 
         let mut draws = operation.draws();
-        let draw = draws.next().expect("ordinary render must retain exactly one draw");
+        let draw = draws
+            .next()
+            .expect("ordinary render must retain exactly one draw");
         assert!(
             draws.next().is_none(),
             "ordinary render must retain exactly one draw"
