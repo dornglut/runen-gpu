@@ -139,6 +139,9 @@ pub(super) fn normalized_features(
     {
         supported.push(GpuCapabilityFeature::IndirectExecution);
     }
+    if features.contains(Features::INDIRECT_FIRST_INSTANCE) {
+        supported.push(GpuCapabilityFeature::IndirectFirstInstance);
+    }
     if !unknown_flags && flags.contains(DownlevelFlags::DEPTH_BIAS_CLAMP) {
         supported.push(GpuCapabilityFeature::DepthBiasClamp);
     }
@@ -624,6 +627,34 @@ mod tests {
         assert!(
             !storage_texture_without_storage_resource
                 .contains(&GpuCapabilityFeature::StorageTextureBindingArrayNonUniformIndexing)
+        );
+    }
+
+    #[test]
+    fn indirect_first_instance_maps_only_from_the_exact_wgpu_feature() {
+        let absent = normalized_features(
+            Backend::Vulkan,
+            Features::empty(),
+            DownlevelFlags::empty(),
+            false,
+            false,
+        );
+        assert!(!absent.contains(&GpuCapabilityFeature::IndirectFirstInstance));
+
+        let present = normalized_features(
+            Backend::Vulkan,
+            Features::INDIRECT_FIRST_INSTANCE,
+            DownlevelFlags::empty(),
+            false,
+            false,
+        );
+        assert!(present.contains(&GpuCapabilityFeature::IndirectFirstInstance));
+        assert_eq!(
+            present
+                .into_iter()
+                .filter(|feature| *feature == GpuCapabilityFeature::IndirectFirstInstance)
+                .count(),
+            1
         );
     }
 

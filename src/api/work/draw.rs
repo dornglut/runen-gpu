@@ -1,6 +1,7 @@
 use super::super::{
-    GpuBufferAccess, GpuBufferAccessKind, GpuBufferHandle, GpuBufferRange, GpuWorkOperationCause,
-    GpuWorkOperationError,
+    GpuBufferAccess, GpuBufferAccessKind, GpuBufferHandle, GpuBufferRange, GpuCapabilityFeature,
+    GpuCapabilityRequirement, GpuCapabilityRequirementError, GpuCapabilityRequirements,
+    GpuWorkOperationCause, GpuWorkOperationError,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -45,6 +46,12 @@ impl GpuDrawRange {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum GpuIndirectFirstInstanceMode {
+    ZeroOnly,
+    MayBeNonZero,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum GpuDrawIntent {
     Direct {
@@ -60,6 +67,7 @@ pub enum GpuDrawIntent {
         arguments: GpuBufferHandle,
         range: GpuBufferRange,
         indexed: bool,
+        first_instance_mode: GpuIndirectFirstInstanceMode,
     },
 }
 
@@ -83,6 +91,7 @@ impl GpuDrawIntent {
         arguments: &GpuBufferHandle,
         range: GpuBufferRange,
         indexed: bool,
+        first_instance_mode: GpuIndirectFirstInstanceMode,
     ) -> Result<Self, GpuWorkOperationError> {
         let expected_size = if indexed { 20 } else { 16 };
         if !range.offset().is_multiple_of(4) || range.size() != expected_size {
@@ -109,6 +118,7 @@ impl GpuDrawIntent {
             arguments: arguments.clone(),
             range,
             indexed,
+            first_instance_mode,
         })
     }
 
@@ -117,6 +127,42 @@ impl GpuDrawIntent {
             self,
             Self::Indexed { .. } | Self::Indirect { indexed: true, .. }
         )
+    }
+
+    pub const fn indirect_first_instance_mode(&self) -> Option<GpuIndirectFirstInstanceMode> {
+        match self {
+            Self::Indirect {
+                first_instance_mode,
+                ..
+            } => Some(*first_instance_mode),
+            Self::Direct { .. } | Self::Indexed { .. } => None,
+        }
+    }
+
+    pub fn derived_requirements(
+        &self,
+    ) -> Result<GpuCapabilityRequirements, GpuCapabilityRequirementError> {
+        let mut requirements = GpuCapabilityRequirements::new();
+        let Self::Indirect {
+            first_instance_mode,
+            ..
+        } = self
+        else {
+            return Ok(requirements);
+        };
+
+        requirements.insert(GpuCapabilityRequirement::Required(
+            GpuCapabilityFeature::IndirectExecution,
+        ))?;
+        requirements.insert(match first_instance_mode {
+            GpuIndirectFirstInstanceMode::ZeroOnly => {
+                GpuCapabilityRequirement::Disabled(GpuCapabilityFeature::IndirectFirstInstance)
+            }
+            GpuIndirectFirstInstanceMode::MayBeNonZero => {
+                GpuCapabilityRequirement::Required(GpuCapabilityFeature::IndirectFirstInstance)
+            }
+        })?;
+        Ok(requirements)
     }
 
     pub fn derived_access(&self) -> Result<Option<GpuBufferAccess>, GpuWorkOperationError> {

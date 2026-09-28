@@ -17,6 +17,8 @@ mod retained_depth_clip_control;
 mod retained_fixed_binding_array;
 #[path = "gpu_compute_generated_indirect_native.rs"]
 mod retained_indirect;
+#[path = "gpu_r4_indirect_first_instance.rs"]
+mod retained_indirect_first_instance;
 #[path = "gpu_r3_binding_array_non_uniform_indexing/mod.rs"]
 mod retained_non_uniform_binding_array;
 #[path = "gpu_offscreen_indexed_native.rs"]
@@ -34,11 +36,12 @@ mod retained_vertex8;
 #[path = "gpu_r1_vertex_packed_formats.rs"]
 mod retained_vertex_packed;
 
-const FEATURES: [GpuCapabilityFeature; 18] = [
+const FEATURES: [GpuCapabilityFeature; 19] = [
     GpuCapabilityFeature::Compute,
     GpuCapabilityFeature::RenderPipeline,
     GpuCapabilityFeature::Copy,
     GpuCapabilityFeature::IndirectExecution,
+    GpuCapabilityFeature::IndirectFirstInstance,
     GpuCapabilityFeature::StorageTexture,
     GpuCapabilityFeature::TextureBindingArray,
     GpuCapabilityFeature::BufferBindingArray,
@@ -535,6 +538,13 @@ fn metal_qualification_records_exact_public_api_evidence() {
         depth_clip.supported && depth_clip.exercised,
         "qualified Metal adapter advertises DepthClipControl and must execute the public oracle"
     );
+    pollster::block_on(retained_indirect_first_instance::run_case(
+        &context,
+        GpuIndirectFirstInstanceMode::ZeroOnly,
+    ));
+    let indirect_first_instance = pollster::block_on(
+        retained_indirect_first_instance::run_on_adapter(GpuBackendFamily::Metal, None, &context),
+    );
     retained_sampler_anisotropy::realize_anisotropic_sampler(&context);
     let (transient_graph, transient_readback_id) = retained_transient_attachment::graph();
     let transient_prepared =
@@ -595,7 +605,7 @@ fn metal_qualification_records_exact_public_api_evidence() {
     assert_eq!(stats.pending_readbacks(), 0);
 
     let report = json!({
-        "schema_version": 6,
+        "schema_version": 7,
         "qualification_level": mode.report_name(),
         "revision": revision,
         "environment": {
@@ -637,6 +647,8 @@ fn metal_qualification_records_exact_public_api_evidence() {
             "blend_state_mask": blend_mask,
             "depth_bias_baseline_mask": depth_bias_mask,
             "depth_clip_control": "EXERCISED",
+            "indirect_first_instance":
+                proof_disposition(indirect_first_instance.exercised),
             "sampler_anisotropy": "EXERCISED",
             "transient_attachment": "EXERCISED",
             "transient_depth": "EXERCISED",

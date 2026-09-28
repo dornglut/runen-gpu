@@ -31,7 +31,7 @@ pub use copy::{
     GpuBufferRegion, GpuBufferTextureLayout, GpuCopyExtent, GpuCopyOperation, GpuTextureCopyRegion,
     GpuTextureOrigin,
 };
-pub use draw::{GpuDrawIntent, GpuDrawRange};
+pub use draw::{GpuDrawIntent, GpuDrawRange, GpuIndirectFirstInstanceMode};
 pub use present::GpuPresentOperation;
 pub use query::{GpuQueryResolveOperation, GpuTimestampMarkerOperation, GpuTimestampWrites};
 

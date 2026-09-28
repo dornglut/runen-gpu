@@ -195,9 +195,64 @@ fn dispatch_draw_and_indirect_access_are_checked() {
     let mut allocator = allocator();
     let arguments = buffer(&mut allocator, "arguments", 64, [GpuBufferUsage::Indirect]);
     let range = GpuBufferRange::new(&arguments, 0, 16).unwrap();
-    let draw = GpuDrawIntent::indirect(&arguments, range, false).unwrap();
-    assert!(draw.derived_access().unwrap().is_some());
-    assert!(GpuDrawIntent::indirect(&arguments, range, true).is_err());
+    let zero_only = GpuDrawIntent::indirect(
+        &arguments,
+        range,
+        false,
+        GpuIndirectFirstInstanceMode::ZeroOnly,
+    )
+    .unwrap();
+    assert!(zero_only.derived_access().unwrap().is_some());
+    assert_eq!(
+        zero_only
+            .derived_requirements()
+            .unwrap()
+            .get(GpuCapabilityFeature::IndirectExecution),
+        Some(GpuCapabilityRequirement::Required(
+            GpuCapabilityFeature::IndirectExecution
+        ))
+    );
+    assert_eq!(
+        zero_only
+            .derived_requirements()
+            .unwrap()
+            .get(GpuCapabilityFeature::IndirectFirstInstance),
+        Some(GpuCapabilityRequirement::Disabled(
+            GpuCapabilityFeature::IndirectFirstInstance
+        ))
+    );
+    let may_be_nonzero = GpuDrawIntent::indirect(
+        &arguments,
+        range,
+        false,
+        GpuIndirectFirstInstanceMode::MayBeNonZero,
+    )
+    .unwrap();
+    assert_eq!(
+        may_be_nonzero
+            .derived_requirements()
+            .unwrap()
+            .get(GpuCapabilityFeature::IndirectFirstInstance),
+        Some(GpuCapabilityRequirement::Required(
+            GpuCapabilityFeature::IndirectFirstInstance
+        ))
+    );
+    assert!(
+        zero_only
+            .derived_requirements()
+            .unwrap()
+            .merge(&may_be_nonzero.derived_requirements().unwrap())
+            .is_err()
+    );
+    assert!(
+        GpuDrawIntent::indirect(
+            &arguments,
+            range,
+            true,
+            GpuIndirectFirstInstanceMode::ZeroOnly,
+        )
+        .is_err()
+    );
     let elements = GpuDrawRange::new(3, 9).unwrap();
     let instances = GpuDrawRange::new(0, 2).unwrap();
     assert!(!GpuDrawIntent::direct(elements, instances).is_indexed());

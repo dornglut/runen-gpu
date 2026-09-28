@@ -298,7 +298,13 @@ fn render_operation(
         bindings,
         [vertex_binding],
         None,
-        GpuDrawIntent::indirect(args, GpuBufferRange::whole(args).unwrap(), false).unwrap(),
+        GpuDrawIntent::indirect(
+            args,
+            GpuBufferRange::whole(args).unwrap(),
+            false,
+            GpuIndirectFirstInstanceMode::ZeroOnly,
+        )
+        .unwrap(),
         GpuViewport::new(0.0, 0.0, WIDTH as f32, HEIGHT as f32, 0.0, 1.0).unwrap(),
         GpuScissorRect::new(0, 0, WIDTH, HEIGHT).unwrap(),
         GpuBlendConstant::new(0.0, 0.0, 0.0, 0.0).unwrap(),
@@ -408,6 +414,15 @@ pub(crate) fn assert_graph_contract(
     ] {
         assert_required(graph.requirements(), feature);
     }
+    assert_eq!(
+        graph
+            .requirements()
+            .get(GpuCapabilityFeature::IndirectFirstInstance),
+        Some(GpuCapabilityRequirement::Disabled(
+            GpuCapabilityFeature::IndirectFirstInstance
+        )),
+        "portable compute-generated indirect proof must keep indirect first-instance disabled"
+    );
 
     let compute = graph
         .nodes()

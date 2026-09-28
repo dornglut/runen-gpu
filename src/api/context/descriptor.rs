@@ -519,6 +519,7 @@ pub(crate) const fn preferred_degradation_is_valid(
         | GpuCapabilityFeature::RenderPipeline
         | GpuCapabilityFeature::Copy
         | GpuCapabilityFeature::IndirectExecution
+        | GpuCapabilityFeature::IndirectFirstInstance
         | GpuCapabilityFeature::StorageTexture
         | GpuCapabilityFeature::TextureBindingArray
         | GpuCapabilityFeature::BufferBindingArray
@@ -556,11 +557,12 @@ pub(crate) fn alignment_value(facts: GpuAlignmentFacts, kind: GpuAlignmentKind) 
 mod tests {
     use super::*;
 
-    const FEATURES: [GpuCapabilityFeature; 18] = [
+    const FEATURES: [GpuCapabilityFeature; 19] = [
         GpuCapabilityFeature::Compute,
         GpuCapabilityFeature::RenderPipeline,
         GpuCapabilityFeature::Copy,
         GpuCapabilityFeature::IndirectExecution,
+        GpuCapabilityFeature::IndirectFirstInstance,
         GpuCapabilityFeature::StorageTexture,
         GpuCapabilityFeature::TextureBindingArray,
         GpuCapabilityFeature::BufferBindingArray,

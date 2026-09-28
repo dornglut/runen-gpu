@@ -176,7 +176,7 @@ insufficient.
 Goal: cover mature generic GPU-driven execution without adding renderer meaning.
 
 - occlusion queries alongside existing timestamp query authority;
-- standardized indirect-first-instance support;
+- normalized indirect-first-instance semantics are current: portable indirect draws retain an explicit zero-only contract while capability-gated draws that may consume a nonzero first instance require the normalized optional feature;
 - multiview and multisampled-array/layered execution as advanced capability-gated
   contracts after texture-view correctness is established;
 - keep multi-draw-count deferred while its backend/platform scope remains narrow;
@@ -244,7 +244,7 @@ This is intentionally family-level rather than a mirror of WGPU's feature list.
 | Non-uniform sampled-texture/storage-resource indexing | `ADVANCED` | `CURRENT` — fixed fully populated texture/sampler, storage-buffer, and storage-texture families; uniform-buffer and sparse/partial forms remain separately deferred |
 | Partially-bound/sparse binding arrays | `ADVANCED` | `DEFER` until target support and occupancy semantics justify stable authority |
 | Occlusion queries | `CORE` | `PLAN` — R4 |
-| Indirect-first-instance | `ADVANCED` | `PLAN` — R4 |
+| Indirect-first-instance | `ADVANCED` | `CURRENT` — explicit zero-only / capability-gated may-be-nonzero indirect-draw semantics |
 | Multiview and multisampled arrays | `ADVANCED` | `PLAN` — R4 after view/resource foundations |
 | Multi-draw-count and pipeline statistics | `ADVANCED` | `DEFER` while backend/platform scope remains narrow |
 | Explicit surface color spaces and wide-gamut/HDR physical presentation | `ADVANCED` | `PLAN` — R5 |

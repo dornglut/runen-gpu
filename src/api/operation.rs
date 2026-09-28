@@ -1,9 +1,8 @@
 use super::work::{
     GpuBufferTextureLayout, GpuClearOperation, GpuColorAttachmentLoad, GpuComputeOperation,
-    GpuCopyOperation, GpuDepthAttachmentLoad, GpuDrawIntent, GpuPresentOperation,
-    GpuQueryResolveOperation, GpuRenderColorAttachment, GpuRenderDepthStencilAttachment,
-    GpuStencilAttachmentLoad, GpuTextureCopyRegion, GpuTimestampMarkerOperation,
-    GpuTimestampWrites,
+    GpuCopyOperation, GpuDepthAttachmentLoad, GpuPresentOperation, GpuQueryResolveOperation,
+    GpuRenderColorAttachment, GpuRenderDepthStencilAttachment, GpuStencilAttachmentLoad,
+    GpuTextureCopyRegion, GpuTimestampMarkerOperation, GpuTimestampWrites,
 };
 use super::{
     GpuBufferAccess, GpuBufferAccessKind, GpuBufferRange, GpuCapabilityFeature,
@@ -380,11 +379,7 @@ impl GpuWorkOperation {
             Self::Render(operation) => {
                 for draw in operation.draws() {
                     requirements = requirements.merge(draw.requirements())?;
-                    if matches!(draw.draw(), GpuDrawIntent::Indirect { .. }) {
-                        requirements.insert(GpuCapabilityRequirement::Required(
-                            GpuCapabilityFeature::IndirectExecution,
-                        ))?;
-                    }
+                    requirements = requirements.merge(&draw.draw().derived_requirements()?)?;
                 }
                 if operation.depth_stencil_attachment().is_some() {
                     requirements.insert(GpuCapabilityRequirement::Required(
