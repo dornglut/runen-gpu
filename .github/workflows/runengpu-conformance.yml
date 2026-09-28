@@ -290,6 +290,13 @@ jobs:
           set -euo pipefail
           cargo +stable test --test gpu_r4_indirect_first_instance --locked -- --ignored --nocapture
 
+      - name: Run occlusion query qualification
+        env:
+          RUST_BACKTRACE: '1'
+        run: |
+          set -euo pipefail
+          cargo +stable test --test gpu_r4_occlusion_query --locked -- --ignored --nocapture
+
       - name: Run persistent reaction-diffusion sequence proof
         env:
           RUST_BACKTRACE: '1'
