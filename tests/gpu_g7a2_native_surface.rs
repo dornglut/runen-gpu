@@ -87,7 +87,7 @@ fn clear_and_present_graph(image: &GpuAcquiredSurfaceImage) -> GpuPreparedWorkGr
     let render = GpuRenderOperation::new(
         [attachment],
         None,
-        std::iter::empty::<GpuRenderDraw>(),
+        std::iter::empty::<GpuRenderPassItem>(),
         None,
     )
     .unwrap();
