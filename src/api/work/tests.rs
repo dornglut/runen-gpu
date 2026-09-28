@@ -1,7 +1,8 @@
 use super::super::operation::{GpuRenderOperation, GpuRenderPassItem, GpuWorkOperation};
 use super::*;
 use crate::{
-    GpuBufferDescriptor, GpuBufferInitialization, GpuBufferUsage, GpuBufferUsages, GpuMemoryIntent,
+    GpuAccessCause, GpuBufferDescriptor, GpuBufferInitialization, GpuBufferUsage, GpuBufferUsages,
+    GpuMemoryIntent,
     GpuQuerySetDescriptor, GpuReconstruction, GpuResourceCommon, GpuResourceLabel,
     GpuResourceLifetime, GpuResourceProvenance, GpuTextureDescriptor, GpuTextureExtent,
     GpuTextureInitialization, GpuTextureUsage, GpuTextureUsages, GpuTextureViewDescriptor,
@@ -658,6 +659,29 @@ fn occlusion_scope_and_resolve_requirements_are_typed() {
 
     assert!(GpuOcclusionQueryScope::new(&timestamp_queries, 0, []).is_err());
     assert!(GpuOcclusionQueryScope::new(&occlusion_queries, 2, []).is_err());
+
+    for (query_set, kind) in [
+        (&timestamp_queries, GpuQueryAccessKind::WriteOcclusion),
+        (&occlusion_queries, GpuQueryAccessKind::WriteTimestamp),
+    ] {
+        let error = GpuQueryAccess::new(
+            query_set,
+            GpuQueryRange::new(query_set, 0, 1).unwrap(),
+            kind,
+        )
+        .unwrap_err();
+        assert_eq!(error.cause(), GpuAccessCause::InvalidDescriptorUsage);
+    }
+    let multi_slot_write = GpuQueryAccess::new(
+        &occlusion_queries,
+        GpuQueryRange::whole(&occlusion_queries).unwrap(),
+        GpuQueryAccessKind::WriteOcclusion,
+    )
+    .unwrap_err();
+    assert_eq!(
+        multi_slot_write.cause(),
+        GpuAccessCause::InvalidDescriptorUsage
+    );
 
     let scope = GpuOcclusionQueryScope::new(&occlusion_queries, 1, []).unwrap();
     assert_eq!(scope.query_index(), 1);
