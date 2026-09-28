@@ -213,7 +213,12 @@ fn fs_main() -> @location(0) vec4<f32> {
         assert_eq!(operation.depth_stencil_attachment(), None);
         assert_eq!(operation.timestamp_writes(), None);
 
-        let draw = &operation.draws()[0];
+        let mut draws = operation.draws();
+        let draw = draws.next().expect("ordinary render must retain exactly one draw");
+        assert!(
+            draws.next().is_none(),
+            "ordinary render must retain exactly one draw"
+        );
         assert_eq!(draw.pipeline(), &pipeline);
         assert!(draw.vertex_buffers().is_empty());
         assert!(draw.index_buffer().is_none());
