@@ -479,7 +479,6 @@ fn uniform_buffer_non_uniform_indexing_is_explicitly_deferred() {
     );
 }
 
-
 const DUAL_SOURCE_WGSL: &str = r#"
 enable dual_source_blending;
 
@@ -639,10 +638,7 @@ fn malformed_wgsl_remains_canonical_wgsl_invalid_across_optional_profiles() {
     )
     .expect_err("syntax-invalid WGSL must not become valid under a broader capability profile");
 
-    assert_eq!(
-        error.cause(),
-        GpuProgramContractCause::CanonicalWgslInvalid
-    );
+    assert_eq!(error.cause(), GpuProgramContractCause::CanonicalWgslInvalid);
 }
 
 #[test]
@@ -677,10 +673,7 @@ fn dual_source_pipeline_derives_capability_and_requires_exact_shader_parity() {
     .unwrap();
     let ordinary_error = GpuRenderPipelineDescriptor::new(
         ordinary_program,
-        GpuRenderEntryPoints::new(
-            entry_point("ordinary_vs"),
-            Some(entry_point("ordinary_fs")),
-        ),
+        GpuRenderEntryPoints::new(entry_point("ordinary_vs"), Some(entry_point("ordinary_fs"))),
         render_state_with_blend(Some(dual_source_blend())),
         GpuPipelineConfiguration::default(),
     )
@@ -704,7 +697,9 @@ fn dual_source_pipeline_derives_capability_and_requires_exact_shader_parity() {
         render_state_with_blend(None),
         GpuPipelineConfiguration::default(),
     )
-    .expect_err("dual-source output without Src1 blend consumption must reject under strict parity");
+    .expect_err(
+        "dual-source output without Src1 blend consumption must reject under strict parity",
+    );
     assert_eq!(
         dual_error.cause(),
         GpuProgramContractCause::PipelineStageIoMismatch
