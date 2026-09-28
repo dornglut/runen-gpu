@@ -149,9 +149,9 @@ forcing callers to know backend feature bits.
 - integrate optional float/filter/blend and shader built-in requirements with
   existing format/capability authority rather than creating redundant policy;
 - preserve truthful fixed binding-array admission;
-- plan normalized non-uniform sampled-texture and storage-resource indexing as an
-  advanced capability-gated path when source requirement discovery, admission,
-  limits, and focused proof are decision-complete;
+- provide normalized non-uniform sampled-texture and storage-resource indexing as an
+  advanced capability-gated path with compiler-derived source requirements, exact
+  admission, fixed-array prerequisite/limit authority, and focused retained proof;
 - keep large storage buffers as a valid scalable object/material-data baseline;
   buffer binding arrays are not a prerequisite for that model;
 - keep partially-bound or sparse binding arrays deferred until their target
@@ -237,7 +237,7 @@ This is intentionally family-level rather than a mirror of WGPU's feature list.
 | Transient attachment content semantics | `ADVANCED` | `PLAN` — R1/R2 boundary; contract investigation precedes delivery |
 | WGSL `f16` and mature standardized optional shader features | `ADVANCED` | `PLAN` — R3 |
 | Fixed binding arrays | `ADVANCED` | `CURRENT` |
-| Non-uniform sampled-texture/storage-resource indexing | `ADVANCED` | `PLAN` — R3, capability-gated native-generic path |
+| Non-uniform sampled-texture/storage-resource indexing | `ADVANCED` | `CURRENT` — R3, capability-gated native-generic path |
 | Partially-bound/sparse binding arrays | `ADVANCED` | `DEFER` until target support and occupancy semantics justify stable authority |
 | Occlusion queries | `CORE` | `PLAN` — R4 |
 | Indirect-first-instance | `ADVANCED` | `PLAN` — R4 |
