@@ -662,6 +662,7 @@ fn is_declared_extension(feature: GpuCapabilityFeature) -> bool {
         GpuCapabilityFeature::TimestampQuery
             | GpuCapabilityFeature::StorageTexture
             | GpuCapabilityFeature::IndirectExecution
+            | GpuCapabilityFeature::IndirectFirstInstance
             | GpuCapabilityFeature::TextureBindingArray
             | GpuCapabilityFeature::BufferBindingArray
             | GpuCapabilityFeature::StorageResourceBindingArray
