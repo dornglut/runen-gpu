@@ -160,32 +160,6 @@ pub(super) fn lower_texture(
             "texture extent exceeds an admitted or created-device dimension or array-layer limit",
         ));
     }
-    if descriptor.dimension() != GpuTextureDimension::D2
-        && (descriptor.format().is_depth() || descriptor.format().is_stencil())
-    {
-        return Err(incompatible(
-            identity,
-            "the private backend supports normalized depth/stencil textures only in two dimensions",
-        ));
-    }
-    if descriptor.dimension() == GpuTextureDimension::D1
-        && native_usage.contains(TextureUsages::RENDER_ATTACHMENT)
-    {
-        return Err(incompatible(
-            identity,
-            "one-dimensional textures cannot carry render-attachment usage",
-        ));
-    }
-    if descriptor.sample_count() > 1
-        && (!native_usage.contains(TextureUsages::RENDER_ATTACHMENT)
-            || extent.depth_or_layers() != 1)
-    {
-        return Err(incompatible(
-            identity,
-            "multisampled textures require render-attachment usage and one array layer",
-        ));
-    }
-
     let format_features = device_format_features(&context.backend, native_format);
     if !format_features.allowed_usages.contains(native_usage) {
         return Err(incompatible(

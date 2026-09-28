@@ -899,6 +899,25 @@ impl GpuTextureDescriptor {
                 ));
             }
         }
+        let has_attachment_usage = usages.contains(GpuTextureUsage::ColorAttachment)
+            || usages.contains(GpuTextureUsage::DepthStencilAttachment);
+        if (format.is_depth() || format.is_stencil()) && dimension != GpuTextureDimension::D2 {
+            return Err(GpuResourceDescriptorError::invalid(
+                "construct GPU texture descriptor",
+                label,
+                GpuResourceDescriptorCause::InvalidExtent,
+                "use two-dimensional textures for normalized depth/stencil formats",
+            ));
+        }
+        if dimension == GpuTextureDimension::D1 && has_attachment_usage {
+            return Err(GpuResourceDescriptorError::invalid(
+                "construct GPU texture descriptor",
+                label,
+                GpuResourceDescriptorCause::InvalidExtent,
+                "omit render-attachment usage from one-dimensional textures",
+            ));
+        }
+
         let max_dimension = extent.width().max(extent.height()).max(match dimension {
             GpuTextureDimension::D3 => extent.depth_or_layers(),
             GpuTextureDimension::D1 | GpuTextureDimension::D2 => 1,
@@ -915,7 +934,10 @@ impl GpuTextureDescriptor {
         if !is_normalized_sample_count_representable(sample_count)
             || (texture_format::is_block_compressed(format) && sample_count != 1)
             || (sample_count > 1
-                && (mip_level_count != 1
+                && (dimension != GpuTextureDimension::D2
+                    || mip_level_count != 1
+                    || extent.depth_or_layers() != 1
+                    || !has_attachment_usage
                     || usages.contains(GpuTextureUsage::StorageRead)
                     || usages.contains(GpuTextureUsage::StorageWrite)))
         {
@@ -923,7 +945,7 @@ impl GpuTextureDescriptor {
                 "construct GPU texture descriptor",
                 label,
                 GpuResourceDescriptorCause::InvalidSampleCount,
-                "use a normalized representable sample count and one non-storage mip for multisampling",
+                "use a normalized representable sample count; multisampled textures require one D2 layer, one mip, attachment usage, and no storage usage",
             ));
         }
         if matches!(initialization, GpuTextureInitialization::Prepared(_)) && sample_count != 1 {
@@ -1900,6 +1922,141 @@ mod tests {
                 GpuTextureFormat::Rgba8Unorm,
                 zeroed_multisample_usages,
                 GpuTextureInitialization::Zeroed,
+            )
+            .is_ok()
+        );
+    }
+
+    #[test]
+    fn texture_dimension_and_multisample_structure_are_normalized_at_construction() {
+        let label = label("texture structure");
+        let d1_extent = GpuTextureExtent::new(&label, GpuTextureDimension::D1, 8, 1, 1).unwrap();
+        let d2_extent = GpuTextureExtent::new(&label, GpuTextureDimension::D2, 8, 8, 1).unwrap();
+        let d2_array_extent =
+            GpuTextureExtent::new(&label, GpuTextureDimension::D2, 8, 8, 2).unwrap();
+        let d3_extent = GpuTextureExtent::new(&label, GpuTextureDimension::D3, 8, 8, 2).unwrap();
+
+        let sampled = || GpuTextureUsages::new(&label, [GpuTextureUsage::Sampled]).unwrap();
+        let color_attachment =
+            || GpuTextureUsages::new(&label, [GpuTextureUsage::ColorAttachment]).unwrap();
+        let depth_attachment =
+            || GpuTextureUsages::new(&label, [GpuTextureUsage::DepthStencilAttachment]).unwrap();
+
+        for (name, dimension, extent) in [
+            ("d1 depth", GpuTextureDimension::D1, d1_extent),
+            ("d3 depth", GpuTextureDimension::D3, d3_extent),
+        ] {
+            let error = GpuTextureDescriptor::new(
+                common(name),
+                dimension,
+                extent,
+                1,
+                1,
+                GpuTextureFormat::Depth32Float,
+                sampled(),
+                GpuTextureInitialization::Uninitialized,
+            )
+            .unwrap_err();
+            assert_eq!(error.cause(), GpuResourceDescriptorCause::InvalidExtent);
+        }
+
+        assert!(
+            GpuTextureDescriptor::new(
+                common("d2 depth"),
+                GpuTextureDimension::D2,
+                d2_extent,
+                1,
+                1,
+                GpuTextureFormat::Depth32Float,
+                depth_attachment(),
+                GpuTextureInitialization::Uninitialized,
+            )
+            .is_ok()
+        );
+
+        let d1_attachment = GpuTextureDescriptor::new(
+            common("d1 color attachment"),
+            GpuTextureDimension::D1,
+            d1_extent,
+            1,
+            1,
+            GpuTextureFormat::Rgba8Unorm,
+            color_attachment(),
+            GpuTextureInitialization::Uninitialized,
+        )
+        .unwrap_err();
+        assert_eq!(
+            d1_attachment.cause(),
+            GpuResourceDescriptorCause::InvalidExtent
+        );
+
+        assert!(
+            GpuTextureDescriptor::new(
+                common("d1 sampled"),
+                GpuTextureDimension::D1,
+                d1_extent,
+                1,
+                1,
+                GpuTextureFormat::Rgba8Unorm,
+                sampled(),
+                GpuTextureInitialization::Uninitialized,
+            )
+            .is_ok()
+        );
+
+        for (name, dimension, extent, usages) in [
+            (
+                "multisampled d1",
+                GpuTextureDimension::D1,
+                d1_extent,
+                sampled(),
+            ),
+            (
+                "multisampled d3",
+                GpuTextureDimension::D3,
+                d3_extent,
+                sampled(),
+            ),
+            (
+                "multisampled d2 without attachment",
+                GpuTextureDimension::D2,
+                d2_extent,
+                sampled(),
+            ),
+            (
+                "multisampled d2 array",
+                GpuTextureDimension::D2,
+                d2_array_extent,
+                color_attachment(),
+            ),
+        ] {
+            let error = GpuTextureDescriptor::new(
+                common(name),
+                dimension,
+                extent,
+                1,
+                4,
+                GpuTextureFormat::Rgba8Unorm,
+                usages,
+                GpuTextureInitialization::Uninitialized,
+            )
+            .unwrap_err();
+            assert_eq!(
+                error.cause(),
+                GpuResourceDescriptorCause::InvalidSampleCount
+            );
+        }
+
+        assert!(
+            GpuTextureDescriptor::new(
+                common("multisampled d2 color attachment"),
+                GpuTextureDimension::D2,
+                d2_extent,
+                1,
+                4,
+                GpuTextureFormat::Rgba8Unorm,
+                color_attachment(),
+                GpuTextureInitialization::Uninitialized,
             )
             .is_ok()
         );

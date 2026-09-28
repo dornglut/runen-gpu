@@ -89,6 +89,36 @@ fn sampled_array_texture(
     )
 }
 
+fn multisampled_attachment_texture(
+    allocator: &mut GpuWorkResourceIdAllocator,
+    name: &str,
+    width: u32,
+    height: u32,
+    sample_count: u32,
+) -> GpuTextureHandle {
+    let texture_label = label(name);
+    allocator
+        .allocate_texture_handle(
+            GpuTextureDescriptor::new(
+                common(name),
+                GpuTextureDimension::D2,
+                GpuTextureExtent::new(&texture_label, GpuTextureDimension::D2, width, height, 1)
+                    .unwrap(),
+                1,
+                sample_count,
+                GpuTextureFormat::Rgba8Unorm,
+                GpuTextureUsages::new(
+                    &texture_label,
+                    [GpuTextureUsage::Sampled, GpuTextureUsage::ColorAttachment],
+                )
+                .unwrap(),
+                GpuTextureInitialization::Uninitialized,
+            )
+            .unwrap(),
+        )
+        .unwrap()
+}
+
 fn texture_view(
     allocator: &mut GpuWorkResourceIdAllocator,
     texture: &GpuTextureHandle,
@@ -324,15 +354,8 @@ fn incompatible_parent_shape_and_multisample_views_are_rejected_before_realizati
         GpuResourceDescriptorCause::IncompatibleViewDimension
     );
 
-    let multisampled = sampled_texture(
-        &mut allocator,
-        "multisampled parent",
-        GpuTextureDimension::D2,
-        4,
-        4,
-        1,
-        4,
-    );
+    let multisampled =
+        multisampled_attachment_texture(&mut allocator, "multisampled parent", 4, 4, 4);
     let multisample_error = texture_view(
         &mut allocator,
         &multisampled,
