@@ -46,7 +46,7 @@ pub(crate) use graph::{
     same_resource_descriptor,
 };
 pub use handles::*;
-pub use operation::{GpuRenderOperation, GpuWorkNodeKind, GpuWorkOperation};
+pub use operation::{GpuRenderOperation, GpuRenderPassItem, GpuWorkNodeKind, GpuWorkOperation};
 pub use ordinary::*;
 pub use ordinary_transfer::*;
 pub use pipeline_realization::*;
