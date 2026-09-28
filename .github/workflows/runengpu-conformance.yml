@@ -283,6 +283,13 @@ jobs:
           path: ${{ runner.temp }}/runengpu-proof-artifacts/compute-generated-indirect-offscreen.png
           if-no-files-found: error
 
+      - name: Run indirect first-instance qualification
+        env:
+          RUST_BACKTRACE: '1'
+        run: |
+          set -euo pipefail
+          cargo +stable test --test gpu_r4_indirect_first_instance --locked -- --ignored --nocapture
+
       - name: Run persistent reaction-diffusion sequence proof
         env:
           RUST_BACKTRACE: '1'
