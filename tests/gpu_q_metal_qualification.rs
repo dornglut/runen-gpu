@@ -542,12 +542,9 @@ fn metal_qualification_records_exact_public_api_evidence() {
         &context,
         GpuIndirectFirstInstanceMode::ZeroOnly,
     ));
-    let indirect_first_instance =
-        pollster::block_on(retained_indirect_first_instance::run_on_adapter(
-            GpuBackendFamily::Metal,
-            None,
-            &context,
-        ));
+    let indirect_first_instance = pollster::block_on(
+        retained_indirect_first_instance::run_on_adapter(GpuBackendFamily::Metal, None, &context),
+    );
     retained_sampler_anisotropy::realize_anisotropic_sampler(&context);
     let (transient_graph, transient_readback_id) = retained_transient_attachment::graph();
     let transient_prepared =
