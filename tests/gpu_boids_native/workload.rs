@@ -379,7 +379,7 @@ fn render_operation(
         None,
     )
     .unwrap();
-    GpuRenderOperation::new([attachment], None, [draw], None).unwrap()
+    GpuRenderOperation::new([attachment], None, [GpuRenderPassItem::Draw(draw)], None).unwrap()
 }
 
 fn offscreen_target(resources: &mut GpuResourceScope) -> (GpuTextureHandle, GpuTextureViewHandle) {
