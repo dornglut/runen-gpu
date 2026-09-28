@@ -13,12 +13,12 @@ mod retained_blend;
 mod retained_depth_bias;
 #[path = "gpu_r2_depth_clip_control.rs"]
 mod retained_depth_clip_control;
-#[path = "gpu_r4_indirect_first_instance.rs"]
-mod retained_indirect_first_instance;
 #[path = "gpu_fixed_binding_array/mod.rs"]
 mod retained_fixed_binding_array;
 #[path = "gpu_compute_generated_indirect_native.rs"]
 mod retained_indirect;
+#[path = "gpu_r4_indirect_first_instance.rs"]
+mod retained_indirect_first_instance;
 #[path = "gpu_r3_binding_array_non_uniform_indexing/mod.rs"]
 mod retained_non_uniform_binding_array;
 #[path = "gpu_offscreen_indexed_native.rs"]
