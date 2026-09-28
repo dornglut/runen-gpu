@@ -1,4 +1,4 @@
-use super::super::operation::{GpuRenderOperation, GpuWorkOperation};
+use super::super::operation::{GpuRenderOperation, GpuRenderPassItem, GpuWorkOperation};
 use super::*;
 use crate::{
     GpuBufferDescriptor, GpuBufferInitialization, GpuBufferUsage, GpuBufferUsages, GpuMemoryIntent,
@@ -628,6 +628,151 @@ fn load_store_only_render_is_rejected_clear_is_work_and_timestamp_requires_attac
     let timestamp_writes = GpuTimestampWrites::new(&queries, Some(0), None).unwrap();
     assert!(GpuRenderOperation::new([], None, [], Some(timestamp_writes.clone())).is_err());
     assert!(GpuRenderOperation::new([load], None, [], Some(timestamp_writes)).is_ok());
+}
+
+#[test]
+fn occlusion_scope_and_resolve_requirements_are_typed() {
+    let mut allocator = allocator();
+    let timestamp_queries = allocator
+        .allocate_query_set_handle(
+            GpuQuerySetDescriptor::new(
+                common("timestamp queries"),
+                GpuQueryKind::Timestamp,
+                2,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+    let occlusion_queries = allocator
+        .allocate_query_set_handle(
+            GpuQuerySetDescriptor::new(
+                common("occlusion queries"),
+                GpuQueryKind::Occlusion,
+                2,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+    let other_occlusion_queries = allocator
+        .allocate_query_set_handle(
+            GpuQuerySetDescriptor::new(
+                common("other occlusion queries"),
+                GpuQueryKind::Occlusion,
+                2,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+
+    assert!(GpuOcclusionQueryScope::new(&timestamp_queries, 0, []).is_err());
+    assert!(GpuOcclusionQueryScope::new(&occlusion_queries, 2, []).is_err());
+
+    let scope = GpuOcclusionQueryScope::new(&occlusion_queries, 1, []).unwrap();
+    assert_eq!(scope.query_index(), 1);
+    assert!(scope.draws().is_empty());
+    assert_eq!(scope.access().kind(), GpuQueryAccessKind::WriteOcclusion);
+    assert!(scope.access().kind().writes());
+    assert!(!scope.access().kind().reads());
+    assert!(
+        GpuResourceAccess::Query(scope.access().clone())
+            .derived_requirements()
+            .unwrap()
+            .get(GpuCapabilityFeature::TimestampQuery)
+            .is_none()
+    );
+
+    let target = texture(
+        &mut allocator,
+        "occlusion target",
+        1,
+        GpuTextureFormat::Rgba8Unorm,
+        [GpuTextureUsage::ColorAttachment],
+    );
+    let target_view = single_view(
+        &mut allocator,
+        &target,
+        "occlusion target view",
+        0,
+        0,
+        GpuTextureAspect::Color,
+    );
+    let load = GpuRenderColorAttachment::new(
+        target_view,
+        GpuColorAttachmentLoad::Load,
+        GpuAttachmentStore::Store,
+        None,
+    )
+    .unwrap();
+
+    let empty_scope = GpuOcclusionQueryScope::new(&occlusion_queries, 0, []).unwrap();
+    let operation = GpuRenderOperation::new(
+        [load.clone()],
+        None,
+        [GpuRenderPassItem::OcclusionQuery(empty_scope)],
+        None,
+    )
+    .unwrap();
+    assert_eq!(
+        operation
+            .occlusion_query_set()
+            .unwrap()
+            .diagnostic_identity(),
+        occlusion_queries.diagnostic_identity()
+    );
+
+    let first = GpuOcclusionQueryScope::new(&occlusion_queries, 0, []).unwrap();
+    let second = GpuOcclusionQueryScope::new(&other_occlusion_queries, 1, []).unwrap();
+    assert!(
+        GpuRenderOperation::new(
+            [load],
+            None,
+            [
+                GpuRenderPassItem::OcclusionQuery(first),
+                GpuRenderPassItem::OcclusionQuery(second),
+            ],
+            None,
+        )
+        .is_err()
+    );
+
+    let resolve = buffer(
+        &mut allocator,
+        "query resolve",
+        16,
+        [GpuBufferUsage::QueryResolve],
+    );
+    let timestamp_resolve = GpuQueryResolveOperation::new(
+        &timestamp_queries,
+        GpuQueryRange::new(&timestamp_queries, 0, 2).unwrap(),
+        &resolve,
+        0,
+    )
+    .unwrap();
+    let timestamp_requirements =
+        GpuWorkOperation::Resolve(timestamp_resolve).derived_requirements().unwrap();
+    assert_eq!(
+        timestamp_requirements.get(GpuCapabilityFeature::TimestampQuery),
+        Some(GpuCapabilityRequirement::Required(
+            GpuCapabilityFeature::TimestampQuery
+        ))
+    );
+    assert!(timestamp_requirements.get(GpuCapabilityFeature::Copy).is_none());
+
+    let occlusion_resolve = GpuQueryResolveOperation::new(
+        &occlusion_queries,
+        GpuQueryRange::new(&occlusion_queries, 0, 2).unwrap(),
+        &resolve,
+        0,
+    )
+    .unwrap();
+    let occlusion_requirements =
+        GpuWorkOperation::Resolve(occlusion_resolve).derived_requirements().unwrap();
+    assert!(
+        occlusion_requirements
+            .get(GpuCapabilityFeature::TimestampQuery)
+            .is_none()
+    );
+    assert!(occlusion_requirements.get(GpuCapabilityFeature::Copy).is_none());
 }
 
 #[test]
