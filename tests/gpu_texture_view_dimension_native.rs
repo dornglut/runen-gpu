@@ -102,23 +102,14 @@ fn multisampled_attachment_texture(
             GpuTextureDescriptor::new(
                 common(name),
                 GpuTextureDimension::D2,
-                GpuTextureExtent::new(
-                    &texture_label,
-                    GpuTextureDimension::D2,
-                    width,
-                    height,
-                    1,
-                )
-                .unwrap(),
+                GpuTextureExtent::new(&texture_label, GpuTextureDimension::D2, width, height, 1)
+                    .unwrap(),
                 1,
                 sample_count,
                 GpuTextureFormat::Rgba8Unorm,
                 GpuTextureUsages::new(
                     &texture_label,
-                    [
-                        GpuTextureUsage::Sampled,
-                        GpuTextureUsage::ColorAttachment,
-                    ],
+                    [GpuTextureUsage::Sampled, GpuTextureUsage::ColorAttachment],
                 )
                 .unwrap(),
                 GpuTextureInitialization::Uninitialized,
