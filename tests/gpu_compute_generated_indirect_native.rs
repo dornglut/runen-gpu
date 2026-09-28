@@ -318,7 +318,7 @@ fn render_operation(
         None,
     )
     .unwrap();
-    GpuRenderOperation::new([attachment], None, [draw], None).unwrap()
+    GpuRenderOperation::new([attachment], None, [GpuRenderPassItem::Draw(draw)], None).unwrap()
 }
 
 pub(crate) fn graph() -> (
