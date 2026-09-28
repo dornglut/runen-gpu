@@ -52,9 +52,6 @@ pub(super) fn lower_buffer(
             ));
         }
     }
-    if usages.contains(GpuBufferUsage::QueryResolve) {
-        require_feature(context, identity, GpuCapabilityFeature::TimestampQuery)?;
-    }
     let device_limits = context.device_facts().device_limits().values();
     let workload_limits = context.device_facts().workload_budget().limits();
     if descriptor.size_bytes() > device_limits.max_buffer_size()
