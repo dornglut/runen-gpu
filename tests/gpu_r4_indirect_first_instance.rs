@@ -439,6 +439,19 @@ pub(crate) async fn run_on_adapter(
             .device_facts()
             .is_enabled(GpuCapabilityFeature::IndirectFirstInstance)
     );
+
+    let (zero_graph, _) = graph(GpuIndirectFirstInstanceMode::ZeroOnly);
+    let zero_error = context
+        .prepare_submission(zero_graph)
+        .await
+        .expect_err(
+            "ZeroOnly must reject during normalized admission when IndirectFirstInstance is enabled",
+        );
+    assert_eq!(
+        zero_error.kind(),
+        GpuSubmissionPreparationErrorKind::CapabilityNotAdmitted
+    );
+
     run_case(&context, GpuIndirectFirstInstanceMode::MayBeNonZero).await;
     IndirectFirstInstanceProofOutcome {
         supported: true,
