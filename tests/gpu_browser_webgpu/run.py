@@ -101,6 +101,7 @@ const done = arguments[arguments.length - 1];
         typeof wasm.runengpu_browser_packed32_color_attachment_mask !== "function" ||
         typeof wasm.runengpu_browser_bc_exercised_mask !== "function" ||
         typeof wasm.runengpu_browser_blend_state_exercised_mask !== "function" ||
+        typeof wasm.runengpu_browser_dual_source_blend_mask !== "function" ||
         typeof wasm.runengpu_browser_depth_bias_exercised_mask !== "function" ||
         typeof wasm.runengpu_browser_sampler_anisotropy_exercised !== "function" ||
         typeof wasm.runengpu_browser_shader_f16_exercised_mask !== "function" ||
@@ -135,6 +136,7 @@ const done = arguments[arguments.length - 1];
           packed32ColorAttachmentMask: wasm.runengpu_browser_packed32_color_attachment_mask(),
           bcMask: wasm.runengpu_browser_bc_exercised_mask(),
           blendStateMask: wasm.runengpu_browser_blend_state_exercised_mask(),
+          dualSourceBlendMask: wasm.runengpu_browser_dual_source_blend_mask(),
           depthBiasMask: wasm.runengpu_browser_depth_bias_exercised_mask(),
           samplerAnisotropyExercised: wasm.runengpu_browser_sampler_anisotropy_exercised(),
           shaderF16Mask: wasm.runengpu_browser_shader_f16_exercised_mask(),
@@ -834,6 +836,29 @@ def main() -> int:
             raise RuntimeError(
                 "RunenGPU actual-browser BlendState: NOT QUALIFIED "
                 f"(mask={blend_state_mask:#x}, expected={blend_state_full_mask:#x})"
+            )
+
+        dual_source_mask = value.get("dualSourceBlendMask")
+        if type(dual_source_mask) is not int or dual_source_mask < 0 or dual_source_mask > 0b11:
+            raise RuntimeError(
+                f"RunenGPU actual-browser DualSourceBlending: invalid mask {dual_source_mask!r}"
+            )
+        dual_source_supported = bool(dual_source_mask & 0b01)
+        dual_source_exercised = bool(dual_source_mask & 0b10)
+        if dual_source_supported != dual_source_exercised:
+            raise RuntimeError(
+                "RunenGPU actual-browser DualSourceBlending support/execution mismatch "
+                f"(mask={dual_source_mask:#x})"
+            )
+        if dual_source_exercised:
+            print(
+                "RunenGPU actual-browser DualSourceBlending: "
+                "EXERCISED (secondary-source RGB/alpha exact readback)"
+            )
+        else:
+            print(
+                "RunenGPU actual-browser DualSourceBlending: "
+                "UNSUPPORTED (normalized capability absent)"
             )
 
         depth_bias_mask = value.get("depthBiasMask")
