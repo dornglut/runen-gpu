@@ -10,6 +10,7 @@ pub enum GpuCapabilityFeature {
     RenderPipeline,
     Copy,
     IndirectExecution,
+    IndirectFirstInstance,
     StorageTexture,
     TextureBindingArray,
     BufferBindingArray,
