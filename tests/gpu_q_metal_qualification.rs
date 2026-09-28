@@ -19,10 +19,10 @@ mod retained_fixed_binding_array;
 mod retained_indirect;
 #[path = "gpu_r4_indirect_first_instance.rs"]
 mod retained_indirect_first_instance;
-#[path = "gpu_r4_occlusion_query.rs"]
-mod retained_occlusion_query;
 #[path = "gpu_r3_binding_array_non_uniform_indexing/mod.rs"]
 mod retained_non_uniform_binding_array;
+#[path = "gpu_r4_occlusion_query.rs"]
+mod retained_occlusion_query;
 #[path = "gpu_offscreen_indexed_native.rs"]
 mod retained_offscreen;
 #[path = "gpu_prefix_scan_native.rs"]
