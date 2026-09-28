@@ -11,8 +11,9 @@ use super::interface::{
 };
 use super::source::GpuAdmittedProgramSource;
 use super::stage_io::{
-    GpuFragmentOutputBuiltin, GpuObservedFragmentOutputSignature, GpuObservedVertexInputSignature,
-    GpuShaderIoLocation, GpuShaderIoScalarClass, GpuShaderIoValueType, GpuVertexInputBuiltin,
+    GpuBlendSource, GpuFragmentOutputBuiltin, GpuFragmentOutputLocation,
+    GpuObservedFragmentOutputSignature, GpuObservedVertexInputSignature, GpuShaderIoLocation,
+    GpuShaderIoScalarClass, GpuShaderIoValueType, GpuVertexInputBuiltin,
 };
 use crate::{GpuCapabilityFeature, GpuTextureFormat};
 use core::num::{NonZeroU32, NonZeroU64};
@@ -75,33 +76,13 @@ pub(crate) fn analyze_program(
     let operation = "admit canonical WGSL program";
     let source_label = source.identity().diagnostic_label();
     let baseline_capabilities = baseline_analysis_capabilities();
-    let (module, analysis_capabilities, mut required_features) = match parse_wgsl(
-        source.canonical_wgsl(),
-        baseline_capabilities,
-    ) {
-        Ok(module) => (module, baseline_capabilities, Vec::new()),
-        Err(baseline_error) => {
-            let f16_capabilities =
-                baseline_capabilities | naga::valid::Capabilities::SHADER_FLOAT16;
-            match parse_wgsl(source.canonical_wgsl(), f16_capabilities) {
-                Ok(module) => (
-                    module,
-                    f16_capabilities,
-                    vec![GpuCapabilityFeature::ShaderF16],
-                ),
-                Err(f16_error) => {
-                    return Err(invalid(
-                        operation,
-                        &source_label,
-                        GpuProgramContractCause::CanonicalWgslInvalid,
-                        format!(
-                            "canonical WGSL parse failed under baseline capabilities: {baseline_error}; retry with ShaderF16 also failed: {f16_error}"
-                        ),
-                    ));
-                }
-            }
-        }
-    };
+    let (module, analysis_capabilities, mut required_features) =
+        parse_wgsl_with_normalized_profiles(
+            source.canonical_wgsl(),
+            baseline_capabilities,
+            operation,
+            &source_label,
+        )?;
     reject_f16_overrides(&module, &source_label)?;
     let validator_capabilities =
         analysis_capabilities | non_uniform_binding_array_analysis_capabilities();
@@ -438,6 +419,62 @@ fn baseline_analysis_capabilities() -> naga::valid::Capabilities {
         | naga::valid::Capabilities::BUFFER_BINDING_ARRAY
         | naga::valid::Capabilities::STORAGE_TEXTURE_BINDING_ARRAY
         | naga::valid::Capabilities::STORAGE_BUFFER_BINDING_ARRAY
+}
+
+fn parse_wgsl_with_normalized_profiles(
+    source: &str,
+    baseline_capabilities: naga::valid::Capabilities,
+    operation: &'static str,
+    source_label: &str,
+) -> Result<
+    (
+        naga::Module,
+        naga::valid::Capabilities,
+        Vec<GpuCapabilityFeature>,
+    ),
+    GpuProgramContractError,
+> {
+    let profiles = [
+        (baseline_capabilities, Vec::new(), "baseline"),
+        (
+            baseline_capabilities | naga::valid::Capabilities::SHADER_FLOAT16,
+            vec![GpuCapabilityFeature::ShaderF16],
+            "ShaderF16",
+        ),
+        (
+            baseline_capabilities | naga::valid::Capabilities::DUAL_SOURCE_BLENDING,
+            vec![GpuCapabilityFeature::DualSourceBlending],
+            "DualSourceBlending",
+        ),
+        (
+            baseline_capabilities
+                | naga::valid::Capabilities::SHADER_FLOAT16
+                | naga::valid::Capabilities::DUAL_SOURCE_BLENDING,
+            vec![
+                GpuCapabilityFeature::ShaderF16,
+                GpuCapabilityFeature::DualSourceBlending,
+            ],
+            "ShaderF16+DualSourceBlending",
+        ),
+    ];
+
+    let mut failures = Vec::with_capacity(profiles.len());
+    for (capabilities, required_features, label) in profiles {
+        match parse_wgsl(source, capabilities) {
+            Ok(module) => return Ok((module, capabilities, required_features)),
+            Err(error) => failures.push(format!("{label}: {error}")),
+        }
+    }
+
+    Err(invalid(
+        operation,
+        source_label,
+        GpuProgramContractCause::CanonicalWgslInvalid,
+        format!(
+            "canonical WGSL parse failed under every normalized capability profile: {}",
+            failures.join("; ")
+        ),
+    ))
 }
 
 fn parse_wgsl(
@@ -896,6 +933,14 @@ fn normalize_vertex_input(
             argument.ty,
             argument.binding.as_ref(),
             &mut locations,
+            &mut |location, blend_src, value_type| {
+                if blend_src.is_some() {
+                    return Err(
+                        "dual-source blend identity is only valid for fragment output".to_string(),
+                    );
+                }
+                Ok(GpuShaderIoLocation::new(location, value_type))
+            },
             &mut |builtin| match builtin {
                 BuiltIn::VertexIndex => Ok(GpuVertexInputBuiltin::VertexIndex),
                 BuiltIn::InstanceIndex => Ok(GpuVertexInputBuiltin::InstanceIndex),
@@ -922,6 +967,23 @@ fn normalize_fragment_output(
             result.ty,
             result.binding.as_ref(),
             &mut locations,
+            &mut |location, blend_src, value_type| {
+                let blend_source = match blend_src {
+                    None => None,
+                    Some(0) => Some(GpuBlendSource::Primary),
+                    Some(1) => Some(GpuBlendSource::Secondary),
+                    Some(_) => {
+                        return Err(
+                            "fragment output uses an unsupported blend-source index".to_string()
+                        );
+                    }
+                };
+                Ok(GpuFragmentOutputLocation::new(
+                    location,
+                    blend_source,
+                    value_type,
+                ))
+            },
             &mut |builtin| match builtin {
                 BuiltIn::FragDepth => Ok(GpuFragmentOutputBuiltin::FragDepth),
                 BuiltIn::SampleMask => Ok(GpuFragmentOutputBuiltin::SampleMask),
@@ -934,11 +996,16 @@ fn normalize_fragment_output(
     GpuObservedFragmentOutputSignature::new(entry_point, locations, builtins)
 }
 
-fn collect_io<B>(
+fn collect_io<L, B>(
     module: &naga::Module,
     ty: naga::Handle<naga::Type>,
     binding: Option<&Binding>,
-    locations: &mut Vec<GpuShaderIoLocation>,
+    locations: &mut Vec<L>,
+    map_location: &mut impl FnMut(
+        u32,
+        Option<u32>,
+        GpuShaderIoValueType,
+    ) -> Result<L, String>,
     map_builtin: &mut impl FnMut(BuiltIn) -> Result<B, &'static str>,
     builtins: &mut Vec<B>,
 ) -> Result<(), String> {
@@ -950,6 +1017,7 @@ fn collect_io<B>(
                     member.ty,
                     member.binding.as_ref(),
                     locations,
+                    map_location,
                     map_builtin,
                     builtins,
                 )?;
@@ -960,21 +1028,16 @@ fn collect_io<B>(
     match binding {
         Some(Binding::Location {
             location,
-            blend_src: None,
+            blend_src,
             ..
         }) => {
-            locations.push(GpuShaderIoLocation::new(
+            locations.push(map_location(
                 *location,
+                *blend_src,
                 io_value_type(module, ty)?,
-            ));
+            )?);
             Ok(())
         }
-        Some(Binding::Location {
-            blend_src: Some(_), ..
-        }) => Err(
-            "dual-source blend output is outside the accepted RunenGPU stage-IO vocabulary"
-                .to_string(),
-        ),
         Some(Binding::BuiltIn(builtin)) => {
             builtins.push(map_builtin(*builtin).map_err(str::to_string)?);
             Ok(())
