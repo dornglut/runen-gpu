@@ -148,6 +148,9 @@ pub(super) fn normalized_features(
     if features.contains(Features::DEPTH_CLIP_CONTROL) {
         supported.push(GpuCapabilityFeature::DepthClipControl);
     }
+    if features.contains(Features::DUAL_SOURCE_BLENDING) {
+        supported.push(GpuCapabilityFeature::DualSourceBlending);
+    }
     // The current WGPU Metal timestamp surface is not sufficient proof of RunenGPU's ordered
     // marker semantics. Keep the normalized capability conservative until Apple-native
     // marker + resolve/readback evidence proves the backend path truthful.
@@ -477,6 +480,35 @@ mod tests {
             );
             assert!(
                 !unsupported.contains(&GpuCapabilityFeature::DepthClipControl),
+                "{backend:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn dual_source_blending_requires_the_exact_advertised_feature() {
+        for backend in [Backend::Vulkan, Backend::BrowserWebGpu, Backend::Metal] {
+            let supported = normalized_features(
+                backend,
+                Features::DUAL_SOURCE_BLENDING,
+                DownlevelFlags::empty(),
+                false,
+                false,
+            );
+            assert!(
+                supported.contains(&GpuCapabilityFeature::DualSourceBlending),
+                "{backend:?}"
+            );
+
+            let unsupported = normalized_features(
+                backend,
+                Features::empty(),
+                DownlevelFlags::empty(),
+                false,
+                false,
+            );
+            assert!(
+                !unsupported.contains(&GpuCapabilityFeature::DualSourceBlending),
                 "{backend:?}"
             );
         }
