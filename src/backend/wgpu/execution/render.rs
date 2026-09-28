@@ -271,6 +271,7 @@ async fn prepare_render_draw(
             arguments,
             range,
             indexed,
+            ..
         } => PreparedRenderDrawIntent::Indirect {
             arguments: realized_buffer(context, buffer_cache, arguments)?,
             offset: range.offset(),
