@@ -207,7 +207,7 @@ pub(crate) fn render_graph() -> (GpuPreparedWorkGraph, GpuReadbackId) {
         None,
     )
     .unwrap();
-    let render = GpuRenderOperation::new([attachment], None, [draw], None).unwrap();
+    let render = GpuRenderOperation::new([attachment], None, [GpuRenderPassItem::Draw(draw)], None).unwrap();
 
     assert_eq!(render.color_attachments().len(), 1);
     let proof_attachment = &render.color_attachments()[0];
