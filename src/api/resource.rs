@@ -1930,14 +1930,11 @@ mod tests {
     #[test]
     fn texture_dimension_and_multisample_structure_are_normalized_at_construction() {
         let label = label("texture structure");
-        let d1_extent =
-            GpuTextureExtent::new(&label, GpuTextureDimension::D1, 8, 1, 1).unwrap();
-        let d2_extent =
-            GpuTextureExtent::new(&label, GpuTextureDimension::D2, 8, 8, 1).unwrap();
+        let d1_extent = GpuTextureExtent::new(&label, GpuTextureDimension::D1, 8, 1, 1).unwrap();
+        let d2_extent = GpuTextureExtent::new(&label, GpuTextureDimension::D2, 8, 8, 1).unwrap();
         let d2_array_extent =
             GpuTextureExtent::new(&label, GpuTextureDimension::D2, 8, 8, 2).unwrap();
-        let d3_extent =
-            GpuTextureExtent::new(&label, GpuTextureDimension::D3, 8, 8, 2).unwrap();
+        let d3_extent = GpuTextureExtent::new(&label, GpuTextureDimension::D3, 8, 8, 2).unwrap();
 
         let sampled = || GpuTextureUsages::new(&label, [GpuTextureUsage::Sampled]).unwrap();
         let color_attachment =
