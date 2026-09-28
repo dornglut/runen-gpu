@@ -833,7 +833,11 @@ fn combined_pipeline_cannot_use_an_attachment_aspect_that_was_omitted() {
         GpuRenderOperation::new(
             [],
             Some(depth_only),
-            [GpuRenderPassItem::Draw(draw(pipeline.clone(), 8, FIRST_REFERENCE))],
+            [GpuRenderPassItem::Draw(draw(
+                pipeline.clone(),
+                8,
+                FIRST_REFERENCE,
+            ))],
             None,
         )
         .is_err()
