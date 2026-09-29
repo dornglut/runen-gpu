@@ -202,17 +202,17 @@ fn clear_and_present_graph(image: &GpuAcquiredSurfaceImage) -> GpuPreparedWorkGr
     .unwrap()
 }
 
-async fn terminalize(context: &GpuContext, submission: &GpuSubmission) -> bool {
+async fn terminalize(context: &GpuContext, submission: &GpuSubmission) -> Result<(), u32> {
     for _ in 0..MAX_SUBMISSION_TICKS {
         context.progress();
         match submission.status() {
-            GpuSubmissionStatus::Completed => return true,
-            GpuSubmissionStatus::Failed(_) => return false,
+            GpuSubmissionStatus::Completed => return Ok(()),
+            GpuSubmissionStatus::Failed(_) => return Err(114u32),
             GpuSubmissionStatus::Accepted => {}
         }
         super::browser_yield().await;
     }
-    false
+    Err(119u32)
 }
 
 fn normalized_format_code(format: GpuTextureFormat) -> u32 {
@@ -286,9 +286,7 @@ async fn run_public_surface(window: Arc<Window>) -> Result<u32, u32> {
     let graph = clear_and_present_graph(&image);
     let prepared = context.prepare_submission(graph).await.map_err(|_| 112u32)?;
     let submission = context.submit_prepared(prepared).map_err(|_| 113u32)?;
-    if !terminalize(&context, &submission).await {
-        return Err(114u32);
-    }
+    terminalize(&context, &submission).await?;
 
     let next = context.acquire_surface_image(configured).map_err(|_| 115u32)?;
     if next.lease_id() == image.lease_id() {
