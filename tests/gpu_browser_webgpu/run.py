@@ -23,6 +23,8 @@ import urllib.request
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("out_dir", type=pathlib.Path)
+    parser.add_argument("--artifact-dir", type=pathlib.Path, required=True)
+    parser.add_argument("--revision", required=True)
     return parser.parse_args()
 
 
@@ -116,7 +118,14 @@ const done = arguments[arguments.length - 1];
         typeof wasm.runengpu_browser_depth24plus_stencil8_exercised !== "function" ||
         typeof wasm.runengpu_browser_depth24plus_stencil8_sampled_exercised !== "function" ||
         typeof wasm.runengpu_browser_depth32float_stencil8_exercised !== "function" ||
-        typeof wasm.runengpu_browser_depth32float_stencil8_sampled_exercised !== "function") {
+        typeof wasm.runengpu_browser_depth32float_stencil8_sampled_exercised !== "function" ||
+        typeof wasm.runengpu_browser_surface_evidence_disposition !== "function" ||
+        typeof wasm.runengpu_browser_surface_evidence_bits !== "function" ||
+        typeof wasm.runengpu_browser_surface_evidence_public_format !== "function" ||
+        typeof wasm.runengpu_browser_surface_evidence_direct_format !== "function" ||
+        typeof wasm.runengpu_browser_surface_evidence_color_spaces !== "function" ||
+        typeof wasm.runengpu_browser_surface_evidence_rgba16float_color_spaces !== "function" ||
+        typeof wasm.runengpu_browser_surface_evidence_diagnostic_stage !== "function") {
       throw new Error("RunenGPU browser proof control exports are absent");
     }
     wasm.runengpu_browser_start();
@@ -152,6 +161,13 @@ const done = arguments[arguments.length - 1];
           depth24PlusStencil8SampledExercised: wasm.runengpu_browser_depth24plus_stencil8_sampled_exercised(),
           depth32FloatStencil8Exercised: wasm.runengpu_browser_depth32float_stencil8_exercised(),
           depth32FloatStencil8SampledExercised: wasm.runengpu_browser_depth32float_stencil8_sampled_exercised(),
+          surfaceEvidenceDisposition: wasm.runengpu_browser_surface_evidence_disposition(),
+          surfaceEvidenceBits: wasm.runengpu_browser_surface_evidence_bits(),
+          surfaceEvidencePublicFormat: wasm.runengpu_browser_surface_evidence_public_format(),
+          surfaceEvidenceDirectFormat: wasm.runengpu_browser_surface_evidence_direct_format(),
+          surfaceEvidenceColorSpaces: wasm.runengpu_browser_surface_evidence_color_spaces(),
+          surfaceEvidenceRgba16floatColorSpaces: wasm.runengpu_browser_surface_evidence_rgba16float_color_spaces(),
+          surfaceEvidenceDiagnosticStage: wasm.runengpu_browser_surface_evidence_diagnostic_stage(),
         });
         return;
       }
@@ -166,6 +182,157 @@ const done = arguments[arguments.length - 1];
   }
 })();
 """
+
+
+SURFACE_DISPOSITIONS = {
+    1: "DELIVERY_PREREQUISITE_ESTABLISHED",
+    2: "SURFACE_PATH_UNQUALIFIED",
+    3: "CHARACTERIZATION_UNQUALIFIED",
+    4: "BACKEND_CAPABILITY_INCONSISTENT",
+}
+SURFACE_FORMATS = {
+    0: "Unknown",
+    1: "Rgba8Unorm",
+    2: "Bgra8Unorm",
+    3: "Rgba16Float",
+}
+SURFACE_COLOR_SPACES = (
+    (1 << 0, "Srgb"),
+    (1 << 1, "DisplayP3"),
+    (1 << 2, "ExtendedSrgb"),
+    (1 << 3, "ExtendedDisplayP3"),
+)
+
+
+def report_browser_surface_evidence(
+    value: dict[str, object],
+    *,
+    artifact_dir: pathlib.Path,
+    revision: str,
+    chrome_version: str,
+) -> None:
+    disposition_code = value.get("surfaceEvidenceDisposition")
+    bits = value.get("surfaceEvidenceBits")
+    public_format_code = value.get("surfaceEvidencePublicFormat")
+    direct_format_code = value.get("surfaceEvidenceDirectFormat")
+    color_space_mask = value.get("surfaceEvidenceColorSpaces")
+    rgba16float_color_space_mask = value.get("surfaceEvidenceRgba16floatColorSpaces")
+    diagnostic_stage = value.get("surfaceEvidenceDiagnosticStage")
+    integers = (
+        disposition_code,
+        bits,
+        public_format_code,
+        direct_format_code,
+        color_space_mask,
+        rgba16float_color_space_mask,
+        diagnostic_stage,
+    )
+    if any(type(item) is not int for item in integers):
+        raise RuntimeError(f"invalid browser surface evidence payload: {value!r}")
+    if disposition_code not in SURFACE_DISPOSITIONS:
+        raise RuntimeError(f"invalid browser surface disposition: {disposition_code!r}")
+    if public_format_code not in SURFACE_FORMATS or direct_format_code not in SURFACE_FORMATS:
+        raise RuntimeError("browser surface evidence returned an unknown format code")
+    if color_space_mask & ~0xF:
+        raise RuntimeError(f"browser surface evidence returned unknown color-space bits: {color_space_mask:#x}")
+    if rgba16float_color_space_mask & ~0xF:
+        raise RuntimeError(
+            "browser surface evidence returned unknown Rgba16Float color-space bits: "
+            f"{rgba16float_color_space_mask:#x}"
+        )
+
+    public_executed = bool(bits & (1 << 0))
+    census_reached = bool(bits & (1 << 1))
+    display_p3_advertised = bool(bits & (1 << 2))
+    display_p3_executed = bool(bits & (1 << 3))
+    rgba16float_advertised = bool(bits & (1 << 4))
+    extended_pair_executed = bool(bits & (1 << 5))
+    if display_p3_executed and not display_p3_advertised:
+        raise RuntimeError("browser surface evidence executed DisplayP3 without advertisement")
+    if display_p3_advertised and not census_reached:
+        raise RuntimeError("browser surface evidence advertised DisplayP3 without capability census")
+    if display_p3_executed and not census_reached:
+        raise RuntimeError("browser surface evidence executed DisplayP3 without capability census")
+    if public_executed and public_format_code == 0:
+        raise RuntimeError("public browser surface execution omitted its normalized format")
+    if display_p3_advertised and direct_format_code == 0:
+        raise RuntimeError("advertised DisplayP3 omitted its selected ordinary format")
+
+    advertised_color_spaces = [
+        name for bit, name in SURFACE_COLOR_SPACES if color_space_mask & bit
+    ]
+    rgba16float_color_spaces = [
+        name for bit, name in SURFACE_COLOR_SPACES if rgba16float_color_space_mask & bit
+    ]
+    if rgba16float_advertised != bool(rgba16float_color_spaces):
+        raise RuntimeError("Rgba16Float advertisement disagrees with its color-space facts")
+    if display_p3_advertised and "DisplayP3" not in advertised_color_spaces:
+        raise RuntimeError("DisplayP3 evidence bit disagrees with advertised color-space mask")
+
+    disposition = SURFACE_DISPOSITIONS[disposition_code]
+    report = {
+        "schema_version": 1,
+        "repository_revision": revision,
+        "disposition": disposition,
+        "browser": {
+            "name": "Chrome",
+            "version": chrome_version,
+            "headless": True,
+            "requested_webgpu_adapter": "swiftshader",
+        },
+        "public_runengpu": {
+            "backend": "BrowserWebGpu",
+            "surface_lifecycle_exercised": public_executed,
+            "selected_format": SURFACE_FORMATS[public_format_code],
+        },
+        "diagnostic_stage": diagnostic_stage,
+        "direct_wgpu": {
+            "backend": "BrowserWebGpu",
+            "adapter_name": None,
+            "selected_format": SURFACE_FORMATS[direct_format_code],
+            "advertised_color_spaces": advertised_color_spaces,
+            "display_p3_advertised": display_p3_advertised,
+            "display_p3_executed": display_p3_executed,
+            "rgba16float_advertised": rgba16float_advertised,
+            "rgba16float_advertised_color_spaces": rgba16float_color_spaces,
+            "extended_pair_executed": extended_pair_executed,
+        },
+    }
+
+    report_root = artifact_dir / "browser-surface"
+    report_root.mkdir(parents=True, exist_ok=True)
+    report_path = report_root / "report.json"
+    report_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
+    if json.loads(report_path.read_text())["repository_revision"] != revision:
+        raise RuntimeError("browser surface evidence report revision did not round-trip exactly")
+
+    print(
+        "RunenGPU actual-browser public surface lifecycle: "
+        + ("EXERCISED" if public_executed else "UNQUALIFIED")
+        + f" (format={SURFACE_FORMATS[public_format_code]})"
+    )
+    print(
+        "RunenGPU direct WGPU browser surface: "
+        f"format={SURFACE_FORMATS[direct_format_code]}, "
+        f"color_spaces={advertised_color_spaces}"
+    )
+    print(
+        "RunenGPU browser DisplayP3: "
+        + ("EXERCISED" if display_p3_executed else "NOT EXERCISED")
+    )
+    print(f"RunenGPU browser Rgba16Float color spaces: {rgba16float_color_spaces}")
+    print(
+        "RunenGPU browser surface evidence disposition: "
+        + disposition
+        + f" (diagnostic_stage={diagnostic_stage})"
+    )
+
+    required_positive_bits = 0xF
+    if disposition != "DELIVERY_PREREQUISITE_ESTABLISHED" or bits & required_positive_bits != required_positive_bits:
+        raise RuntimeError(
+            "RunenGPU browser surface delivery prerequisite not established: "
+            f"{disposition} (bits={bits:#x})"
+        )
 
 
 def read_exercised_mask(
@@ -614,6 +781,8 @@ def verify_depth32float_stencil8_reporter() -> None:
 
 def main() -> int:
     args = parse_args()
+    if not args.revision or any(ch not in "0123456789abcdef" for ch in args.revision.lower()):
+        raise RuntimeError("expected exact hexadecimal repository revision")
     verify_format_reporter()
     verify_depth_reporter()
     verify_stencil8_reporter()
@@ -677,6 +846,12 @@ def main() -> int:
                                 "--no-sandbox",
                                 "--disable-dev-shm-usage",
                                 "--enable-unsafe-webgpu",
+                                "--ignore-gpu-blocklist",
+                                "--enable-gpu",
+                                "--enable-features=Vulkan",
+                                "--use-vulkan=swiftshader",
+                                "--use-angle=swiftshader",
+                                "--enable-unsafe-swiftshader",
                                 "--use-webgpu-adapter=swiftshader",
                                 "--use-gpu-in-tests",
                             ],
@@ -1031,6 +1206,13 @@ def main() -> int:
         report_stencil8_proof(value)
         report_depth24plus_stencil8_proof(value)
         report_depth32float_stencil8_proof(value)
+        chrome_version = subprocess.check_output([chrome, "--version"], text=True).strip()
+        report_browser_surface_evidence(
+            value,
+            artifact_dir=args.artifact_dir,
+            revision=args.revision,
+            chrome_version=chrome_version,
+        )
         print("RunenGPU actual-browser WebGPU conformance: PASS")
         return 0
     except Exception:
