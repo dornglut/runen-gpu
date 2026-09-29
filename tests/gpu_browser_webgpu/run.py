@@ -247,6 +247,9 @@ def report_browser_surface_evidence(
     display_p3_executed = bool(bits & (1 << 3))
     rgba16float_advertised = bool(bits & (1 << 4))
     extended_pair_executed = bool(bits & (1 << 5))
+    public_display_p3_executed = bool(bits & (1 << 6))
+    if public_display_p3_executed and not public_executed:
+        raise RuntimeError("public DisplayP3 execution lacks a completed surface lifecycle")
     if display_p3_executed and not display_p3_advertised:
         raise RuntimeError("browser surface evidence executed DisplayP3 without advertisement")
     if display_p3_advertised and not census_reached:
@@ -284,6 +287,16 @@ def report_browser_surface_evidence(
             "backend": "BrowserWebGpu",
             "surface_lifecycle_exercised": public_executed,
             "selected_format": SURFACE_FORMATS[public_format_code],
+            "baseline_color_space": "Srgb" if public_executed else None,
+            "selected_non_srgb_pair": (
+                {
+                    "format": SURFACE_FORMATS[public_format_code],
+                    "color_space": "DisplayP3",
+                }
+                if public_display_p3_executed
+                else None
+            ),
+            "display_p3_executed": public_display_p3_executed,
         },
         "diagnostic_stage": diagnostic_stage,
         "direct_wgpu": {
@@ -320,6 +333,10 @@ def report_browser_surface_evidence(
         "RunenGPU browser DisplayP3: "
         + ("EXERCISED" if display_p3_executed else "NOT EXERCISED")
     )
+    print(
+        "RunenGPU public browser DisplayP3: "
+        + ("EXERCISED" if public_display_p3_executed else "NOT EXERCISED")
+    )
     print(f"RunenGPU browser Rgba16Float color spaces: {rgba16float_color_spaces}")
     print(
         "RunenGPU browser surface evidence disposition: "
@@ -327,7 +344,7 @@ def report_browser_surface_evidence(
         + f" (diagnostic_stage={diagnostic_stage})"
     )
 
-    required_positive_bits = 0xF
+    required_positive_bits = 0x4F
     if disposition != "DELIVERY_PREREQUISITE_ESTABLISHED" or bits & required_positive_bits != required_positive_bits:
         raise RuntimeError(
             "RunenGPU browser surface delivery prerequisite not established: "

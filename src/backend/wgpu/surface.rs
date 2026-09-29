@@ -1,7 +1,7 @@
 pub(crate) mod execution;
 
-use super::adapter_mapping::known_formats;
 use super::device_request::{enforce_runengpu_instance_flags, request_with_instance};
+use super::texture_format_mapping::{TEXTURE_FORMATS, texture_format};
 use super::{WgpuDeviceHealth, WgpuErrorAttributionGate};
 use crate::{
     GpuAcquiredSurfaceImage, GpuCapabilityFeature, GpuCapabilityRequirement,
@@ -9,21 +9,21 @@ use crate::{
     GpuContextRequestError, GpuContextRequestErrorCategory, GpuExecutionPolicy,
     GpuRealizationPolicies, GpuResourceCommon, GpuResourceLabel, GpuResourceProvenance,
     GpuSurfaceAcquireError, GpuSurfaceAcquireErrorCategory, GpuSurfaceAcquisitionStatus,
-    GpuSurfaceAlphaMode, GpuSurfaceCapabilities, GpuSurfaceConfiguration, GpuSurfaceError,
-    GpuSurfaceErrorCategory, GpuSurfaceGeneration, GpuSurfaceHandle, GpuSurfaceId,
-    GpuSurfaceLeaseOwner, GpuSurfaceLeaseReleaser, GpuSurfacePresentMode, GpuSurfaceResourceLease,
-    GpuSurfaceTarget, GpuTextureAspect, GpuTextureDescriptor, GpuTextureDimension,
-    GpuTextureExtent, GpuTextureFormat, GpuTextureHandle, GpuTextureInitialization,
-    GpuTextureSubresourceRange, GpuTextureUsage, GpuTextureUsages, GpuTextureViewDescriptor,
-    GpuTextureViewDimension, GpuTextureViewHandle, GpuWorkResourceId, GpuWorkResourceIdAllocator,
-    allocate_surface_id, allocate_surface_lease_id,
+    GpuSurfaceAlphaMode, GpuSurfaceCapabilities, GpuSurfaceColorSpace, GpuSurfaceConfiguration,
+    GpuSurfaceError, GpuSurfaceErrorCategory, GpuSurfaceFormatCapabilities, GpuSurfaceGeneration,
+    GpuSurfaceHandle, GpuSurfaceId, GpuSurfaceLeaseOwner, GpuSurfaceLeaseReleaser,
+    GpuSurfacePresentMode, GpuSurfaceResourceLease, GpuSurfaceTarget, GpuTextureAspect,
+    GpuTextureDescriptor, GpuTextureDimension, GpuTextureExtent, GpuTextureFormat,
+    GpuTextureHandle, GpuTextureInitialization, GpuTextureSubresourceRange, GpuTextureUsage,
+    GpuTextureUsages, GpuTextureViewDescriptor, GpuTextureViewDimension, GpuTextureViewHandle,
+    GpuWorkResourceId, GpuWorkResourceIdAllocator, allocate_surface_id, allocate_surface_lease_id,
 };
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex, MutexGuard, Weak};
 use wgpu::{
     Adapter, CompositeAlphaMode, CurrentSurfaceTexture, Device, Instance, InstanceDescriptor,
-    PresentMode, Surface, SurfaceColorSpace, SurfaceConfiguration, SurfaceTexture, TextureFormat,
-    TextureUsages,
+    PresentMode, Surface, SurfaceColorSpace, SurfaceColorSpaces, SurfaceConfiguration,
+    SurfaceTexture, TextureFormat, TextureUsages,
 };
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -173,7 +173,7 @@ impl WgpuSurfaceState {
             ));
         }
         let capabilities = normalize_surface_capabilities(&surface.get_capabilities(adapter));
-        if capabilities.formats().is_empty()
+        if capabilities.format_capabilities().is_empty()
             || capabilities.present_modes().is_empty()
             || capabilities.alpha_modes().is_empty()
             || !capabilities.supports_usage(GpuTextureUsage::ColorAttachment)
@@ -615,11 +615,21 @@ fn ensure_surface_health(
 
 fn normalize_surface_capabilities(native: &wgpu::SurfaceCapabilities) -> GpuSurfaceCapabilities {
     let mut formats = Vec::new();
-    for native_format in &native.formats {
-        if let Some(format) = normalize_texture_format(*native_format) {
-            if !formats.contains(&format) {
-                formats.push(format);
-            }
+    for entry in &native.format_capabilities {
+        let Some(format) = normalize_texture_format(entry.format) else {
+            continue;
+        };
+        if formats
+            .iter()
+            .any(|known: &GpuSurfaceFormatCapabilities| known.format() == format)
+        {
+            continue;
+        }
+        if let Some(facts) = GpuSurfaceFormatCapabilities::from_normalized_facts(
+            format,
+            normalize_color_spaces(entry.color_spaces),
+        ) {
+            formats.push(facts);
         }
     }
 
@@ -670,6 +680,13 @@ fn validate_configuration(
             "configured surface format is absent from the normalized surface capability set",
         ));
     }
+    if !capabilities.supports_pair(configuration.format(), configuration.color_space()) {
+        return Err(GpuSurfaceError::new(
+            GpuSurfaceErrorCategory::UnsupportedColorSpace,
+            Some(surface),
+            "configured surface color space is absent for the selected format",
+        ));
+    }
     if let Some(usage) = configuration
         .usages()
         .iter()
@@ -695,17 +712,6 @@ fn validate_configuration(
             "configured alpha mode is absent from the normalized surface capability set",
         ));
     }
-    if configuration
-        .view_formats()
-        .iter()
-        .any(|format| map_texture_format(*format).is_none())
-    {
-        return Err(GpuSurfaceError::new(
-            GpuSurfaceErrorCategory::UnsupportedViewFormat,
-            Some(surface),
-            "configured surface view format is absent from the normalized backend format vocabulary",
-        ));
-    }
     Ok(())
 }
 
@@ -724,9 +730,8 @@ fn lower_configuration(configuration: &GpuSurfaceConfiguration) -> SurfaceConfig
         });
     SurfaceConfiguration {
         usage,
-        format: map_texture_format(configuration.format())
-            .expect("surface configuration construction accepts only normalized backend formats"),
-        color_space: SurfaceColorSpace::Auto,
+        format: texture_format(configuration.format()),
+        color_space: map_color_space(configuration.color_space()),
         width: configuration.width(),
         height: configuration.height(),
         present_mode: map_present_mode(configuration.present_mode()),
@@ -736,32 +741,63 @@ fn lower_configuration(configuration: &GpuSurfaceConfiguration) -> SurfaceConfig
             .view_formats()
             .iter()
             .copied()
-            .map(|format| {
-                map_texture_format(format).expect(
-                    "surface view format construction accepts only normalized backend formats",
-                )
-            })
+            .map(texture_format)
             .collect(),
     }
 }
 
 fn normalize_texture_format(native: TextureFormat) -> Option<GpuTextureFormat> {
-    // RGBA16 intermediate textures do not extend the G7A presentation vocabulary.
-    if matches!(
-        native,
-        TextureFormat::Rgba16Uint | TextureFormat::Rgba16Sint | TextureFormat::Rgba16Float
-    ) {
-        return None;
-    }
-    known_formats()
+    TEXTURE_FORMATS
         .into_iter()
-        .find_map(|(normalized, candidate)| (candidate == native).then_some(normalized))
+        .find_map(|(normalized, candidate)| {
+            (*candidate == native && !normalized.is_depth() && !normalized.is_stencil())
+                .then_some(*normalized)
+        })
 }
 
-fn map_texture_format(format: GpuTextureFormat) -> Option<TextureFormat> {
-    known_formats()
-        .into_iter()
-        .find_map(|(candidate, native)| (candidate == format).then_some(native))
+fn normalize_color_spaces(native: SurfaceColorSpaces) -> Vec<GpuSurfaceColorSpace> {
+    [
+        (SurfaceColorSpaces::SRGB, GpuSurfaceColorSpace::Srgb),
+        (
+            SurfaceColorSpaces::EXTENDED_SRGB_LINEAR,
+            GpuSurfaceColorSpace::ExtendedSrgbLinear,
+        ),
+        (
+            SurfaceColorSpaces::DISPLAY_P3,
+            GpuSurfaceColorSpace::DisplayP3,
+        ),
+        (
+            SurfaceColorSpaces::BT2100_PQ,
+            GpuSurfaceColorSpace::Bt2100Pq,
+        ),
+        (
+            SurfaceColorSpaces::BT2100_HLG,
+            GpuSurfaceColorSpace::Bt2100Hlg,
+        ),
+        (
+            SurfaceColorSpaces::EXTENDED_SRGB,
+            GpuSurfaceColorSpace::ExtendedSrgb,
+        ),
+        (
+            SurfaceColorSpaces::EXTENDED_DISPLAY_P3,
+            GpuSurfaceColorSpace::ExtendedDisplayP3,
+        ),
+    ]
+    .into_iter()
+    .filter_map(|(flag, normalized)| native.contains(flag).then_some(normalized))
+    .collect()
+}
+
+const fn map_color_space(color_space: GpuSurfaceColorSpace) -> SurfaceColorSpace {
+    match color_space {
+        GpuSurfaceColorSpace::Srgb => SurfaceColorSpace::Srgb,
+        GpuSurfaceColorSpace::ExtendedSrgbLinear => SurfaceColorSpace::ExtendedSrgbLinear,
+        GpuSurfaceColorSpace::DisplayP3 => SurfaceColorSpace::DisplayP3,
+        GpuSurfaceColorSpace::Bt2100Pq => SurfaceColorSpace::Bt2100Pq,
+        GpuSurfaceColorSpace::Bt2100Hlg => SurfaceColorSpace::Bt2100Hlg,
+        GpuSurfaceColorSpace::ExtendedSrgb => SurfaceColorSpace::ExtendedSrgb,
+        GpuSurfaceColorSpace::ExtendedDisplayP3 => SurfaceColorSpace::ExtendedDisplayP3,
+    }
 }
 
 const fn normalize_present_mode(native: PresentMode) -> Option<GpuSurfacePresentMode> {
@@ -1005,8 +1041,16 @@ mod tests {
     fn capabilities() -> GpuSurfaceCapabilities {
         GpuSurfaceCapabilities::from_normalized_facts(
             vec![
-                GpuTextureFormat::Bgra8Unorm,
-                GpuTextureFormat::Bgra8UnormSrgb,
+                GpuSurfaceFormatCapabilities::from_normalized_facts(
+                    GpuTextureFormat::Bgra8Unorm,
+                    [GpuSurfaceColorSpace::Srgb, GpuSurfaceColorSpace::DisplayP3],
+                )
+                .unwrap(),
+                GpuSurfaceFormatCapabilities::from_normalized_facts(
+                    GpuTextureFormat::Bgra8UnormSrgb,
+                    [GpuSurfaceColorSpace::Srgb],
+                )
+                .unwrap(),
             ],
             vec![
                 GpuTextureUsage::ColorAttachment,
@@ -1022,6 +1066,7 @@ mod tests {
             640,
             480,
             GpuTextureFormat::Bgra8Unorm,
+            GpuSurfaceColorSpace::Srgb,
             [
                 GpuTextureUsage::ColorAttachment,
                 GpuTextureUsage::CopySource,
@@ -1063,15 +1108,23 @@ mod tests {
     }
 
     #[test]
-    fn capability_normalization_keeps_only_explicit_g7a_vocabulary() {
+    fn capability_normalization_uses_exact_per_format_pairs() {
         let native = wgpu::SurfaceCapabilities {
-            formats: vec![
-                TextureFormat::Bgra8UnormSrgb,
-                TextureFormat::Rgba16Uint,
-                TextureFormat::Rgba16Sint,
-                TextureFormat::Rgba16Float,
+            formats: vec![TextureFormat::Bgra8UnormSrgb],
+            format_capabilities: vec![
+                wgpu::SurfaceFormatCapabilities {
+                    format: TextureFormat::Bgra8UnormSrgb,
+                    color_spaces: SurfaceColorSpaces::SRGB | SurfaceColorSpaces::DISPLAY_P3,
+                },
+                wgpu::SurfaceFormatCapabilities {
+                    format: TextureFormat::Rgba16Float,
+                    color_spaces: SurfaceColorSpaces::EXTENDED_SRGB_LINEAR,
+                },
+                wgpu::SurfaceFormatCapabilities {
+                    format: TextureFormat::Depth32Float,
+                    color_spaces: SurfaceColorSpaces::SRGB,
+                },
             ],
-            format_capabilities: Vec::new(),
             present_modes: vec![PresentMode::AutoVsync, PresentMode::Fifo],
             alpha_modes: vec![CompositeAlphaMode::Auto, CompositeAlphaMode::Opaque],
             usages: TextureUsages::RENDER_ATTACHMENT
@@ -1079,7 +1132,23 @@ mod tests {
                 | TextureUsages::TEXTURE_BINDING,
         };
         let normalized = normalize_surface_capabilities(&native);
-        assert_eq!(normalized.formats(), &[GpuTextureFormat::Bgra8UnormSrgb]);
+        assert_eq!(normalized.format_capabilities().len(), 2);
+        assert_eq!(
+            normalized.format_capabilities()[0].format(),
+            GpuTextureFormat::Bgra8UnormSrgb
+        );
+        assert_eq!(
+            normalized.format_capabilities()[0].color_spaces(),
+            &[GpuSurfaceColorSpace::Srgb, GpuSurfaceColorSpace::DisplayP3]
+        );
+        assert_eq!(
+            normalized.format_capabilities()[1].format(),
+            GpuTextureFormat::Rgba16Float
+        );
+        assert_eq!(
+            normalized.format_capabilities()[1].color_spaces(),
+            &[GpuSurfaceColorSpace::ExtendedSrgbLinear]
+        );
         assert_eq!(
             normalized.usages(),
             &[
@@ -1101,6 +1170,7 @@ mod tests {
             640,
             480,
             GpuTextureFormat::Bgra8Unorm,
+            GpuSurfaceColorSpace::Srgb,
             [
                 GpuTextureUsage::ColorAttachment,
                 GpuTextureUsage::CopyDestination,
@@ -1115,6 +1185,70 @@ mod tests {
             validate_configuration(surface, &capabilities(), &unsupported),
             Err(error) if error.category() == GpuSurfaceErrorCategory::UnsupportedUsage
         ));
+
+        let unsupported_color_space = GpuSurfaceConfiguration::new(
+            640,
+            480,
+            GpuTextureFormat::Bgra8UnormSrgb,
+            GpuSurfaceColorSpace::DisplayP3,
+            [GpuTextureUsage::ColorAttachment],
+            GpuSurfacePresentMode::Fifo,
+            GpuSurfaceAlphaMode::Opaque,
+            2,
+            [],
+        )
+        .unwrap();
+        assert!(matches!(
+            validate_configuration(surface, &capabilities(), &unsupported_color_space),
+            Err(error) if error.category() == GpuSurfaceErrorCategory::UnsupportedColorSpace
+        ));
+
+        let unsupported_format = GpuSurfaceConfiguration::new(
+            640,
+            480,
+            GpuTextureFormat::Rgba16Float,
+            GpuSurfaceColorSpace::Srgb,
+            [GpuTextureUsage::ColorAttachment],
+            GpuSurfacePresentMode::Fifo,
+            GpuSurfaceAlphaMode::Opaque,
+            2,
+            [],
+        )
+        .unwrap();
+        assert!(matches!(
+            validate_configuration(surface, &capabilities(), &unsupported_format),
+            Err(error) if error.category() == GpuSurfaceErrorCategory::UnsupportedFormat
+        ));
+    }
+
+    #[test]
+    fn concrete_color_spaces_map_without_backend_auto() {
+        for (normalized, native) in [
+            (GpuSurfaceColorSpace::Srgb, SurfaceColorSpace::Srgb),
+            (
+                GpuSurfaceColorSpace::ExtendedSrgbLinear,
+                SurfaceColorSpace::ExtendedSrgbLinear,
+            ),
+            (
+                GpuSurfaceColorSpace::DisplayP3,
+                SurfaceColorSpace::DisplayP3,
+            ),
+            (GpuSurfaceColorSpace::Bt2100Pq, SurfaceColorSpace::Bt2100Pq),
+            (
+                GpuSurfaceColorSpace::Bt2100Hlg,
+                SurfaceColorSpace::Bt2100Hlg,
+            ),
+            (
+                GpuSurfaceColorSpace::ExtendedSrgb,
+                SurfaceColorSpace::ExtendedSrgb,
+            ),
+            (
+                GpuSurfaceColorSpace::ExtendedDisplayP3,
+                SurfaceColorSpace::ExtendedDisplayP3,
+            ),
+        ] {
+            assert_eq!(map_color_space(normalized), native);
+        }
     }
 
     #[test]
