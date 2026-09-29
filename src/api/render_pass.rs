@@ -496,11 +496,9 @@ mod tests {
             layered_color_attachment(&mut allocator, "layered mismatched count", 0, 3);
         let reference_count =
             layered_color_attachment(&mut allocator, "layered reference count", 0, 2);
-        let mismatch = GpuRenderPassSignature::from_attachments(
-            &[reference_count, mismatched_count],
-            None,
-        )
-        .expect_err("all multiview attachments in one pass must use the same view count");
+        let mismatch =
+            GpuRenderPassSignature::from_attachments(&[reference_count, mismatched_count], None)
+                .expect_err("all multiview attachments in one pass must use the same view count");
         assert_eq!(mismatch.cause(), GpuWorkOperationCause::InvalidAttachment);
         assert!(matches!(
             signature
