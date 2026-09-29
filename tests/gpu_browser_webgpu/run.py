@@ -255,8 +255,8 @@ def report_browser_surface_evidence(
         raise RuntimeError("browser surface evidence executed DisplayP3 without capability census")
     if public_executed and public_format_code == 0:
         raise RuntimeError("public browser surface execution omitted its normalized format")
-    if census_reached and direct_format_code == 0:
-        raise RuntimeError("direct browser surface census omitted its selected format")
+    if display_p3_advertised and direct_format_code == 0:
+        raise RuntimeError("advertised DisplayP3 omitted its selected ordinary format")
 
     advertised_color_spaces = [
         name for bit, name in SURFACE_COLOR_SPACES if color_space_mask & bit

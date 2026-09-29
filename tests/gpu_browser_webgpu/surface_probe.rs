@@ -410,14 +410,21 @@ async fn run_direct_wgpu(window: Arc<Window>) -> Result<SurfaceEvidence, u32> {
                     .contains(wgpu::SurfaceColorSpaces::DISPLAY_P3)
         })
     })
-    .ok_or(DISPOSITION_BACKEND_CAPABILITY_INCONSISTENT)?;
+    .or_else(|| {
+        caps.format_capabilities.iter().find(|entry| {
+            matches!(
+                entry.format,
+                wgpu::TextureFormat::Rgba8Unorm | wgpu::TextureFormat::Bgra8Unorm
+            )
+        })
+    });
 
     let mut evidence = SurfaceEvidence {
         disposition: DISPOSITION_BACKEND_CAPABILITY_INCONSISTENT,
-        bits: BIT_DIRECT_CENSUS | BIT_DISPLAY_P3_ADVERTISED,
+        bits: BIT_DIRECT_CENSUS,
         public_format: FORMAT_UNKNOWN,
-        direct_format: wgpu_format_code(selected.format),
-        advertised_color_spaces: color_space_mask(selected.color_spaces),
+        direct_format: selected.map_or(FORMAT_UNKNOWN, |entry| wgpu_format_code(entry.format)),
+        advertised_color_spaces: selected.map_or(0, |entry| color_space_mask(entry.color_spaces)),
         rgba16float_color_spaces: rgba16float_entry
             .map(|entry| color_space_mask(entry.color_spaces))
             .unwrap_or(0),
@@ -426,6 +433,16 @@ async fn run_direct_wgpu(window: Arc<Window>) -> Result<SurfaceEvidence, u32> {
     if rgba16float_entry.is_some() {
         evidence.bits |= BIT_RGBA16FLOAT_ADVERTISED;
     }
+    let Some(selected) = selected else {
+        return Ok(evidence);
+    };
+    if !selected
+        .color_spaces
+        .contains(wgpu::SurfaceColorSpaces::DISPLAY_P3)
+    {
+        return Ok(evidence);
+    }
+    evidence.bits |= BIT_DISPLAY_P3_ADVERTISED;
 
     let config = wgpu::SurfaceConfiguration {
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
@@ -452,9 +469,13 @@ async fn run_direct_wgpu(window: Arc<Window>) -> Result<SurfaceEvidence, u32> {
         }
     };
 
-    let first = acquire()?;
+    let Ok(first) = acquire() else {
+        return Ok(evidence);
+    };
     clear_direct_surface(&device, &queue, first);
-    let second = acquire()?;
+    let Ok(second) = acquire() else {
+        return Ok(evidence);
+    };
     drop(second);
 
     evidence.bits |= BIT_DISPLAY_P3_EXECUTED;
