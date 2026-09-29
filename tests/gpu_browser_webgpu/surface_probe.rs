@@ -167,8 +167,10 @@ fn clear_and_present_graph(image: &GpuAcquiredSurfaceImage) -> GpuPreparedWorkGr
     let present =
         GpuPresentOperation::new(view.clone().into(), view.descriptor().subresources()).unwrap();
 
-    let mut builder =
-        GpuWorkFragmentBuilder::new(label("browser surface proof"), provenance("browser surface proof"));
+    let mut builder = GpuWorkFragmentBuilder::new(
+        label("browser surface proof"),
+        provenance("browser surface proof"),
+    );
     builder.declare_resource(texture.into()).unwrap();
     builder.declare_resource(view.into()).unwrap();
     builder
@@ -241,7 +243,12 @@ async fn run_public_surface(window: Arc<Window>) -> Result<u32, ()> {
         .formats()
         .iter()
         .copied()
-        .find(|format| matches!(format, GpuTextureFormat::Rgba8Unorm | GpuTextureFormat::Bgra8Unorm))
+        .find(|format| {
+            matches!(
+                format,
+                GpuTextureFormat::Rgba8Unorm | GpuTextureFormat::Bgra8Unorm
+            )
+        })
         .or_else(|| capabilities.formats().first().copied())
         .ok_or(())?;
     let present_mode = capabilities
@@ -268,7 +275,9 @@ async fn run_public_surface(window: Arc<Window>) -> Result<u32, ()> {
         [],
     )
     .map_err(|_| ())?;
-    let configured = context.configure_surface(surface, configuration).map_err(|_| ())?;
+    let configured = context
+        .configure_surface(surface, configuration)
+        .map_err(|_| ())?;
     let image = context.acquire_surface_image(configured).map_err(|_| ())?;
     if image.texture().descriptor().common().ownership() != GpuResourceOwnership::SurfaceAcquired {
         return Err(());
@@ -327,14 +336,11 @@ fn color_space_mask(spaces: wgpu::SurfaceColorSpaces) -> u32 {
     mask
 }
 
-fn clear_direct_surface(
-    device: &wgpu::Device,
-    queue: &wgpu::Queue,
-    frame: wgpu::SurfaceTexture,
-) {
-    let view = frame.texture.create_view(&wgpu::TextureViewDescriptor::default());
-    let mut encoder =
-        device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+fn clear_direct_surface(device: &wgpu::Device, queue: &wgpu::Queue, frame: wgpu::SurfaceTexture) {
+    let view = frame
+        .texture
+        .create_view(&wgpu::TextureViewDescriptor::default());
+    let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
     {
         let _pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("RunenGPU direct DisplayP3 clear"),
@@ -389,19 +395,20 @@ async fn run_direct_wgpu(window: Arc<Window>) -> Result<SurfaceEvidence, u32> {
         .iter()
         .any(|entry| entry.format == wgpu::TextureFormat::Rgba16Float);
 
-    let selected = [wgpu::TextureFormat::Rgba8Unorm, wgpu::TextureFormat::Bgra8Unorm]
-        .into_iter()
-        .find_map(|format| {
-            caps.format_capabilities
-                .iter()
-                .find(|entry| {
-                    entry.format == format
-                        && entry
-                            .color_spaces
-                            .contains(wgpu::SurfaceColorSpaces::DISPLAY_P3)
-                })
+    let selected = [
+        wgpu::TextureFormat::Rgba8Unorm,
+        wgpu::TextureFormat::Bgra8Unorm,
+    ]
+    .into_iter()
+    .find_map(|format| {
+        caps.format_capabilities.iter().find(|entry| {
+            entry.format == format
+                && entry
+                    .color_spaces
+                    .contains(wgpu::SurfaceColorSpaces::DISPLAY_P3)
         })
-        .ok_or(DISPOSITION_BACKEND_CAPABILITY_INCONSISTENT)?;
+    })
+    .ok_or(DISPOSITION_BACKEND_CAPABILITY_INCONSISTENT)?;
 
     let mut evidence = SurfaceEvidence {
         disposition: DISPOSITION_BACKEND_CAPABILITY_INCONSISTENT,
@@ -476,8 +483,15 @@ pub(super) async fn run() -> SurfaceEvidence {
     evidence.bits |= BIT_PUBLIC_SURFACE;
     evidence.public_format = public_format;
 
-    if evidence.bits & (BIT_PUBLIC_SURFACE | BIT_DIRECT_CENSUS | BIT_DISPLAY_P3_ADVERTISED | BIT_DISPLAY_P3_EXECUTED)
-        == (BIT_PUBLIC_SURFACE | BIT_DIRECT_CENSUS | BIT_DISPLAY_P3_ADVERTISED | BIT_DISPLAY_P3_EXECUTED)
+    if evidence.bits
+        & (BIT_PUBLIC_SURFACE
+            | BIT_DIRECT_CENSUS
+            | BIT_DISPLAY_P3_ADVERTISED
+            | BIT_DISPLAY_P3_EXECUTED)
+        == (BIT_PUBLIC_SURFACE
+            | BIT_DIRECT_CENSUS
+            | BIT_DISPLAY_P3_ADVERTISED
+            | BIT_DISPLAY_P3_EXECUTED)
     {
         evidence.disposition = DISPOSITION_PREREQUISITE_ESTABLISHED;
     }
