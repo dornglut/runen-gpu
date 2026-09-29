@@ -224,7 +224,7 @@ def report_browser_compression_features(
     )
 
 
-def report_optional_format_roles(
+def retain_browser_optional_format_roles(
     value: dict[str, object], *, artifact_dir: pathlib.Path, revision: str
 ) -> None:
     mask = value.get("optionalFormatRolesMask")
@@ -1297,7 +1297,7 @@ def main() -> int:
         report_browser_compression_features(
             value, artifact_dir=args.artifact_dir, revision=args.revision
         )
-        report_optional_format_roles(
+        retain_browser_optional_format_roles(
             value, artifact_dir=args.artifact_dir, revision=args.revision
         )
         print("RunenGPU actual-browser WebGPU conformance: PASS")
