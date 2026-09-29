@@ -103,6 +103,7 @@ mod browser {
         static SURFACE_EVIDENCE_PUBLIC_FORMAT: RefCell<u32> = RefCell::new(0);
         static SURFACE_EVIDENCE_DIRECT_FORMAT: RefCell<u32> = RefCell::new(0);
         static SURFACE_EVIDENCE_COLOR_SPACES: RefCell<u32> = RefCell::new(0);
+        static SURFACE_EVIDENCE_RGBA16FLOAT_COLOR_SPACES: RefCell<u32> = RefCell::new(0);
         static SURFACE_EVIDENCE_DIAGNOSTIC_STAGE: RefCell<u32> = RefCell::new(0);
     }
 
@@ -2304,6 +2305,9 @@ fn cs_main() {
         SURFACE_EVIDENCE_COLOR_SPACES.with(|slot| {
             *slot.borrow_mut() = surface_evidence.advertised_color_spaces;
         });
+        SURFACE_EVIDENCE_RGBA16FLOAT_COLOR_SPACES.with(|slot| {
+            *slot.borrow_mut() = surface_evidence.rgba16float_color_spaces;
+        });
         SURFACE_EVIDENCE_DIAGNOSTIC_STAGE
             .with(|slot| *slot.borrow_mut() = surface_evidence.diagnostic_stage);
     }
@@ -2360,6 +2364,11 @@ fn cs_main() {
     #[unsafe(no_mangle)]
     pub extern "C" fn runengpu_browser_surface_evidence_color_spaces() -> u32 {
         SURFACE_EVIDENCE_COLOR_SPACES.with(|value| *value.borrow())
+    }
+
+    #[unsafe(no_mangle)]
+    pub extern "C" fn runengpu_browser_surface_evidence_rgba16float_color_spaces() -> u32 {
+        SURFACE_EVIDENCE_RGBA16FLOAT_COLOR_SPACES.with(|value| *value.borrow())
     }
 
     #[unsafe(no_mangle)]

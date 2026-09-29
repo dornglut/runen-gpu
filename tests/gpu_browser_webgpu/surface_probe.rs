@@ -42,6 +42,7 @@ pub(super) struct SurfaceEvidence {
     pub public_format: u32,
     pub direct_format: u32,
     pub advertised_color_spaces: u32,
+    pub rgba16float_color_spaces: u32,
     pub diagnostic_stage: u32,
 }
 
@@ -133,6 +134,7 @@ async fn stop_event_loop(proxy: EventLoopProxy<SurfaceProbeEvent>) {
     let _ = proxy.send_event(SurfaceProbeEvent::Exit);
     for _ in 0..MAX_EVENT_LOOP_TICKS {
         if EVENT_LOOP_EXITED.with(|slot| *slot.borrow()) {
+            WINDOWS.with(|slot| *slot.borrow_mut() = None);
             return;
         }
         super::browser_yield().await;
@@ -390,10 +392,10 @@ async fn run_direct_wgpu(window: Arc<Window>) -> Result<SurfaceEvidence, u32> {
         return Err(DISPOSITION_CHARACTERIZATION_UNQUALIFIED);
     }
 
-    let rgba16float_advertised = caps
+    let rgba16float_entry = caps
         .format_capabilities
         .iter()
-        .any(|entry| entry.format == wgpu::TextureFormat::Rgba16Float);
+        .find(|entry| entry.format == wgpu::TextureFormat::Rgba16Float);
 
     let selected = [
         wgpu::TextureFormat::Rgba8Unorm,
@@ -416,9 +418,12 @@ async fn run_direct_wgpu(window: Arc<Window>) -> Result<SurfaceEvidence, u32> {
         public_format: FORMAT_UNKNOWN,
         direct_format: wgpu_format_code(selected.format),
         advertised_color_spaces: color_space_mask(selected.color_spaces),
+        rgba16float_color_spaces: rgba16float_entry
+            .map(|entry| color_space_mask(entry.color_spaces))
+            .unwrap_or(0),
         diagnostic_stage: 0,
     };
-    if rgba16float_advertised {
+    if rgba16float_entry.is_some() {
         evidence.bits |= BIT_RGBA16FLOAT_ADVERTISED;
     }
 

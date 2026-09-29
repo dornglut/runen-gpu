@@ -124,6 +124,7 @@ const done = arguments[arguments.length - 1];
         typeof wasm.runengpu_browser_surface_evidence_public_format !== "function" ||
         typeof wasm.runengpu_browser_surface_evidence_direct_format !== "function" ||
         typeof wasm.runengpu_browser_surface_evidence_color_spaces !== "function" ||
+        typeof wasm.runengpu_browser_surface_evidence_rgba16float_color_spaces !== "function" ||
         typeof wasm.runengpu_browser_surface_evidence_diagnostic_stage !== "function") {
       throw new Error("RunenGPU browser proof control exports are absent");
     }
@@ -165,6 +166,7 @@ const done = arguments[arguments.length - 1];
           surfaceEvidencePublicFormat: wasm.runengpu_browser_surface_evidence_public_format(),
           surfaceEvidenceDirectFormat: wasm.runengpu_browser_surface_evidence_direct_format(),
           surfaceEvidenceColorSpaces: wasm.runengpu_browser_surface_evidence_color_spaces(),
+          surfaceEvidenceRgba16floatColorSpaces: wasm.runengpu_browser_surface_evidence_rgba16float_color_spaces(),
           surfaceEvidenceDiagnosticStage: wasm.runengpu_browser_surface_evidence_diagnostic_stage(),
         });
         return;
@@ -214,6 +216,7 @@ def report_browser_surface_evidence(
     public_format_code = value.get("surfaceEvidencePublicFormat")
     direct_format_code = value.get("surfaceEvidenceDirectFormat")
     color_space_mask = value.get("surfaceEvidenceColorSpaces")
+    rgba16float_color_space_mask = value.get("surfaceEvidenceRgba16floatColorSpaces")
     diagnostic_stage = value.get("surfaceEvidenceDiagnosticStage")
     integers = (
         disposition_code,
@@ -221,6 +224,7 @@ def report_browser_surface_evidence(
         public_format_code,
         direct_format_code,
         color_space_mask,
+        rgba16float_color_space_mask,
         diagnostic_stage,
     )
     if any(type(item) is not int for item in integers):
@@ -231,6 +235,11 @@ def report_browser_surface_evidence(
         raise RuntimeError("browser surface evidence returned an unknown format code")
     if color_space_mask & ~0xF:
         raise RuntimeError(f"browser surface evidence returned unknown color-space bits: {color_space_mask:#x}")
+    if rgba16float_color_space_mask & ~0xF:
+        raise RuntimeError(
+            "browser surface evidence returned unknown Rgba16Float color-space bits: "
+            f"{rgba16float_color_space_mask:#x}"
+        )
 
     public_executed = bool(bits & (1 << 0))
     census_reached = bool(bits & (1 << 1))
@@ -252,6 +261,11 @@ def report_browser_surface_evidence(
     advertised_color_spaces = [
         name for bit, name in SURFACE_COLOR_SPACES if color_space_mask & bit
     ]
+    rgba16float_color_spaces = [
+        name for bit, name in SURFACE_COLOR_SPACES if rgba16float_color_space_mask & bit
+    ]
+    if rgba16float_advertised != bool(rgba16float_color_spaces):
+        raise RuntimeError("Rgba16Float advertisement disagrees with its color-space facts")
     if display_p3_advertised and "DisplayP3" not in advertised_color_spaces:
         raise RuntimeError("DisplayP3 evidence bit disagrees with advertised color-space mask")
 
@@ -280,6 +294,7 @@ def report_browser_surface_evidence(
             "display_p3_advertised": display_p3_advertised,
             "display_p3_executed": display_p3_executed,
             "rgba16float_advertised": rgba16float_advertised,
+            "rgba16float_advertised_color_spaces": rgba16float_color_spaces,
             "extended_pair_executed": extended_pair_executed,
         },
     }
@@ -305,6 +320,7 @@ def report_browser_surface_evidence(
         "RunenGPU browser DisplayP3: "
         + ("EXERCISED" if display_p3_executed else "NOT EXERCISED")
     )
+    print(f"RunenGPU browser Rgba16Float color spaces: {rgba16float_color_spaces}")
     print(
         "RunenGPU browser surface evidence disposition: "
         + disposition
