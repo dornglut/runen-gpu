@@ -396,6 +396,120 @@ mod tests {
         .unwrap()
     }
 
+    fn layered_color_attachment(
+        allocator: &mut GpuWorkResourceIdAllocator,
+        name: &str,
+        base_layer: u32,
+        layer_count: u32,
+    ) -> GpuRenderColorAttachment {
+        let resource_label = label(name);
+        let texture = allocator
+            .allocate_texture_handle(
+                GpuTextureDescriptor::new(
+                    common(name),
+                    GpuTextureDimension::D2,
+                    GpuTextureExtent::new(
+                        &resource_label,
+                        GpuTextureDimension::D2,
+                        16,
+                        8,
+                        base_layer + layer_count,
+                    )
+                    .unwrap(),
+                    1,
+                    1,
+                    GpuTextureFormat::Rgba8Unorm,
+                    GpuTextureUsages::new(
+                        &resource_label,
+                        [GpuTextureUsage::ColorAttachment],
+                    )
+                    .unwrap(),
+                    GpuTextureInitialization::Uninitialized,
+                )
+                .unwrap(),
+            )
+            .unwrap();
+        let subresources = GpuTextureSubresourceRange::new(
+            texture.descriptor().common().label(),
+            0,
+            1,
+            base_layer,
+            layer_count,
+            GpuTextureAspect::Color,
+        )
+        .unwrap();
+        let view = allocator
+            .allocate_texture_view_handle(
+                GpuTextureViewDescriptor::new(
+                    common(&format!("{name} view")),
+                    &texture,
+                    None,
+                    GpuTextureViewDimension::D2Array,
+                    subresources,
+                )
+                .unwrap(),
+            )
+            .unwrap();
+        GpuRenderColorAttachment::new(
+            view,
+            GpuColorAttachmentLoad::Clear(GpuColorClearValue::new(0.0, 0.0, 0.0, 1.0).unwrap()),
+            GpuAttachmentStore::Store,
+            None,
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn multiview_state_and_signature_enforce_the_normalized_2_through_31_domain() {
+        for rejected in [0, 1, 32, u32::MAX] {
+            let error = GpuMultiviewState::new(rejected)
+                .expect_err("outside-domain multiview count must reject structurally");
+            assert_eq!(error.cause(), GpuWorkOperationCause::InvalidMultiview);
+        }
+        assert_eq!(GpuMultiviewState::new(2).unwrap().view_count(), 2);
+        assert_eq!(GpuMultiviewState::new(31).unwrap().view_count(), 31);
+
+        let mut allocator =
+            GpuWorkResourceIdAllocator::for_owner_scope(NonZeroU64::new(93).unwrap());
+        let first = layered_color_attachment(&mut allocator, "layered first", 1, 2);
+        assert_eq!(first.source().descriptor().subresources().base_array_layer(), 1);
+        assert_eq!(first.source().descriptor().subresources().array_layer_count(), 2);
+        let second = layered_color_attachment(&mut allocator, "layered second", 4, 2);
+        let signature = GpuRenderPassSignature::from_attachments(&[first, second], None).unwrap();
+        assert_eq!(
+            signature.multiview(),
+            Some(GpuMultiviewState::new(2).unwrap())
+        );
+        assert!(matches!(
+            signature
+                .requirements()
+                .get(GpuCapabilityFeature::Multiview),
+            Some(GpuCapabilityRequirement::Required(
+                GpuCapabilityFeature::Multiview
+            ))
+        ));
+        assert!(
+            signature
+                .validate_limits(GpuLimits::new(
+                    1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1,
+                )
+                .unwrap()
+                .with_multiview_limit(1))
+                .is_err()
+        );
+        assert!(
+            signature
+                .validate_limits(
+                    GpuLimits::new(
+                        1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1,
+                    )
+                    .unwrap()
+                    .with_multiview_limit(2)
+                )
+                .is_ok()
+        );
+    }
+
     #[test]
     fn signature_uses_effective_mip_extent_and_rejects_attachment_mismatch() {
         let mut allocator =
