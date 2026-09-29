@@ -4,6 +4,7 @@ use super::target::{
     GpuColorTargetStateDescriptor, GpuDepthStencilStateDescriptor, GpuFragmentOutputStateDescriptor,
 };
 use super::vertex::GpuVertexInputStateDescriptor;
+use crate::GpuMultiviewState;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct GpuRenderPipelineStateDescriptor {
@@ -12,6 +13,7 @@ pub struct GpuRenderPipelineStateDescriptor {
     primitive: GpuPrimitiveStateDescriptor,
     depth_stencil: Option<GpuDepthStencilStateDescriptor>,
     multisample: GpuMultisampleStateDescriptor,
+    multiview: Option<GpuMultiviewState>,
 }
 
 impl GpuRenderPipelineStateDescriptor {
@@ -88,6 +90,7 @@ impl GpuRenderPipelineStateDescriptor {
             primitive,
             depth_stencil,
             multisample,
+            multiview: None,
         })
     }
 
@@ -109,6 +112,28 @@ impl GpuRenderPipelineStateDescriptor {
 
     pub const fn multisample(&self) -> GpuMultisampleStateDescriptor {
         self.multisample
+    }
+
+    pub const fn multiview(&self) -> Option<GpuMultiviewState> {
+        self.multiview
+    }
+
+    pub fn with_multiview(
+        mut self,
+        multiview: GpuMultiviewState,
+    ) -> Result<Self, GpuProgramContractError> {
+        if self.multisample.sample_count() != 1 {
+            return Err(invalid_render_pipeline_state(
+                format!(
+                    "samples={}, multiview={:?}",
+                    self.multisample.sample_count(),
+                    multiview
+                ),
+                "use single-sampled render-pipeline state for the first normalized multiview contract",
+            ));
+        }
+        self.multiview = Some(multiview);
+        Ok(self)
     }
 
     pub const fn has_fragment_stage(&self) -> bool {

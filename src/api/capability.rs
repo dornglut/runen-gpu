@@ -23,6 +23,7 @@ pub enum GpuCapabilityFeature {
     DepthBiasClamp,
     DepthClipControl,
     DualSourceBlending,
+    Multiview,
     ShaderF16,
     TimestampQuery,
     Presentation,
@@ -354,6 +355,7 @@ pub struct GpuLimits {
     max_vertex_buffer_array_stride: u32,
     max_binding_array_elements_per_shader_stage: u32,
     max_binding_array_sampler_elements_per_shader_stage: u32,
+    max_multiview_view_count: u32,
 }
 
 impl GpuLimits {
@@ -423,6 +425,7 @@ impl GpuLimits {
             max_vertex_buffer_array_stride,
             max_binding_array_elements_per_shader_stage: 0,
             max_binding_array_sampler_elements_per_shader_stage: 0,
+            max_multiview_view_count: 0,
         })
     }
 
@@ -486,6 +489,10 @@ impl GpuLimits {
         self.max_binding_array_sampler_elements_per_shader_stage
     }
 
+    pub const fn max_multiview_view_count(self) -> u32 {
+        self.max_multiview_view_count
+    }
+
     /// Enriches normalized limits with fixed binding-array element budgets.
     ///
     /// Zero is a truthful value for contexts/backends where fixed binding arrays are not admitted.
@@ -498,6 +505,14 @@ impl GpuLimits {
             max_binding_array_elements_per_shader_stage;
         self.max_binding_array_sampler_elements_per_shader_stage =
             max_binding_array_sampler_elements_per_shader_stage;
+        self
+    }
+
+    /// Enriches normalized limits with the admitted contiguous multiview view-count budget.
+    ///
+    /// Zero is truthful whenever multiview is not admitted for the adapter/device/workload.
+    pub const fn with_multiview_limit(mut self, max_multiview_view_count: u32) -> Self {
+        self.max_multiview_view_count = max_multiview_view_count;
         self
     }
 
@@ -541,6 +556,7 @@ impl GpuLimits {
             max_vertex_buffer_array_stride,
             max_binding_array_elements_per_shader_stage: 0,
             max_binding_array_sampler_elements_per_shader_stage: 0,
+            max_multiview_view_count: 0,
         }
     }
 }

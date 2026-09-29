@@ -78,6 +78,7 @@ pub enum GpuLimitKind {
     MaxVertexBufferArrayStride,
     MaxBindingArrayElementsPerShaderStage,
     MaxBindingArraySamplerElementsPerShaderStage,
+    MaxMultiviewViewCount,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -532,6 +533,7 @@ pub(crate) const fn preferred_degradation_is_valid(
         | GpuCapabilityFeature::DepthBiasClamp
         | GpuCapabilityFeature::DepthClipControl
         | GpuCapabilityFeature::DualSourceBlending
+        | GpuCapabilityFeature::Multiview
         | GpuCapabilityFeature::ShaderF16 => {
             matches!(fallback, GpuPreferredFallback::SelectAlternativeWork)
         }
@@ -558,7 +560,7 @@ pub(crate) fn alignment_value(facts: GpuAlignmentFacts, kind: GpuAlignmentKind) 
 mod tests {
     use super::*;
 
-    const FEATURES: [GpuCapabilityFeature; 20] = [
+    const FEATURES: [GpuCapabilityFeature; 21] = [
         GpuCapabilityFeature::Compute,
         GpuCapabilityFeature::RenderPipeline,
         GpuCapabilityFeature::Copy,
@@ -576,6 +578,7 @@ mod tests {
         GpuCapabilityFeature::DepthBiasClamp,
         GpuCapabilityFeature::DepthClipControl,
         GpuCapabilityFeature::DualSourceBlending,
+        GpuCapabilityFeature::Multiview,
         GpuCapabilityFeature::ShaderF16,
         GpuCapabilityFeature::TimestampQuery,
         GpuCapabilityFeature::Presentation,

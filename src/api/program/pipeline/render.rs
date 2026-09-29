@@ -1,9 +1,10 @@
 use super::super::contract_diagnostics::{GpuProgramContractCause, GpuProgramContractError};
 use super::super::requirement_identity::hash_capability_requirements;
 use super::super::{
-    GpuEntryPointName, GpuExpectedFragmentOutputSignature, GpuExpectedVertexInputSignature,
-    GpuPipelineLayoutDescriptor, GpuProgramDescriptor, GpuShaderStage, GpuSpecializationValueSet,
-    compare_fragment_output_signatures, compare_vertex_input_signatures,
+    GpuEntryPointDescriptor, GpuEntryPointName, GpuExpectedFragmentOutputSignature,
+    GpuExpectedVertexInputSignature, GpuPipelineLayoutDescriptor, GpuProgramDescriptor,
+    GpuShaderStage, GpuSpecializationValueSet, compare_fragment_output_signatures,
+    compare_vertex_input_signatures,
 };
 use super::GpuPipelineConfiguration;
 use super::render_state::{GpuDepthClipMode, GpuRenderPipelineStateDescriptor};
@@ -101,6 +102,23 @@ impl GpuRenderPipelineDescriptor {
             }
         }
 
+        let selected_uses_view_index = program
+            .entry_point(GpuShaderStage::Vertex, entry_points.vertex())
+            .is_some_and(GpuEntryPointDescriptor::uses_view_index)
+            || entry_points.fragment().is_some_and(|fragment| {
+                program
+                    .entry_point(GpuShaderStage::Fragment, fragment)
+                    .is_some_and(GpuEntryPointDescriptor::uses_view_index)
+            });
+        if selected_uses_view_index && state.multiview().is_none() {
+            return Err(GpuProgramContractError::invalid(
+                operation,
+                entry_points.diagnostic_label(),
+                GpuProgramContractCause::PipelineStageIoMismatch,
+                "use multiview render-pipeline state whenever a selected vertex or fragment entry point consumes view_index",
+            ));
+        }
+
         validate_stage_io(&program, &entry_points, &state)?;
 
         let layout = GpuPipelineLayoutDescriptor::from_interface(program.interface())?;
@@ -117,6 +135,14 @@ impl GpuRenderPipelineDescriptor {
                 entry_points.diagnostic_label(),
                 &mut requirements,
                 GpuCapabilityRequirement::Required(GpuCapabilityFeature::DepthClipControl),
+            )?;
+        }
+        if state.multiview().is_some() {
+            insert_pipeline_requirement(
+                operation,
+                entry_points.diagnostic_label(),
+                &mut requirements,
+                GpuCapabilityRequirement::Required(GpuCapabilityFeature::Multiview),
             )?;
         }
         if state

@@ -1,4 +1,5 @@
 use super::super::WgpuContextState;
+use super::super::pipeline_realization::contiguous_multiview_mask;
 use super::super::surface::execution::WgpuSurfaceLeaseGuard;
 use super::observability::PreparedExecutionObservability;
 use super::surface_resources::{
@@ -28,6 +29,7 @@ pub(super) struct PreparedRenderOperation {
     depth_stencil_attachment: Option<PreparedRenderDepthStencilAttachment>,
     draws: Vec<PreparedRenderDraw>,
     timestamp_writes: Option<PreparedTimestampWrites>,
+    multiview_mask: Option<std::num::NonZeroU32>,
 }
 
 impl PreparedRenderOperation {
@@ -189,6 +191,7 @@ pub(super) async fn prepare_render_operation(
         depth_stencil_attachment,
         draws,
         timestamp_writes,
+        multiview_mask: contiguous_multiview_mask(render.signature().multiview()),
     })
 }
 
@@ -381,7 +384,7 @@ pub(super) fn encode_render_operation<'a>(
                     depth_stencil_attachment,
                     timestamp_writes,
                     occlusion_query_set: None,
-                    multiview_mask: None,
+                    multiview_mask: render.multiview_mask,
                 });
 
                 for (draw, pipeline_object) in render.draws.iter().zip(pipeline_objects) {

@@ -394,12 +394,20 @@ impl GpuRenderColorAttachment {
         store: GpuAttachmentStore,
         resolve_target: Option<GpuMultisampleResolveTarget>,
     ) -> Result<Self, GpuWorkOperationError> {
-        validate_attachment_view(
+        validate_render_attachment_view(
             &source,
             "construct GPU render color attachment",
-            GpuWorkOperationCause::InvalidAttachment,
-            "use one explicit 2D color-attachment view selecting exactly one mip and one array layer",
+            "use either one explicit D2 view selecting one layer or one single-sampled D2Array view selecting 2 through 31 contiguous layers",
         )?;
+        if is_multiview_attachment(&source) && store == GpuAttachmentStore::Discard {
+            return Err(GpuWorkOperationError::invalid(
+                "construct GPU render color attachment",
+                source.descriptor().common().label().as_str(),
+                Some(source.diagnostic_identity()),
+                GpuWorkOperationCause::InvalidAttachment,
+                "use Store for multiview color attachments; layered Discard is deferred by the pinned WGPU memory-initialization contract",
+            ));
+        }
         let label = source
             .descriptor()
             .texture()
@@ -556,11 +564,10 @@ impl GpuRenderDepthStencilAttachment {
         depth: Option<GpuDepthAttachmentState>,
         stencil: Option<GpuStencilAttachmentState>,
     ) -> Result<Self, GpuWorkOperationError> {
-        validate_attachment_view(
+        validate_render_attachment_view(
             &source,
             "construct GPU render depth/stencil attachment",
-            GpuWorkOperationCause::InvalidAttachment,
-            "use one explicit 2D depth/stencil attachment view selecting exactly one mip and one array layer",
+            "use either one explicit D2 view selecting one layer or one single-sampled D2Array view selecting 2 through 31 contiguous layers",
         )?;
         let texture = source.descriptor().texture();
         let format = effective_view_format(&source);
@@ -590,6 +597,23 @@ impl GpuRenderDepthStencilAttachment {
                 Some(texture.diagnostic_identity()),
                 GpuWorkOperationCause::InvalidAttachment,
                 "use a view whose effective format contains a stencil aspect before configuring stencil attachment state",
+            ));
+        }
+        if is_multiview_attachment(&source)
+            && (depth.is_some_and(|state| {
+                state.access() == GpuDepthStencilAccess::ReadWrite
+                    && state.store() == GpuAttachmentStore::Discard
+            }) || stencil.is_some_and(|state| {
+                state.access() == GpuDepthStencilAccess::ReadWrite
+                    && state.store() == GpuAttachmentStore::Discard
+            }))
+        {
+            return Err(GpuWorkOperationError::invalid(
+                "construct GPU render depth/stencil attachment",
+                label.clone(),
+                Some(texture.diagnostic_identity()),
+                GpuWorkOperationCause::InvalidAttachment,
+                "use Store for every writable multiview depth/stencil aspect; layered Discard is deferred by the pinned WGPU memory-initialization contract",
             ));
         }
         if texture
@@ -679,6 +703,41 @@ impl GpuRenderDepthStencilAttachment {
     pub fn stencil_access(&self) -> Option<&GpuTextureAccess> {
         self.stencil_access.as_ref()
     }
+}
+
+fn is_multiview_attachment(view: &GpuTextureViewHandle) -> bool {
+    view.descriptor().dimension() == GpuTextureViewDimension::D2Array
+}
+
+fn validate_render_attachment_view(
+    view: &GpuTextureViewHandle,
+    operation: &'static str,
+    correction: &'static str,
+) -> Result<(), GpuWorkOperationError> {
+    let descriptor = view.descriptor();
+    let subresources = descriptor.subresources();
+    let texture = descriptor.texture();
+    let ordinary = descriptor.dimension() == GpuTextureViewDimension::D2
+        && subresources.mip_level_count() == 1
+        && subresources.array_layer_count() == 1;
+    let multiview = descriptor.dimension() == GpuTextureViewDimension::D2Array
+        && subresources.mip_level_count() == 1
+        && (2..=31).contains(&subresources.array_layer_count())
+        && texture.descriptor().sample_count() == 1
+        && !texture
+            .descriptor()
+            .usages()
+            .contains(GpuTextureUsage::TransientAttachment);
+    if !ordinary && !multiview {
+        return Err(GpuWorkOperationError::invalid(
+            operation,
+            descriptor.common().label().as_str(),
+            Some(view.diagnostic_identity()),
+            GpuWorkOperationCause::InvalidAttachment,
+            correction,
+        ));
+    }
+    Ok(())
 }
 
 fn validate_attachment_view(

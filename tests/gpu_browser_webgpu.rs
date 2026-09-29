@@ -20,6 +20,9 @@ mod retained_fixed_binding_array;
 #[path = "gpu_r4_indirect_first_instance.rs"]
 mod retained_indirect_first_instance;
 #[cfg(target_arch = "wasm32")]
+#[path = "gpu_r4_multiview.rs"]
+mod retained_multiview;
+#[cfg(target_arch = "wasm32")]
 #[path = "gpu_r3_binding_array_non_uniform_indexing/mod.rs"]
 mod retained_non_uniform_binding_array;
 #[cfg(target_arch = "wasm32")]
@@ -52,7 +55,7 @@ mod browser {
     use super::{
         retained_bc, retained_blend_state, retained_depth_bias, retained_depth_clip_control,
         retained_dual_source_blending, retained_fixed_binding_array,
-        retained_indirect_first_instance, retained_non_uniform_binding_array,
+        retained_indirect_first_instance, retained_multiview, retained_non_uniform_binding_array,
         retained_offscreen_indexed, retained_prefix_scan, retained_sampler_anisotropy,
         retained_shader_f16, retained_transient_attachment, retained_vertex_packed,
         retained_vertex8, retained_vertex16,
@@ -2234,6 +2237,7 @@ fn cs_main() {
 
         retained_fixed_binding_array::prove_browser_webgpu_unsupported_contract().await;
         retained_non_uniform_binding_array::prove_browser_webgpu_unsupported_contract().await;
+        retained_multiview::prove_browser_webgpu_unsupported().await;
         run_browser_prefix_scan().await;
         run_browser_offscreen_indexed().await;
         run_browser_rgba16_copy().await;

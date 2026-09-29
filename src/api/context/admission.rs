@@ -431,8 +431,9 @@ pub(crate) fn admitted_device_facts(
 
 const FIXED_BINDING_ARRAY_ELEMENT_BASELINE: u32 = 500_000;
 const FIXED_BINDING_ARRAY_SAMPLER_ELEMENT_BASELINE: u32 = 1_000;
+const MULTIVIEW_VIEW_COUNT_BASELINE: u32 = 2;
 
-const ALL_LIMIT_KINDS: [GpuLimitKind; 19] = [
+const ALL_LIMIT_KINDS: [GpuLimitKind; 20] = [
     GpuLimitKind::MaxUniformBufferBindingSize,
     GpuLimitKind::MaxStorageBufferBindingSize,
     GpuLimitKind::MaxColorAttachments,
@@ -452,6 +453,7 @@ const ALL_LIMIT_KINDS: [GpuLimitKind; 19] = [
     GpuLimitKind::MaxVertexBufferArrayStride,
     GpuLimitKind::MaxBindingArrayElementsPerShaderStage,
     GpuLimitKind::MaxBindingArraySamplerElementsPerShaderStage,
+    GpuLimitKind::MaxMultiviewViewCount,
 ];
 
 const ALL_ALIGNMENT_KINDS: [GpuAlignmentKind; 5] = [
@@ -502,10 +504,18 @@ fn effective_workload_budget(
         } else {
             0
         };
-    let baseline = normalized_limit_baseline().with_binding_array_limits(
-        general_binding_array_baseline,
-        sampler_binding_array_baseline,
-    );
+    let baseline = normalized_limit_baseline()
+        .with_binding_array_limits(
+            general_binding_array_baseline,
+            sampler_binding_array_baseline,
+        )
+        .with_multiview_limit(
+            if enabled_features.contains(&GpuCapabilityFeature::Multiview) {
+                MULTIVIEW_VIEW_COUNT_BASELINE
+            } else {
+                0
+            },
+        );
     let value = |kind| {
         descriptor
             .limits
@@ -550,7 +560,8 @@ fn effective_workload_budget(
         .with_binding_array_limits(
             u32_value(GpuLimitKind::MaxBindingArrayElementsPerShaderStage)?,
             u32_value(GpuLimitKind::MaxBindingArraySamplerElementsPerShaderStage)?,
-        ),
+        )
+        .with_multiview_limit(u32_value(GpuLimitKind::MaxMultiviewViewCount)?),
         descriptor.alignments.clone(),
     ))
 }
@@ -588,6 +599,7 @@ pub(crate) const fn limit_value(limits: GpuLimits, kind: GpuLimitKind) -> u64 {
         GpuLimitKind::MaxBindingArraySamplerElementsPerShaderStage => {
             limits.max_binding_array_sampler_elements_per_shader_stage() as u64
         }
+        GpuLimitKind::MaxMultiviewViewCount => limits.max_multiview_view_count() as u64,
     }
 }
 
@@ -671,6 +683,7 @@ fn is_declared_extension(feature: GpuCapabilityFeature) -> bool {
             | GpuCapabilityFeature::StorageBufferBindingArrayNonUniformIndexing
             | GpuCapabilityFeature::StorageTextureBindingArrayNonUniformIndexing
             | GpuCapabilityFeature::DualSourceBlending
+            | GpuCapabilityFeature::Multiview
     )
 }
 
@@ -1189,6 +1202,85 @@ mod tests {
                 500_000,
                 499_999,
             ))
+        );
+    }
+
+    #[test]
+    fn multiview_feature_uses_two_view_baseline_and_explicit_higher_budget() {
+        let ordinary = evaluate_candidate(
+            &GpuContextDescriptor::new(GpuCapabilityRequirements::new()),
+            adapter([]),
+            true,
+        )
+        .unwrap();
+        assert_eq!(
+            ordinary
+                .workload_budget()
+                .limits()
+                .max_multiview_view_count(),
+            0
+        );
+
+        let mut requirements = GpuCapabilityRequirements::new();
+        requirements
+            .insert(GpuCapabilityRequirement::Required(
+                GpuCapabilityFeature::Multiview,
+            ))
+            .unwrap();
+
+        let multiview_adapter = |max_multiview_view_count| {
+            let limits = limits().with_multiview_limit(max_multiview_view_count);
+            GpuAdapterFacts::new(
+                GpuBackendFamily::Vulkan,
+                GpuAdapterClass::Discrete,
+                GpuSoftwareStatus::Hardware,
+                GpuFallbackStatus::ConfirmedNotFallback,
+                GpuCapabilities::from_normalized_facts(
+                    [GpuCapabilityFeature::Multiview],
+                    limits,
+                    [],
+                ),
+                GpuAdapterLimits::new(limits),
+                alignments(),
+            )
+        };
+
+        let baseline = evaluate_candidate(
+            &GpuContextDescriptor::new(requirements.clone()),
+            multiview_adapter(31),
+            true,
+        )
+        .unwrap();
+        assert_eq!(
+            baseline
+                .workload_budget()
+                .limits()
+                .max_multiview_view_count(),
+            2
+        );
+
+        let raised = evaluate_candidate(
+            &GpuContextDescriptor::new(requirements.clone())
+                .require_limit(GpuLimitKind::MaxMultiviewViewCount, 4),
+            multiview_adapter(31),
+            true,
+        )
+        .unwrap();
+        assert_eq!(
+            raised.workload_budget().limits().max_multiview_view_count(),
+            4
+        );
+
+        let rejected = evaluate_candidate(
+            &GpuContextDescriptor::new(requirements)
+                .require_limit(GpuLimitKind::MaxMultiviewViewCount, 4),
+            multiview_adapter(3),
+            true,
+        )
+        .unwrap_err();
+        assert_eq!(
+            rejected.limit_rejection(),
+            Some((GpuLimitKind::MaxMultiviewViewCount, 4, 3))
         );
     }
 

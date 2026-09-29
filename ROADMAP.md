@@ -177,8 +177,10 @@ Goal: cover mature generic GPU-driven execution without adding renderer meaning.
 
 - occlusion queries alongside existing timestamp query authority;
 - normalized indirect-first-instance semantics are current: portable indirect draws retain an explicit zero-only contract while capability-gated draws that may consume a nonzero first instance require the normalized optional feature;
-- multiview and multisampled-array/layered execution as advanced capability-gated
-  contracts after texture-view correctness is established;
+- contiguous single-sampled multiview rendering is `CURRENT` behind truthful
+  capability and limit gates for the accepted 2..=31 D2Array slice; selective or
+  sparse view masks, multisampled arrays/layered MSAA, layered discard, and broader
+  layered execution remain outside this accepted contract;
 - keep multi-draw-count deferred while its backend/platform scope remains narrow;
   it is not a prerequisite for GPU-driven execution or for the Metal/M3 path;
 - add further GPU-driven execution only when each exact semantic contract meets
@@ -245,7 +247,7 @@ This is intentionally family-level rather than a mirror of WGPU's feature list.
 | Partially-bound/sparse binding arrays | `ADVANCED` | `DEFER` until target support and occupancy semantics justify stable authority |
 | Occlusion queries | `CORE` | `PLAN` — R4 |
 | Indirect-first-instance | `ADVANCED` | `CURRENT` — explicit zero-only / capability-gated may-be-nonzero indirect-draw semantics |
-| Multiview and multisampled arrays | `ADVANCED` | `PLAN` — R4 after view/resource foundations |
+| Multiview and multisampled arrays | `ADVANCED` | `CURRENT` — contiguous single-sampled D2Array multiview slice; selective/sparse masks, multisampled arrays/layered MSAA, layered discard, and broader layered execution remain separate R4 work |
 | Multi-draw-count and pipeline statistics | `ADVANCED` | `DEFER` while backend/platform scope remains narrow |
 | Explicit surface color spaces and wide-gamut/HDR physical presentation | `ADVANCED` | `PLAN` — R5 |
 | Normalized imported-resource contract | `ADVANCED` | `PLAN` — R6, contract investigation precedes implementation |

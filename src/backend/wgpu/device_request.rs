@@ -157,7 +157,7 @@ async fn request_with_instance_generation(
     }
     let device_facts = admitted_device_facts(
         &candidate,
-        map_device_limits(&actual_native_limits),
+        map_device_limits(&actual_native_limits, requested_features),
         selection.dispositions.clone(),
     )?;
     let ContextGenerationSeed { id, generation } = match generation_seed {
@@ -441,6 +441,7 @@ fn wgpu_features_for(feature: GpuCapabilityFeature) -> Features {
         }
         GpuCapabilityFeature::ShaderF16 => Features::SHADER_F16,
         GpuCapabilityFeature::DualSourceBlending => Features::DUAL_SOURCE_BLENDING,
+        GpuCapabilityFeature::Multiview => Features::MULTIVIEW,
         GpuCapabilityFeature::DepthClipControl => Features::DEPTH_CLIP_CONTROL,
         GpuCapabilityFeature::DepthBiasClamp => Features::empty(),
         _ => Features::empty(),
@@ -500,6 +501,7 @@ fn requested_limits(
         budget.max_binding_array_elements_per_shader_stage();
     limits.max_binding_array_sampler_elements_per_shader_stage =
         budget.max_binding_array_sampler_elements_per_shader_stage();
+    limits.max_multiview_view_count = budget.max_multiview_view_count();
     let alignments = contract.selected_alignments();
     limits.min_uniform_buffer_offset_alignment =
         requested_alignment(alignments.uniform_dynamic_offset, "uniform dynamic offset")?;
@@ -526,7 +528,7 @@ fn requested_alignment(
     })
 }
 
-fn map_device_limits(native: &Limits) -> GpuDeviceLimits {
+fn map_device_limits(native: &Limits, enabled_features: Features) -> GpuDeviceLimits {
     GpuDeviceLimits::new(
         GpuLimits::from_validated_adapter_facts(
             native.max_uniform_buffer_binding_size,
@@ -550,7 +552,12 @@ fn map_device_limits(native: &Limits) -> GpuDeviceLimits {
         .with_binding_array_limits(
             native.max_binding_array_elements_per_shader_stage,
             native.max_binding_array_sampler_elements_per_shader_stage,
-        ),
+        )
+        .with_multiview_limit(if enabled_features.contains(Features::MULTIVIEW) {
+            native.max_multiview_view_count.min(31)
+        } else {
+            0
+        }),
         GpuAlignmentFacts {
             uniform_dynamic_offset: Some(u64::from(native.min_uniform_buffer_offset_alignment)),
             storage_dynamic_offset: Some(u64::from(native.min_storage_buffer_offset_alignment)),
@@ -603,20 +610,28 @@ mod tests {
         enabled_features: impl IntoIterator<Item = GpuCapabilityFeature>,
     ) -> crate::GpuCandidateAdmissionReport {
         let enabled_features = enabled_features.into_iter().collect::<Vec<_>>();
-        let limits = test_gpu_limits().with_binding_array_limits(
-            if enabled_features.contains(&GpuCapabilityFeature::TextureBindingArray)
-                || enabled_features.contains(&GpuCapabilityFeature::BufferBindingArray)
-            {
-                500_000
-            } else {
-                0
-            },
-            if enabled_features.contains(&GpuCapabilityFeature::TextureBindingArray) {
-                1_000
-            } else {
-                0
-            },
-        );
+        let limits = test_gpu_limits()
+            .with_binding_array_limits(
+                if enabled_features.contains(&GpuCapabilityFeature::TextureBindingArray)
+                    || enabled_features.contains(&GpuCapabilityFeature::BufferBindingArray)
+                {
+                    500_000
+                } else {
+                    0
+                },
+                if enabled_features.contains(&GpuCapabilityFeature::TextureBindingArray) {
+                    1_000
+                } else {
+                    0
+                },
+            )
+            .with_multiview_limit(
+                if enabled_features.contains(&GpuCapabilityFeature::Multiview) {
+                    31
+                } else {
+                    0
+                },
+            );
         let facts = GpuAdapterFacts::new(
             GpuBackendFamily::Vulkan,
             GpuAdapterClass::Discrete,
@@ -732,6 +747,7 @@ mod tests {
             requested.max_binding_array_sampler_elements_per_shader_stage,
             0
         );
+        assert_eq!(requested.max_multiview_view_count, 0);
         assert_eq!(requested.min_uniform_buffer_offset_alignment, 256);
         assert_eq!(requested.min_storage_buffer_offset_alignment, 256);
     }
@@ -749,8 +765,9 @@ mod tests {
         native.max_vertex_buffer_array_stride = 1024;
         native.max_binding_array_elements_per_shader_stage = 123_456;
         native.max_binding_array_sampler_elements_per_shader_stage = 789;
+        native.max_multiview_view_count = 32;
         native.min_uniform_buffer_offset_alignment = 512;
-        let facts = map_device_limits(&native);
+        let facts = map_device_limits(&native, Features::MULTIVIEW);
         assert_eq!(facts.values().max_vertex_buffers(), 12);
         assert_eq!(facts.values().max_compute_workgroups_per_dimension(), 1234);
         assert_eq!(facts.values().max_buffer_size(), 123_456_789);
@@ -768,6 +785,14 @@ mod tests {
                 .values()
                 .max_binding_array_sampler_elements_per_shader_stage(),
             789
+        );
+        assert_eq!(facts.values().max_multiview_view_count(), 31);
+        assert_eq!(
+            map_device_limits(&native, Features::empty())
+                .values()
+                .max_multiview_view_count(),
+            0,
+            "device multiview limit must be zero when the feature was not enabled"
         );
         assert_eq!(facts.alignments().uniform_dynamic_offset, Some(512));
     }
@@ -935,6 +960,31 @@ mod tests {
                 GpuCapabilityFeature::DualSourceBlending,
             ])),
             Features::DUAL_SOURCE_BLENDING
+        );
+    }
+
+    #[test]
+    fn multiview_requests_the_exact_wgpu_feature_and_baseline_limit() {
+        let candidate = candidate_with_enabled_features([GpuCapabilityFeature::Multiview]);
+        assert_eq!(
+            wgpu_features_for(GpuCapabilityFeature::Multiview),
+            Features::MULTIVIEW
+        );
+        assert_eq!(requested_features(&candidate), Features::MULTIVIEW);
+        assert_eq!(
+            candidate
+                .contract()
+                .workload_budget()
+                .limits()
+                .max_multiview_view_count(),
+            2
+        );
+        assert_eq!(
+            requested_limits(&candidate)
+                .unwrap()
+                .max_multiview_view_count,
+            2,
+            "feature-scoped baseline must request two views, not the adapter maximum"
         );
     }
 

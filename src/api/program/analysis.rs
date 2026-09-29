@@ -84,8 +84,13 @@ pub(crate) fn analyze_program(
             &source_label,
         )?;
     reject_f16_overrides(&module, &source_label)?;
-    let validator_capabilities =
+    let entry_point_view_index =
+        derive_view_index_requirements(&module, &source_label, &mut required_features)?;
+    let mut validator_capabilities =
         analysis_capabilities | non_uniform_binding_array_analysis_capabilities();
+    if required_features.contains(&GpuCapabilityFeature::Multiview) {
+        validator_capabilities |= naga::valid::Capabilities::MULTIVIEW;
+    }
     let module_info =
         naga::valid::Validator::new(naga::valid::ValidationFlags::all(), validator_capabilities)
             .validate(&module)
@@ -192,7 +197,11 @@ pub(crate) fn analyze_program(
         }
         let stage = runen_stage(entry.stage);
         selected_indices.push((stage, index, name.clone()));
-        entry_points.push(GpuEntryPointDescriptor::derived(name, stage));
+        entry_points.push(GpuEntryPointDescriptor::derived(
+            name,
+            stage,
+            entry_point_view_index[index],
+        ));
     }
     entry_points.sort();
 
@@ -310,6 +319,95 @@ pub(crate) fn analyze_program(
         fragment_outputs,
         required_features,
     })
+}
+
+fn derive_view_index_requirements(
+    module: &naga::Module,
+    source_label: &str,
+    required_features: &mut Vec<GpuCapabilityFeature>,
+) -> Result<Vec<bool>, GpuProgramContractError> {
+    let mut entry_point_uses = Vec::with_capacity(module.entry_points.len());
+    for entry_point in &module.entry_points {
+        let uses_view_index =
+            entry_point_uses_view_index(module, entry_point).map_err(|detail| {
+                stage_io_failure(
+                    source_label,
+                    format!("entry point {}: {detail}", entry_point.name),
+                )
+            })?;
+        if uses_view_index && !required_features.contains(&GpuCapabilityFeature::Multiview) {
+            required_features.push(GpuCapabilityFeature::Multiview);
+        }
+        entry_point_uses.push(uses_view_index);
+    }
+    Ok(entry_point_uses)
+}
+
+fn entry_point_uses_view_index(
+    module: &naga::Module,
+    entry_point: &naga::EntryPoint,
+) -> Result<bool, String> {
+    let stage = runen_stage(entry_point.stage);
+    let mut uses_view_index = false;
+    let mut ignored_locations = Vec::<()>::new();
+    let mut ignored_builtins = Vec::<()>::new();
+
+    for argument in &entry_point.function.arguments {
+        collect_io(
+            module,
+            argument.ty,
+            argument.binding.as_ref(),
+            &mut ignored_locations,
+            &mut |_, _, _| Ok(()),
+            &mut |builtin, ty| {
+                if matches!(builtin, BuiltIn::ViewIndex) {
+                    validate_view_index_builtin(module, ty, stage, true)?;
+                    uses_view_index = true;
+                }
+                Ok(())
+            },
+            &mut ignored_builtins,
+        )?;
+    }
+    if let Some(result) = &entry_point.function.result {
+        collect_io(
+            module,
+            result.ty,
+            result.binding.as_ref(),
+            &mut ignored_locations,
+            &mut |_, _, _| Ok(()),
+            &mut |builtin, ty| {
+                if matches!(builtin, BuiltIn::ViewIndex) {
+                    validate_view_index_builtin(module, ty, stage, false)?;
+                    uses_view_index = true;
+                }
+                Ok(())
+            },
+            &mut ignored_builtins,
+        )?;
+    }
+    Ok(uses_view_index)
+}
+
+fn validate_view_index_builtin(
+    module: &naga::Module,
+    ty: naga::Handle<naga::Type>,
+    stage: GpuShaderStage,
+    input: bool,
+) -> Result<(), String> {
+    if !input || !matches!(stage, GpuShaderStage::Vertex | GpuShaderStage::Fragment) {
+        return Err(
+            "view_index is normalized only as a vertex/fragment stage input builtin".to_string(),
+        );
+    }
+
+    let value_type = io_value_type(module, ty)?;
+    if value_type.scalar_class() != GpuShaderIoScalarClass::Uint
+        || value_type.vector_width().get() != 1
+    {
+        return Err("view_index must use the normalized scalar u32 input type".to_string());
+    }
+    Ok(())
 }
 
 fn non_uniform_binding_array_analysis_capabilities() -> naga::valid::Capabilities {
@@ -933,18 +1031,22 @@ fn normalize_vertex_input(
             argument.ty,
             argument.binding.as_ref(),
             &mut locations,
-            &mut |location, blend_src, value_type| {
+            &mut |location, blend_src, ty| {
                 if blend_src.is_some() {
                     return Err(
                         "dual-source blend identity is only valid for fragment output".to_string(),
                     );
                 }
-                Ok(GpuShaderIoLocation::new(location, value_type))
+                Ok(GpuShaderIoLocation::new(
+                    location,
+                    io_value_type(module, ty)?,
+                ))
             },
-            &mut |builtin| match builtin {
+            &mut |builtin, _| match builtin {
                 BuiltIn::VertexIndex => Ok(GpuVertexInputBuiltin::VertexIndex),
                 BuiltIn::InstanceIndex => Ok(GpuVertexInputBuiltin::InstanceIndex),
-                _ => Err("vertex input uses an unsupported builtin"),
+                BuiltIn::ViewIndex => Ok(GpuVertexInputBuiltin::View),
+                _ => Err("vertex input uses an unsupported builtin".to_string()),
             },
             &mut builtins,
         )
@@ -967,7 +1069,7 @@ fn normalize_fragment_output(
             result.ty,
             result.binding.as_ref(),
             &mut locations,
-            &mut |location, blend_src, value_type| {
+            &mut |location, blend_src, ty| {
                 let blend_source = match blend_src {
                     None => None,
                     Some(0) => Some(GpuBlendSource::Primary),
@@ -981,13 +1083,13 @@ fn normalize_fragment_output(
                 Ok(GpuFragmentOutputLocation::new(
                     location,
                     blend_source,
-                    value_type,
+                    io_value_type(module, ty)?,
                 ))
             },
-            &mut |builtin| match builtin {
+            &mut |builtin, _| match builtin {
                 BuiltIn::FragDepth => Ok(GpuFragmentOutputBuiltin::FragDepth),
                 BuiltIn::SampleMask => Ok(GpuFragmentOutputBuiltin::SampleMask),
-                _ => Err("fragment output uses an unsupported builtin"),
+                _ => Err("fragment output uses an unsupported builtin".to_string()),
             },
             &mut builtins,
         )
@@ -1001,8 +1103,8 @@ fn collect_io<L, B>(
     ty: naga::Handle<naga::Type>,
     binding: Option<&Binding>,
     locations: &mut Vec<L>,
-    map_location: &mut impl FnMut(u32, Option<u32>, GpuShaderIoValueType) -> Result<L, String>,
-    map_builtin: &mut impl FnMut(BuiltIn) -> Result<B, &'static str>,
+    map_location: &mut impl FnMut(u32, Option<u32>, naga::Handle<naga::Type>) -> Result<L, String>,
+    map_builtin: &mut impl FnMut(BuiltIn, naga::Handle<naga::Type>) -> Result<B, String>,
     builtins: &mut Vec<B>,
 ) -> Result<(), String> {
     if binding.is_none() {
@@ -1027,15 +1129,11 @@ fn collect_io<L, B>(
             blend_src,
             ..
         }) => {
-            locations.push(map_location(
-                *location,
-                *blend_src,
-                io_value_type(module, ty)?,
-            )?);
+            locations.push(map_location(*location, *blend_src, ty)?);
             Ok(())
         }
         Some(Binding::BuiltIn(builtin)) => {
-            builtins.push(map_builtin(*builtin).map_err(str::to_string)?);
+            builtins.push(map_builtin(*builtin, ty)?);
             Ok(())
         }
         None => Err(
