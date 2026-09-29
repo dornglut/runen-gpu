@@ -52,8 +52,9 @@ mod retained_vertex_packed;
 
 #[cfg(target_arch = "wasm32")]
 mod browser {
-    #[path = "surface_probe.rs"]
-    mod surface_probe;
+    mod surface_probe {
+        include!("gpu_browser_webgpu/surface_probe.rs");
+    }
     use super::{
         retained_bc, retained_blend_state, retained_depth_bias, retained_depth_clip_control,
         retained_dual_source_blending, retained_fixed_binding_array,
