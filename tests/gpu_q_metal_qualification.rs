@@ -21,6 +21,8 @@ mod retained_fixed_binding_array;
 mod retained_indirect;
 #[path = "gpu_r4_indirect_first_instance.rs"]
 mod retained_indirect_first_instance;
+#[path = "gpu_r4_multiview.rs"]
+mod retained_multiview;
 #[path = "gpu_r3_binding_array_non_uniform_indexing/mod.rs"]
 mod retained_non_uniform_binding_array;
 #[path = "gpu_offscreen_indexed_native.rs"]
@@ -38,12 +40,13 @@ mod retained_vertex8;
 #[path = "gpu_r1_vertex_packed_formats.rs"]
 mod retained_vertex_packed;
 
-const FEATURES: [GpuCapabilityFeature; 20] = [
+const FEATURES: [GpuCapabilityFeature; 21] = [
     GpuCapabilityFeature::Compute,
     GpuCapabilityFeature::RenderPipeline,
     GpuCapabilityFeature::Copy,
     GpuCapabilityFeature::IndirectExecution,
     GpuCapabilityFeature::IndirectFirstInstance,
+    GpuCapabilityFeature::Multiview,
     GpuCapabilityFeature::StorageTexture,
     GpuCapabilityFeature::TextureBindingArray,
     GpuCapabilityFeature::BufferBindingArray,
@@ -329,6 +332,7 @@ fn wgpu_characterization(
                 features.contains(wgpu::Features::INDIRECT_FIRST_INSTANCE),
             "depth_clip_control": features.contains(wgpu::Features::DEPTH_CLIP_CONTROL),
             "dual_source_blending": features.contains(wgpu::Features::DUAL_SOURCE_BLENDING),
+            "multiview": features.contains(wgpu::Features::MULTIVIEW),
             "texture_binding_array": features.contains(wgpu::Features::TEXTURE_BINDING_ARRAY),
             "buffer_binding_array": features.contains(wgpu::Features::BUFFER_BINDING_ARRAY),
             "storage_resource_binding_array":
@@ -365,6 +369,7 @@ fn wgpu_characterization(
             "max_buffer_size": limits.max_buffer_size,
             "max_compute_workgroups_per_dimension":
                 limits.max_compute_workgroups_per_dimension,
+            "max_multiview_view_count": limits.max_multiview_view_count,
         },
     })
 }
@@ -394,6 +399,7 @@ fn limits_report(limits: GpuLimits) -> Value {
             limits.max_binding_array_elements_per_shader_stage(),
         "max_binding_array_sampler_elements_per_shader_stage":
             limits.max_binding_array_sampler_elements_per_shader_stage(),
+        "max_multiview_view_count": limits.max_multiview_view_count(),
     })
 }
 
@@ -554,6 +560,17 @@ fn metal_qualification_records_exact_public_api_evidence() {
     let indirect_first_instance = pollster::block_on(
         retained_indirect_first_instance::run_on_adapter(GpuBackendFamily::Metal, None, &context),
     );
+    let multiview = pollster::block_on(retained_multiview::run_on_adapter(
+        GpuBackendFamily::Metal,
+        None,
+        &context,
+    ));
+    if multiview.supported {
+        assert!(
+            multiview.fully_exercised(),
+            "advertised Metal Multiview must execute all retained public semantic oracles"
+        );
+    }
     retained_sampler_anisotropy::realize_anisotropic_sampler(&context);
     let (transient_graph, transient_readback_id) = retained_transient_attachment::graph();
     let transient_prepared =
@@ -614,7 +631,7 @@ fn metal_qualification_records_exact_public_api_evidence() {
     assert_eq!(stats.pending_readbacks(), 0);
 
     let report = json!({
-        "schema_version": 8,
+        "schema_version": 9,
         "qualification_level": mode.report_name(),
         "revision": revision,
         "environment": {
@@ -660,6 +677,8 @@ fn metal_qualification_records_exact_public_api_evidence() {
             "depth_clip_control": "EXERCISED",
             "indirect_first_instance":
                 proof_disposition(indirect_first_instance.exercised),
+            "multiview": proof_disposition(multiview.fully_exercised()),
+            "multiview_normalized_max": multiview.normalized_max,
             "sampler_anisotropy": "EXERCISED",
             "transient_attachment": "EXERCISED",
             "transient_depth": "EXERCISED",
