@@ -119,6 +119,14 @@ impl GpuRenderPipelineDescriptor {
                 GpuCapabilityRequirement::Required(GpuCapabilityFeature::DepthClipControl),
             )?;
         }
+        if state.multiview().is_some() {
+            insert_pipeline_requirement(
+                operation,
+                entry_points.diagnostic_label(),
+                &mut requirements,
+                GpuCapabilityRequirement::Required(GpuCapabilityFeature::Multiview),
+            )?;
+        }
         if state
             .fragment_output()
             .is_some_and(|output| output.references_secondary_source())
