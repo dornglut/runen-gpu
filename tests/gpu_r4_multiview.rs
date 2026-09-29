@@ -176,14 +176,8 @@ fn primary_graph() -> (GpuPreparedWorkGraph, [GpuReadbackId; 3]) {
             GpuTextureDescriptor::new(
                 common("R4 multiview parent"),
                 GpuTextureDimension::D2,
-                GpuTextureExtent::new(
-                    &texture_label,
-                    GpuTextureDimension::D2,
-                    WIDTH,
-                    HEIGHT,
-                    3,
-                )
-                .unwrap(),
+                GpuTextureExtent::new(&texture_label, GpuTextureDimension::D2, WIDTH, HEIGHT, 3)
+                    .unwrap(),
                 1,
                 1,
                 GpuTextureFormat::Rgba8Unorm,
@@ -221,9 +215,7 @@ fn primary_graph() -> (GpuPreparedWorkGraph, [GpuReadbackId; 3]) {
     let sentinel = GpuRenderOperation::new(
         [GpuRenderColorAttachment::new(
             sentinel_view,
-            GpuColorAttachmentLoad::Clear(
-                GpuColorClearValue::new(0.0, 0.0, 1.0, 1.0).unwrap(),
-            ),
+            GpuColorAttachmentLoad::Clear(GpuColorClearValue::new(0.0, 0.0, 1.0, 1.0).unwrap()),
             GpuAttachmentStore::Store,
             None,
         )
@@ -236,9 +228,7 @@ fn primary_graph() -> (GpuPreparedWorkGraph, [GpuReadbackId; 3]) {
 
     let pipeline = multiview_pipeline("proof.r4.multiview.view-index", VIEW_INDEX_WGSL);
     assert!(matches!(
-        pipeline
-            .requirements()
-            .get(GpuCapabilityFeature::Multiview),
+        pipeline.requirements().get(GpuCapabilityFeature::Multiview),
         Some(GpuCapabilityRequirement::Required(
             GpuCapabilityFeature::Multiview
         ))
@@ -246,9 +236,7 @@ fn primary_graph() -> (GpuPreparedWorkGraph, [GpuReadbackId; 3]) {
     let render = GpuRenderOperation::new(
         [GpuRenderColorAttachment::new(
             multiview_view,
-            GpuColorAttachmentLoad::Clear(
-                GpuColorClearValue::new(0.0, 0.0, 0.0, 1.0).unwrap(),
-            ),
+            GpuColorAttachmentLoad::Clear(GpuColorClearValue::new(0.0, 0.0, 0.0, 1.0).unwrap()),
             GpuAttachmentStore::Store,
             None,
         )
@@ -327,10 +315,7 @@ async fn run_primary_oracle(context: &GpuContext) {
         pixel_at(&outputs[1], WIDTH / 2, HEIGHT / 2),
         VIEW_ZERO_PIXEL
     );
-    assert_eq!(
-        pixel_at(&outputs[2], WIDTH / 2, HEIGHT / 2),
-        VIEW_ONE_PIXEL
-    );
+    assert_eq!(pixel_at(&outputs[2], WIDTH / 2, HEIGHT / 2), VIEW_ONE_PIXEL);
 }
 
 fn descriptor(
@@ -373,10 +358,7 @@ pub(crate) async fn run_on_adapter(
         .adapter_facts()
         .supported()
         .supports(GpuCapabilityFeature::Multiview);
-    let normalized_max = census
-        .adapter_facts()
-        .limits()
-        .max_multiview_view_count();
+    let normalized_max = census.adapter_facts().limits().max_multiview_view_count();
 
     if !supported {
         assert_eq!(
@@ -416,10 +398,9 @@ pub(crate) async fn run_on_adapter(
     );
 
     let (graph, _) = primary_graph();
-    let missing_enablement = census
-        .prepare_submission(graph)
-        .await
-        .expect_err("multiview work must reject when support exists but the feature is not enabled");
+    let missing_enablement = census.prepare_submission(graph).await.expect_err(
+        "multiview work must reject when support exists but the feature is not enabled",
+    );
     assert_eq!(
         missing_enablement.kind(),
         GpuSubmissionPreparationErrorKind::CapabilityNotAdmitted
@@ -469,7 +450,11 @@ pub(crate) async fn prove_browser_webgpu_unsupported() {
 fn selected_view_index_requires_multiview_but_multiview_shader_may_ignore_it() {
     let [view_source, ordinary_source] = admit_static_wgsl_sources([
         ("proof.r4.multiview.stage-io.view-index", 1, VIEW_INDEX_WGSL),
-        ("proof.r4.multiview.stage-io.ordinary", 1, NO_VIEW_INDEX_WGSL),
+        (
+            "proof.r4.multiview.stage-io.ordinary",
+            1,
+            NO_VIEW_INDEX_WGSL,
+        ),
     ])
     .unwrap();
     let vertex = GpuEntryPointName::new("vs_main").unwrap();
@@ -517,7 +502,10 @@ fn selected_view_index_requires_multiview_but_multiview_shader_may_ignore_it() {
         GpuPipelineConfiguration::default(),
     )
     .expect_err("selected view_index must reject an ordinary render pipeline");
-    assert_eq!(error.cause(), GpuProgramContractCause::PipelineStageIoMismatch);
+    assert_eq!(
+        error.cause(),
+        GpuProgramContractCause::PipelineStageIoMismatch
+    );
 
     let ordinary_program = GpuProgramDescriptor::new(
         ordinary_source,
@@ -549,9 +537,7 @@ fn selected_view_index_requires_multiview_but_multiview_shader_may_ignore_it() {
     )
     .expect("multiview rendering must not require the selected shader to consume view_index");
     assert!(matches!(
-        pipeline
-            .requirements()
-            .get(GpuCapabilityFeature::Multiview),
+        pipeline.requirements().get(GpuCapabilityFeature::Multiview),
         Some(GpuCapabilityRequirement::Required(
             GpuCapabilityFeature::Multiview
         ))
