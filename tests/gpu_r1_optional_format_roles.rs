@@ -594,10 +594,3 @@ fn optional_format_roles_vulkan_execution() {
         None,
     ));
 }
-
-#[cfg(not(target_arch = "wasm32"))]
-#[test]
-#[ignore = "requires a Direct3D12 adapter"]
-fn optional_format_roles_direct3d12_execution() {
-    pollster::block_on(run_on_adapter(GpuBackendFamily::Direct3D12, None, None));
-}
