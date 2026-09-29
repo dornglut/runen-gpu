@@ -2,9 +2,9 @@ use super::super::contract_diagnostics::{GpuProgramContractCause, GpuProgramCont
 use super::super::requirement_identity::hash_capability_requirements;
 use super::super::{
     GpuEntryPointDescriptor, GpuEntryPointName, GpuExpectedFragmentOutputSignature,
-    GpuExpectedVertexInputSignature,
-    GpuPipelineLayoutDescriptor, GpuProgramDescriptor, GpuShaderStage, GpuSpecializationValueSet,
-    compare_fragment_output_signatures, compare_vertex_input_signatures,
+    GpuExpectedVertexInputSignature, GpuPipelineLayoutDescriptor, GpuProgramDescriptor,
+    GpuShaderStage, GpuSpecializationValueSet, compare_fragment_output_signatures,
+    compare_vertex_input_signatures,
 };
 use super::GpuPipelineConfiguration;
 use super::render_state::{GpuDepthClipMode, GpuRenderPipelineStateDescriptor};
