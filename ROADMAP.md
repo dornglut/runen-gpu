@@ -249,7 +249,7 @@ This is intentionally family-level rather than a mirror of WGPU's feature list.
 | Indirect-first-instance | `ADVANCED` | `CURRENT` — explicit zero-only / capability-gated may-be-nonzero indirect-draw semantics |
 | Multiview and multisampled arrays | `ADVANCED` | `CURRENT` — contiguous single-sampled D2Array multiview slice; selective/sparse masks, multisampled arrays/layered MSAA, layered discard, and broader layered execution remain separate R4 work |
 | Multi-draw-count and pipeline statistics | `ADVANCED` | `DEFER` while backend/platform scope remains narrow |
-| Explicit surface color spaces and wide-gamut/HDR physical presentation | `ADVANCED` | `PLAN` — R5 |
+| Explicit surface color spaces and wide-gamut/HDR physical presentation | `ADVANCED` | `CURRENT` — R5 per-format physical pair selection and public browser DisplayP3 execution; broader platform and HDR qualification remains open |
 | Normalized imported-resource contract | `ADVANCED` | `PLAN` — R6, contract investigation precedes implementation |
 | External media textures | `ADVANCED` | `DEFER` until backend/portable maturity improves |
 | Subgroups and subgroup-size control | `ADVANCED` | `DEFER` until standardized semantics, WGPU behavior, and retained backend conformance align |
