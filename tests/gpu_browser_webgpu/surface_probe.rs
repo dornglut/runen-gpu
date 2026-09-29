@@ -42,6 +42,7 @@ pub(super) struct SurfaceEvidence {
     pub public_format: u32,
     pub direct_format: u32,
     pub advertised_color_spaces: u32,
+    pub diagnostic_stage: u32,
 }
 
 #[derive(Clone, Copy)]
@@ -222,7 +223,7 @@ fn normalized_format_code(format: GpuTextureFormat) -> u32 {
     }
 }
 
-async fn run_public_surface(window: Arc<Window>) -> Result<u32, ()> {
+async fn run_public_surface(window: Arc<Window>) -> Result<u32, u32> {
     let descriptor =
         GpuContextDescriptor::new(GpuCapabilityProfile::DesktopPresentationBaseline.requirements())
             .with_allowed_backends([GpuBackendFamily::BrowserWebGpu])
@@ -230,14 +231,14 @@ async fn run_public_surface(window: Arc<Window>) -> Result<u32, ()> {
 
     let (context, surface) = GpuContext::request_for_surface(descriptor, window)
         .await
-        .map_err(|_| ())?;
+        .map_err(|_| 101)?;
     if context.adapter_facts().backend() != GpuBackendFamily::BrowserWebGpu {
-        return Err(());
+        return Err(102);
     }
 
-    let capabilities = context.surface_capabilities(surface).map_err(|_| ())?;
+    let capabilities = context.surface_capabilities(surface).map_err(|_| 103)?;
     if !capabilities.supports_usage(GpuTextureUsage::ColorAttachment) {
-        return Err(());
+        return Err(104);
     }
     let format = capabilities
         .formats()
@@ -250,19 +251,19 @@ async fn run_public_surface(window: Arc<Window>) -> Result<u32, ()> {
             )
         })
         .or_else(|| capabilities.formats().first().copied())
-        .ok_or(())?;
+        .ok_or(105)?;
     let present_mode = capabilities
         .present_modes()
         .iter()
         .copied()
         .find(|mode| *mode == GpuSurfacePresentMode::Fifo)
-        .ok_or(())?;
+        .ok_or(106)?;
     let alpha_mode = capabilities
         .alpha_modes()
         .iter()
         .copied()
         .find(|mode| *mode == GpuSurfaceAlphaMode::Opaque)
-        .ok_or(())?;
+        .ok_or(107)?;
 
     let configuration = GpuSurfaceConfiguration::new(
         WIDTH,
@@ -274,26 +275,26 @@ async fn run_public_surface(window: Arc<Window>) -> Result<u32, ()> {
         2,
         [],
     )
-    .map_err(|_| ())?;
+    .map_err(|_| 108)?;
     let configured = context
         .configure_surface(surface, configuration)
-        .map_err(|_| ())?;
-    let image = context.acquire_surface_image(configured).map_err(|_| ())?;
+        .map_err(|_| 109)?;
+    let image = context.acquire_surface_image(configured).map_err(|_| 110)?;
     if image.texture().descriptor().common().ownership() != GpuResourceOwnership::SurfaceAcquired {
-        return Err(());
+        return Err(111);
     }
     let graph = clear_and_present_graph(&image);
-    let prepared = context.prepare_submission(graph).await.map_err(|_| ())?;
-    let submission = context.submit_prepared(prepared).map_err(|_| ())?;
+    let prepared = context.prepare_submission(graph).await.map_err(|_| 112)?;
+    let submission = context.submit_prepared(prepared).map_err(|_| 113)?;
     if !terminalize(&context, &submission).await {
-        return Err(());
+        return Err(114);
     }
 
-    let next = context.acquire_surface_image(configured).map_err(|_| ())?;
+    let next = context.acquire_surface_image(configured).map_err(|_| 115)?;
     if next.lease_id() == image.lease_id() {
-        return Err(());
+        return Err(116);
     }
-    context.detach_surface(configured).map_err(|_| ())?;
+    context.detach_surface(configured).map_err(|_| 117)?;
     next.abandon();
     drop(image);
 
@@ -304,7 +305,7 @@ async fn run_public_surface(window: Arc<Window>) -> Result<u32, ()> {
         || stats.readback_bytes_in_flight() != 0
         || stats.pending_readbacks() != 0
     {
-        return Err(());
+        return Err(118);
     }
 
     Ok(normalized_format_code(format))
@@ -417,6 +418,7 @@ async fn run_direct_wgpu(window: Arc<Window>) -> Result<SurfaceEvidence, u32> {
         public_format: FORMAT_UNKNOWN,
         direct_format: wgpu_format_code(selected.format),
         advertised_color_spaces: color_space_mask(selected.color_spaces),
+        diagnostic_stage: 0,
     };
     if rgba16float_advertised {
         evidence.bits |= BIT_RGBA16FLOAT_ADVERTISED;
@@ -468,10 +470,11 @@ pub(super) async fn run() -> SurfaceEvidence {
 
     let public_format = match run_public_surface(public_window).await {
         Ok(format) => format,
-        Err(()) => {
+        Err(stage) => {
             stop_event_loop(proxy).await;
             return SurfaceEvidence {
                 disposition: DISPOSITION_SURFACE_PATH_UNQUALIFIED,
+                diagnostic_stage: stage,
                 ..SurfaceEvidence::default()
             };
         }
