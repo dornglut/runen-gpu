@@ -1103,11 +1103,7 @@ fn collect_io<L, B>(
     ty: naga::Handle<naga::Type>,
     binding: Option<&Binding>,
     locations: &mut Vec<L>,
-    map_location: &mut impl FnMut(
-        u32,
-        Option<u32>,
-        naga::Handle<naga::Type>,
-    ) -> Result<L, String>,
+    map_location: &mut impl FnMut(u32, Option<u32>, naga::Handle<naga::Type>) -> Result<L, String>,
     map_builtin: &mut impl FnMut(BuiltIn, naga::Handle<naga::Type>) -> Result<B, String>,
     builtins: &mut Vec<B>,
 ) -> Result<(), String> {
