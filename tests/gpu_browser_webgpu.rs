@@ -52,6 +52,8 @@ mod retained_vertex_packed;
 
 #[cfg(target_arch = "wasm32")]
 mod browser {
+    #[path = "gpu_browser_webgpu/surface_probe.rs"]
+    mod surface_probe;
     use super::{
         retained_bc, retained_blend_state, retained_depth_bias, retained_depth_clip_control,
         retained_dual_source_blending, retained_fixed_binding_array,
@@ -95,6 +97,11 @@ mod browser {
         static DEPTH24PLUS_STENCIL8_SAMPLED_EXERCISED: RefCell<u32> = RefCell::new(0);
         static DEPTH32FLOAT_STENCIL8_EXERCISED: RefCell<u32> = RefCell::new(0);
         static DEPTH32FLOAT_STENCIL8_SAMPLED_EXERCISED: RefCell<u32> = RefCell::new(0);
+        static SURFACE_EVIDENCE_DISPOSITION: RefCell<u32> = RefCell::new(0);
+        static SURFACE_EVIDENCE_BITS: RefCell<u32> = RefCell::new(0);
+        static SURFACE_EVIDENCE_PUBLIC_FORMAT: RefCell<u32> = RefCell::new(0);
+        static SURFACE_EVIDENCE_DIRECT_FORMAT: RefCell<u32> = RefCell::new(0);
+        static SURFACE_EVIDENCE_COLOR_SPACES: RefCell<u32> = RefCell::new(0);
     }
 
     struct YieldOnce(bool);
@@ -2284,6 +2291,15 @@ fn cs_main() {
         run_browser_stencil8().await;
         run_browser_depth24plus_stencil8().await;
         run_browser_depth32float_stencil8().await;
+
+        let surface_evidence = surface_probe::run().await;
+        SURFACE_EVIDENCE_DISPOSITION.with(|slot| *slot.borrow_mut() = surface_evidence.disposition);
+        SURFACE_EVIDENCE_BITS.with(|slot| *slot.borrow_mut() = surface_evidence.bits);
+        SURFACE_EVIDENCE_PUBLIC_FORMAT.with(|slot| *slot.borrow_mut() = surface_evidence.public_format);
+        SURFACE_EVIDENCE_DIRECT_FORMAT.with(|slot| *slot.borrow_mut() = surface_evidence.direct_format);
+        SURFACE_EVIDENCE_COLOR_SPACES.with(|slot| {
+            *slot.borrow_mut() = surface_evidence.advertised_color_spaces;
+        });
     }
 
     #[unsafe(no_mangle)]
@@ -2313,6 +2329,31 @@ fn cs_main() {
             }
             status
         })
+    }
+
+    #[unsafe(no_mangle)]
+    pub extern "C" fn runengpu_browser_surface_evidence_disposition() -> u32 {
+        SURFACE_EVIDENCE_DISPOSITION.with(|value| *value.borrow())
+    }
+
+    #[unsafe(no_mangle)]
+    pub extern "C" fn runengpu_browser_surface_evidence_bits() -> u32 {
+        SURFACE_EVIDENCE_BITS.with(|value| *value.borrow())
+    }
+
+    #[unsafe(no_mangle)]
+    pub extern "C" fn runengpu_browser_surface_evidence_public_format() -> u32 {
+        SURFACE_EVIDENCE_PUBLIC_FORMAT.with(|value| *value.borrow())
+    }
+
+    #[unsafe(no_mangle)]
+    pub extern "C" fn runengpu_browser_surface_evidence_direct_format() -> u32 {
+        SURFACE_EVIDENCE_DIRECT_FORMAT.with(|value| *value.borrow())
+    }
+
+    #[unsafe(no_mangle)]
+    pub extern "C" fn runengpu_browser_surface_evidence_color_spaces() -> u32 {
+        SURFACE_EVIDENCE_COLOR_SPACES.with(|value| *value.borrow())
     }
 
     #[unsafe(no_mangle)]
