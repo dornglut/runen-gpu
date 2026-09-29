@@ -88,6 +88,7 @@ pub enum GpuWorkOperationCause {
     NonFiniteClearValue,
     OutOfRangeClearValue,
     InvalidAttachment,
+    InvalidMultiview,
     InvalidMultisampleResolve,
     InvalidBufferZero,
     InvalidQueryRange,
