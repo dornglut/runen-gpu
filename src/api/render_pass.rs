@@ -1,7 +1,9 @@
 use super::{
+    GpuCapabilityFeature, GpuCapabilityRequirement, GpuCapabilityRequirements, GpuLimits,
     GpuRenderColorAttachment, GpuRenderDepthStencilAttachment, GpuRenderDraw,
     GpuRenderPipelineDescriptor, GpuScissorRect, GpuTextureDimension, GpuTextureFormat,
-    GpuTextureHandle, GpuTextureViewHandle, GpuWorkOperationCause, GpuWorkOperationError,
+    GpuTextureHandle, GpuTextureViewDimension, GpuTextureViewHandle, GpuWorkOperationCause,
+    GpuWorkOperationError,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -24,6 +26,30 @@ impl GpuRenderExtent {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct GpuMultiviewState {
+    view_count: u32,
+}
+
+impl GpuMultiviewState {
+    pub fn new(view_count: u32) -> Result<Self, GpuWorkOperationError> {
+        if !(2..=31).contains(&view_count) {
+            return Err(GpuWorkOperationError::invalid(
+                "construct GPU multiview state",
+                format!("view_count={view_count}"),
+                None,
+                GpuWorkOperationCause::InvalidMultiview,
+                "use a contiguous multiview count from 2 through 31",
+            ));
+        }
+        Ok(Self { view_count })
+    }
+
+    pub const fn view_count(self) -> u32 {
+        self.view_count
+    }
+}
+
 /// Backend-neutral compatibility signature shared by every draw in one logical render pass.
 ///
 /// This intentionally excludes blend, primitive, vertex, binding, and dynamic state. Those remain
@@ -33,6 +59,7 @@ impl GpuRenderExtent {
 pub struct GpuRenderPassSignature {
     extent: GpuRenderExtent,
     sample_count: u32,
+    multiview: Option<GpuMultiviewState>,
     color_formats: Vec<GpuTextureFormat>,
     depth_stencil_format: Option<GpuTextureFormat>,
 }
@@ -71,6 +98,7 @@ impl GpuRenderPassSignature {
         Ok(Self {
             extent: first.extent,
             sample_count: first.sample_count,
+            multiview: first.multiview,
             color_formats,
             depth_stencil_format,
         })
@@ -82,6 +110,41 @@ impl GpuRenderPassSignature {
 
     pub const fn sample_count(&self) -> u32 {
         self.sample_count
+    }
+
+    pub const fn multiview(&self) -> Option<GpuMultiviewState> {
+        self.multiview
+    }
+
+    pub fn requirements(&self) -> GpuCapabilityRequirements {
+        let mut requirements = GpuCapabilityRequirements::new();
+        if self.multiview.is_some() {
+            requirements
+                .insert(GpuCapabilityRequirement::Required(
+                    GpuCapabilityFeature::Multiview,
+                ))
+                .expect("one render-pass multiview requirement cannot conflict");
+        }
+        requirements
+    }
+
+    pub fn validate_limits(&self, limits: GpuLimits) -> Result<(), GpuWorkOperationError> {
+        if let Some(multiview) = self.multiview {
+            let admitted = limits.max_multiview_view_count();
+            if multiview.view_count() > admitted {
+                return Err(GpuWorkOperationError::invalid(
+                    "validate GPU render-pass multiview limits",
+                    format!(
+                        "view_count={}, admitted_max={admitted}",
+                        multiview.view_count()
+                    ),
+                    None,
+                    GpuWorkOperationCause::InvalidMultiview,
+                    "request a multiview workload budget at least as large as the render-pass view count",
+                ));
+            }
+        }
+        Ok(())
     }
 
     pub fn color_formats(&self) -> &[GpuTextureFormat] {
@@ -108,19 +171,21 @@ impl GpuRenderPassSignature {
             .unwrap_or_default();
         let pipeline_depth_format = state.depth_stencil().map(|depth| depth.format());
         let pipeline_sample_count = state.multisample().sample_count();
+        let pipeline_multiview = state.multiview();
 
         if pipeline_color_formats != self.color_formats
             || pipeline_depth_format != self.depth_stencil_format
             || pipeline_sample_count != self.sample_count
+            || pipeline_multiview != self.multiview
         {
             return Err(GpuWorkOperationError::invalid(
                 "validate GPU render draw against pass signature",
                 format!(
-                    "pipeline colors={pipeline_color_formats:?}, depth={pipeline_depth_format:?}, samples={pipeline_sample_count}"
+                    "pipeline colors={pipeline_color_formats:?}, depth={pipeline_depth_format:?}, samples={pipeline_sample_count}, multiview={pipeline_multiview:?}"
                 ),
                 None,
                 GpuWorkOperationCause::InvalidDraw,
-                "use a render pipeline whose ordered color formats, depth format, and sample count match the render pass",
+                "use a render pipeline whose ordered color formats, depth format, sample count, and multiview state match the render pass",
             ));
         }
         Ok(())
@@ -157,15 +222,25 @@ impl GpuRenderPassSignature {
 struct AttachmentFact {
     extent: GpuRenderExtent,
     sample_count: u32,
+    multiview: Option<GpuMultiviewState>,
     format: GpuTextureFormat,
 }
 
 fn attachment_fact(view: &GpuTextureViewHandle) -> AttachmentFact {
     let descriptor = view.descriptor();
     let texture = descriptor.texture();
+    let multiview = match descriptor.dimension() {
+        GpuTextureViewDimension::D2 => None,
+        GpuTextureViewDimension::D2Array => Some(
+            GpuMultiviewState::new(descriptor.subresources().array_layer_count())
+                .expect("validated D2Array render attachments retain a checked multiview count"),
+        ),
+        _ => unreachable!("render attachments admit only D2 or D2Array views"),
+    };
     AttachmentFact {
         extent: render_extent(texture, descriptor.subresources().base_mip_level()),
         sample_count: texture.descriptor().sample_count(),
+        multiview,
         format: descriptor
             .format()
             .unwrap_or_else(|| texture.descriptor().format()),
@@ -176,18 +251,23 @@ fn validate_attachment_compatibility(
     expected: AttachmentFact,
     actual: AttachmentFact,
 ) -> Result<(), GpuWorkOperationError> {
-    if actual.extent != expected.extent || actual.sample_count != expected.sample_count {
+    if actual.extent != expected.extent
+        || actual.sample_count != expected.sample_count
+        || actual.multiview != expected.multiview
+    {
         return Err(invalid_attachment_signature(
             format!(
-                "expected extent={}x{} samples={}, actual extent={}x{} samples={}",
+                "expected extent={}x{} samples={} multiview={:?}, actual extent={}x{} samples={} multiview={:?}",
                 expected.extent.width(),
                 expected.extent.height(),
                 expected.sample_count,
+                expected.multiview,
                 actual.extent.width(),
                 actual.extent.height(),
                 actual.sample_count,
+                actual.multiview,
             ),
-            "use attachments with one effective render extent and sample count",
+            "use attachments with one effective render extent, sample count, and multiview state",
         ));
     }
     Ok(())
