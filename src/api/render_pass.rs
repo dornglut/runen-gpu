@@ -517,6 +517,35 @@ mod tests {
                 )
                 .is_ok()
         );
+
+        let four_view =
+            layered_color_attachment(&mut allocator, "layered four-view", 0, 4);
+        let four_view_signature =
+            GpuRenderPassSignature::from_attachments(&[four_view], None).unwrap();
+        assert_eq!(
+            four_view_signature.multiview(),
+            Some(GpuMultiviewState::new(4).unwrap())
+        );
+        assert!(
+            four_view_signature
+                .validate_limits(
+                    GpuLimits::new(1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1,)
+                        .unwrap()
+                        .with_multiview_limit(2)
+                )
+                .is_err(),
+            "four-view pass must reject against the default two-view workload budget"
+        );
+        assert!(
+            four_view_signature
+                .validate_limits(
+                    GpuLimits::new(1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1,)
+                        .unwrap()
+                        .with_multiview_limit(4)
+                )
+                .is_ok(),
+            "explicit four-view workload budget must admit the same pass"
+        );
     }
 
     #[test]
