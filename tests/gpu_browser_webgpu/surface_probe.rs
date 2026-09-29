@@ -207,35 +207,7 @@ async fn terminalize(context: &GpuContext, submission: &GpuSubmission) -> Result
         context.progress();
         match submission.status() {
             GpuSubmissionStatus::Completed => return Ok(()),
-            GpuSubmissionStatus::Failed(failure) => {
-                let stage = match failure.kind() {
-                    GpuSubmissionFailureKind::BackendValidation => 1141u32,
-                    GpuSubmissionFailureKind::BackendResourceExhaustion => 1142u32,
-                    GpuSubmissionFailureKind::ContextOrDeviceUnavailableOrLost => {
-                        let detail = failure.detail();
-                        if detail.starts_with("device became unavailable") {
-                            if detail.contains("Destroyed") {
-                                114311u32
-                            } else if detail.contains("Unknown") {
-                                114312u32
-                            } else {
-                                114319u32
-                            }
-                        } else if detail.starts_with("uncaptured WGPU backend error") {
-                            11432u32
-                        } else if detail.contains("prepared initial-content") {
-                            11433u32
-                        } else {
-                            11439u32
-                        }
-                    },
-                    GpuSubmissionFailureKind::SurfaceLease => 1144u32,
-                    GpuSubmissionFailureKind::ReadbackMapping => 1145u32,
-                    GpuSubmissionFailureKind::ContextDropped => 1146u32,
-                    GpuSubmissionFailureKind::InternalInvariant => 1147u32,
-                };
-                return Err(stage);
-            },
+            GpuSubmissionStatus::Failed(_) => return Err(114u32),
             GpuSubmissionStatus::Accepted => {}
         }
         super::browser_yield().await;
