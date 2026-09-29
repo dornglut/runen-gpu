@@ -130,6 +130,14 @@ fn multiview_pipeline(
     source_key: &'static str,
     source_text: &'static str,
 ) -> GpuRenderPipelineDescriptor {
+    multiview_pipeline_with_count(source_key, source_text, 2)
+}
+
+fn multiview_pipeline_with_count(
+    source_key: &'static str,
+    source_text: &'static str,
+    view_count: u32,
+) -> GpuRenderPipelineDescriptor {
     let [source] = admit_static_wgsl_sources([(source_key, 1, source_text)]).unwrap();
     let vertex = GpuEntryPointName::new("vs_main").unwrap();
     let fragment = GpuEntryPointName::new("fs_main").unwrap();
@@ -153,7 +161,7 @@ fn multiview_pipeline(
         GpuMultisampleStateDescriptor::default(),
     )
     .unwrap()
-    .with_multiview(GpuMultiviewState::new(2).unwrap())
+    .with_multiview(GpuMultiviewState::new(view_count).unwrap())
     .unwrap();
     GpuRenderPipelineDescriptor::new(
         program,
@@ -668,6 +676,32 @@ pub(crate) async fn run_on_adapter(
         "default required Multiview workload budget must be exactly two"
     );
 
+    let four_view_pipeline = multiview_pipeline_with_count(
+        "proof.r4.multiview.four-view-realization-limit",
+        NO_VIEW_INDEX_WGSL,
+        4,
+    );
+    let four_view_program = context
+        .realize_program(four_view_pipeline.program())
+        .await
+        .unwrap();
+    let four_view_layout = context
+        .realize_pipeline_layout(four_view_pipeline.layout())
+        .await
+        .unwrap();
+    let realization_error = context
+        .realize_render_pipeline(
+            &four_view_pipeline,
+            &four_view_program,
+            &four_view_layout,
+        )
+        .await
+        .expect_err("four-view pipeline must reject against an admitted two-view workload budget");
+    assert_eq!(
+        realization_error.category(),
+        GpuPipelineRealizationErrorCategory::FormatOrAlignmentNotAdmitted
+    );
+
     run_primary_oracle(&context).await;
     run_shader_without_view_index_oracle(&context).await;
     run_clear_only_oracle(&context).await;
@@ -1036,6 +1070,126 @@ fn selected_view_index_requires_multiview_but_multiview_shader_may_ignore_it() {
             GpuCapabilityFeature::Multiview
         ))
     ));
+}
+
+#[test]
+fn pass_and_pipeline_multiview_state_must_match_exactly() {
+    let mut scope = GpuResourceScope::new();
+    let texture_label = label("R4 multiview parity texture");
+    let texture = scope
+        .texture(
+            GpuTextureDescriptor::new(
+                common("R4 multiview parity texture"),
+                GpuTextureDimension::D2,
+                GpuTextureExtent::new(
+                    &texture_label,
+                    GpuTextureDimension::D2,
+                    WIDTH,
+                    HEIGHT,
+                    4,
+                )
+                .unwrap(),
+                1,
+                1,
+                GpuTextureFormat::Rgba8Unorm,
+                GpuTextureUsages::new(&texture_label, [GpuTextureUsage::ColorAttachment]).unwrap(),
+                GpuTextureInitialization::Uninitialized,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+
+    let ordinary_view = texture_view(
+        &mut scope,
+        &texture,
+        "R4 ordinary parity view",
+        GpuTextureViewDimension::D2,
+        0,
+        1,
+    );
+    let two_view = texture_view(
+        &mut scope,
+        &texture,
+        "R4 two-view parity view",
+        GpuTextureViewDimension::D2Array,
+        0,
+        2,
+    );
+    let four_view = texture_view(
+        &mut scope,
+        &texture,
+        "R4 four-view parity view",
+        GpuTextureViewDimension::D2Array,
+        0,
+        4,
+    );
+
+    let attachment = |view| {
+        GpuRenderColorAttachment::new(
+            view,
+            GpuColorAttachmentLoad::Clear(
+                GpuColorClearValue::new(0.0, 0.0, 0.0, 1.0).unwrap(),
+            ),
+            GpuAttachmentStore::Store,
+            None,
+        )
+        .unwrap()
+    };
+
+    let two_pipeline = multiview_pipeline_with_count(
+        "proof.r4.multiview.parity-two",
+        NO_VIEW_INDEX_WGSL,
+        2,
+    );
+    let four_pipeline = multiview_pipeline_with_count(
+        "proof.r4.multiview.parity-four",
+        NO_VIEW_INDEX_WGSL,
+        4,
+    );
+
+    let ordinary_with_multiview = GpuRenderOperation::new(
+        [attachment(ordinary_view)],
+        None,
+        [render_draw(two_pipeline.clone())],
+        None,
+    )
+    .expect_err("ordinary pass must reject a multiview pipeline");
+    assert_eq!(
+        ordinary_with_multiview.cause(),
+        GpuWorkOperationCause::InvalidDraw
+    );
+
+    let mismatched_count = GpuRenderOperation::new(
+        [attachment(four_view)],
+        None,
+        [render_draw(two_pipeline)],
+        None,
+    )
+    .expect_err("four-view pass must reject a two-view pipeline");
+    assert_eq!(mismatched_count.cause(), GpuWorkOperationCause::InvalidDraw);
+
+    let matched = GpuRenderOperation::new(
+        [attachment(two_view)],
+        None,
+        [render_draw(multiview_pipeline_with_count(
+            "proof.r4.multiview.parity-matched",
+            NO_VIEW_INDEX_WGSL,
+            2,
+        ))],
+        None,
+    )
+    .expect("equal pass/pipeline multiview state must remain valid");
+    assert_eq!(
+        matched.signature().multiview(),
+        Some(GpuMultiviewState::new(2).unwrap())
+    );
+
+    // Keep the four-view descriptor alive in this structural test so both checked
+    // pipeline cardinalities are independently constructed.
+    assert_eq!(
+        four_pipeline.state().multiview(),
+        Some(GpuMultiviewState::new(4).unwrap())
+    );
 }
 
 #[cfg(not(target_arch = "wasm32"))]
