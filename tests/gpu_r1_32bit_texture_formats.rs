@@ -111,6 +111,7 @@ fn structural_normalization_preserves_backend_role_facts() {
         storage_read: false,
         storage_write: true,
         color_attachment: false,
+        blendable: false,
         depth_stencil: false,
         copy_source: true,
         copy_destination: false,

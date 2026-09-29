@@ -23,6 +23,7 @@ fn native_context() -> GpuContext {
         .unwrap();
     let descriptor = GpuContextDescriptor::new(requirements)
         .require_format_role(GpuTextureFormat::Rgba8Unorm, GpuFormatRole::ColorAttachment)
+        .require_format_role(GpuTextureFormat::Rgba8Unorm, GpuFormatRole::Blendable)
         .require_format_role(GpuTextureFormat::Rgba8Unorm, GpuFormatRole::CopySource)
         .with_fallback_policy(GpuSoftwareFallbackPolicy::Require)
         .with_allowed_backends([GpuBackendFamily::Vulkan])

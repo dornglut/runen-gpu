@@ -307,6 +307,8 @@ pub struct GpuTextureFormatCapabilities {
     pub storage_read: bool,
     pub storage_write: bool,
     pub color_attachment: bool,
+    /// Color blending support, which may be absent even when rendering to this format is allowed.
+    pub blendable: bool,
     pub depth_stencil: bool,
     pub copy_source: bool,
     pub copy_destination: bool,
@@ -324,6 +326,7 @@ impl GpuTextureFormatCapabilities {
             storage_read: false,
             storage_write: false,
             color_attachment: false,
+            blendable: false,
             depth_stencil: false,
             copy_source: false,
             copy_destination: false,
@@ -796,6 +799,7 @@ mod tests {
                 storage_read: true,
                 storage_write: false,
                 color_attachment: false,
+                blendable: false,
                 depth_stencil: false,
                 copy_source: true,
                 copy_destination: false,
@@ -811,6 +815,7 @@ mod tests {
             assert_eq!(normalized.filterable, input.filterable, "{format:?}");
             assert_eq!(normalized.storage_read, input.storage_read, "{format:?}");
             assert_eq!(normalized.storage_write, input.storage_write, "{format:?}");
+            assert_eq!(normalized.blendable, input.blendable, "{format:?}");
             assert_eq!(
                 normalized.color_attachment, input.color_attachment,
                 "{format:?}"

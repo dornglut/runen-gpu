@@ -29,6 +29,9 @@ mod retained_non_uniform_binding_array;
 #[path = "gpu_offscreen_indexed_native.rs"]
 mod retained_offscreen_indexed;
 #[cfg(target_arch = "wasm32")]
+#[path = "gpu_r1_optional_format_roles.rs"]
+mod retained_optional_format_roles;
+#[cfg(target_arch = "wasm32")]
 #[path = "gpu_prefix_scan_native.rs"]
 mod retained_prefix_scan;
 #[cfg(target_arch = "wasm32")]
@@ -59,9 +62,9 @@ mod browser {
         retained_bc, retained_blend_state, retained_depth_bias, retained_depth_clip_control,
         retained_dual_source_blending, retained_fixed_binding_array,
         retained_indirect_first_instance, retained_multiview, retained_non_uniform_binding_array,
-        retained_offscreen_indexed, retained_prefix_scan, retained_sampler_anisotropy,
-        retained_shader_f16, retained_transient_attachment, retained_vertex_packed,
-        retained_vertex8, retained_vertex16,
+        retained_offscreen_indexed, retained_optional_format_roles, retained_prefix_scan,
+        retained_sampler_anisotropy, retained_shader_f16, retained_transient_attachment,
+        retained_vertex_packed, retained_vertex8, retained_vertex16,
     };
     use runen_gpu::*;
     use std::cell::RefCell;
@@ -83,6 +86,7 @@ mod browser {
         static BC_EXERCISED_MASK: RefCell<u32> = RefCell::new(0);
         static COMPRESSION_FEATURE_MASK: RefCell<u32> = RefCell::new(0);
         static BLEND_STATE_EXERCISED_MASK: RefCell<u32> = RefCell::new(0);
+        static OPTIONAL_FORMAT_ROLES_MASK: RefCell<u32> = RefCell::new(0);
         static DUAL_SOURCE_BLEND_MASK: RefCell<u32> = RefCell::new(0);
         static DEPTH_BIAS_EXERCISED_MASK: RefCell<u32> = RefCell::new(0);
         static SAMPLER_ANISOTROPY_EXERCISED: RefCell<u32> = RefCell::new(0);
@@ -2288,6 +2292,13 @@ fn cs_main() {
         BC_EXERCISED_MASK.with(|slot| *slot.borrow_mut() = bc_mask);
         let blend_state_mask = retained_blend_state::run_browser_blend_state().await;
         BLEND_STATE_EXERCISED_MASK.with(|slot| *slot.borrow_mut() = blend_state_mask);
+        let optional_roles_mask = retained_optional_format_roles::run_on_adapter(
+            GpuBackendFamily::BrowserWebGpu,
+            None,
+            Some(transient_context.adapter_facts()),
+        )
+        .await;
+        OPTIONAL_FORMAT_ROLES_MASK.with(|slot| *slot.borrow_mut() = optional_roles_mask);
         let dual_source_mask =
             retained_dual_source_blending::run_browser_dual_source_blending().await;
         DUAL_SOURCE_BLEND_MASK.with(|slot| *slot.borrow_mut() = dual_source_mask);
@@ -2461,6 +2472,11 @@ fn cs_main() {
     #[unsafe(no_mangle)]
     pub extern "C" fn runengpu_browser_blend_state_exercised_mask() -> u32 {
         BLEND_STATE_EXERCISED_MASK.with(|mask| *mask.borrow())
+    }
+
+    #[unsafe(no_mangle)]
+    pub extern "C" fn runengpu_browser_optional_format_roles_mask() -> u32 {
+        OPTIONAL_FORMAT_ROLES_MASK.with(|mask| *mask.borrow())
     }
 
     #[unsafe(no_mangle)]

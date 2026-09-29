@@ -76,6 +76,7 @@ fn descriptor(
     }
     let mut descriptor = GpuContextDescriptor::new(requirements)
         .require_format_role(GpuTextureFormat::Rgba8Unorm, GpuFormatRole::ColorAttachment)
+        .require_format_role(GpuTextureFormat::Rgba8Unorm, GpuFormatRole::Blendable)
         .require_format_role(GpuTextureFormat::Rgba8Unorm, GpuFormatRole::CopySource)
         .with_allowed_backends([backend])
         .with_label(if require_dual_source {

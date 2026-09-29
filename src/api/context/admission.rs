@@ -289,6 +289,7 @@ pub(crate) fn evaluate_validated_candidate(
                 GpuFormatRole::StorageRead => facts.storage_read,
                 GpuFormatRole::StorageWrite => facts.storage_write,
                 GpuFormatRole::ColorAttachment => facts.color_attachment,
+                GpuFormatRole::Blendable => facts.color_attachment && facts.blendable,
                 GpuFormatRole::DepthStencil => facts.depth_stencil,
                 GpuFormatRole::CopySource => facts.copy_source,
                 GpuFormatRole::CopyDestination => facts.copy_destination,
@@ -690,6 +691,17 @@ fn is_declared_extension(feature: GpuCapabilityFeature) -> bool {
 fn is_declared_format_role_extension(format: GpuTextureFormat, role: GpuFormatRole) -> bool {
     format == GpuTextureFormat::Depth32FloatStencil8
         || (format == GpuTextureFormat::Rg11b10Ufloat && role == GpuFormatRole::ColorAttachment)
+        || (matches!(
+            format,
+            GpuTextureFormat::R32Float
+                | GpuTextureFormat::Rg32Float
+                | GpuTextureFormat::Rgba32Float
+        ) && matches!(role, GpuFormatRole::Filterable | GpuFormatRole::Blendable))
+        || (format == GpuTextureFormat::Bgra8Unorm
+            && matches!(
+                role,
+                GpuFormatRole::StorageRead | GpuFormatRole::StorageWrite
+            ))
 }
 
 #[cfg(test)]
@@ -1421,6 +1433,7 @@ mod tests {
             storage_read: false,
             storage_write: false,
             color_attachment: false,
+            blendable: false,
             depth_stencil: true,
             copy_source: true,
             copy_destination: true,
@@ -1512,6 +1525,7 @@ mod tests {
             storage_read: false,
             storage_write: false,
             color_attachment: true,
+            blendable: true,
             depth_stencil: false,
             copy_source: true,
             copy_destination: true,
@@ -1592,6 +1606,120 @@ mod tests {
     }
 
     #[test]
+    fn optional_format_roles_preserve_support_and_portability_truth() {
+        let cases = [
+            (GpuTextureFormat::R32Float, GpuFormatRole::Filterable),
+            (GpuTextureFormat::Rg32Float, GpuFormatRole::Filterable),
+            (GpuTextureFormat::Rgba32Float, GpuFormatRole::Filterable),
+            (GpuTextureFormat::R32Float, GpuFormatRole::Blendable),
+            (GpuTextureFormat::Rg32Float, GpuFormatRole::Blendable),
+            (GpuTextureFormat::Rgba32Float, GpuFormatRole::Blendable),
+            (GpuTextureFormat::Bgra8Unorm, GpuFormatRole::StorageRead),
+            (GpuTextureFormat::Bgra8Unorm, GpuFormatRole::StorageWrite),
+        ];
+        for (format, role) in cases {
+            let mut supported = GpuTextureFormatCapabilities::none();
+            supported.sampled = true;
+            supported.color_attachment = true;
+            supported.filterable = true;
+            supported.blendable = true;
+            supported.storage_read = true;
+            supported.storage_write = true;
+            let adapter = |facts| {
+                GpuAdapterFacts::new(
+                    GpuBackendFamily::Vulkan,
+                    GpuAdapterClass::Discrete,
+                    GpuSoftwareStatus::Hardware,
+                    GpuFallbackStatus::ConfirmedNotFallback,
+                    GpuCapabilities::from_normalized_facts([], limits(), [(format, facts)]),
+                    GpuAdapterLimits::new(limits()),
+                    alignments(),
+                )
+            };
+            let descriptor = GpuContextDescriptor::new(GpuCapabilityRequirements::new())
+                .require_format_role(format, role);
+            let admitted = evaluate_candidate(&descriptor, adapter(supported), true).unwrap();
+            assert_eq!(
+                admitted.portability(),
+                GpuPortabilityClass::PortableWithDeclaredExtensions,
+                "{format:?} {role:?}"
+            );
+            assert!(admitted.portability_evidence().reasons().any(|reason| {
+                reason == GpuPortabilityReason::DeclaredFormatRoleExtension { format, role }
+            }));
+            assert!(matches!(
+                evaluate_candidate(
+                    &descriptor.clone().with_portability_policy(
+                        GpuPortabilityPolicy::RequirePortableBaseline
+                    ),
+                    adapter(supported),
+                    true,
+                ),
+                Err(error) if error.category() == GpuContextRequestErrorCategory::NoAdmissibleCandidate
+            ));
+            let rejected = evaluate_candidate(
+                &descriptor,
+                adapter(GpuTextureFormatCapabilities::none()),
+                true,
+            )
+            .unwrap_err();
+            assert_eq!(
+                rejected.category(),
+                GpuContextRequestErrorCategory::UnsupportedFormatRole,
+                "{format:?} {role:?}"
+            );
+        }
+
+        let inconsistent = GpuTextureFormatCapabilities {
+            blendable: true,
+            ..GpuTextureFormatCapabilities::none()
+        };
+        let format = GpuTextureFormat::Rgba32Float;
+        let descriptor = GpuContextDescriptor::new(GpuCapabilityRequirements::new())
+            .require_format_role(format, GpuFormatRole::Blendable);
+        let adapter = GpuAdapterFacts::new(
+            GpuBackendFamily::Vulkan,
+            GpuAdapterClass::Discrete,
+            GpuSoftwareStatus::Hardware,
+            GpuFallbackStatus::ConfirmedNotFallback,
+            GpuCapabilities::from_normalized_facts([], limits(), [(format, inconsistent)]),
+            GpuAdapterLimits::new(limits()),
+            alignments(),
+        );
+        assert!(evaluate_candidate(&descriptor, adapter, true).is_err());
+
+        let renderable_nonblendable = GpuTextureFormatCapabilities {
+            color_attachment: true,
+            ..GpuTextureFormatCapabilities::none()
+        };
+        let adapter = |facts| {
+            GpuAdapterFacts::new(
+                GpuBackendFamily::Vulkan,
+                GpuAdapterClass::Discrete,
+                GpuSoftwareStatus::Hardware,
+                GpuFallbackStatus::ConfirmedNotFallback,
+                GpuCapabilities::from_normalized_facts([], limits(), [(format, facts)]),
+                GpuAdapterLimits::new(limits()),
+                alignments(),
+            )
+        };
+        let replacement = GpuContextDescriptor::new(GpuCapabilityRequirements::new())
+            .require_format_role(format, GpuFormatRole::ColorAttachment);
+        assert!(evaluate_candidate(&replacement, adapter(renderable_nonblendable), true).is_ok());
+        assert!(evaluate_candidate(&descriptor, adapter(renderable_nonblendable), true).is_err());
+
+        let filterable_nonrenderable = GpuTextureFormatCapabilities {
+            sampled: true,
+            filterable: true,
+            ..GpuTextureFormatCapabilities::none()
+        };
+        let filtering = GpuContextDescriptor::new(GpuCapabilityRequirements::new())
+            .require_format_role(format, GpuFormatRole::Filterable);
+        assert!(evaluate_candidate(&filtering, adapter(filterable_nonrenderable), true).is_ok());
+        assert!(evaluate_candidate(&replacement, adapter(filterable_nonrenderable), true).is_err());
+    }
+
+    #[test]
     fn unsupported_complete_device_profile_is_rejected_during_pure_admission() {
         let profile_unsupported =
             adapter([]).with_device_profile(GpuDeviceRequestProfile::Downlevel, false);
@@ -1663,6 +1791,7 @@ mod tests {
             storage_read: true,
             storage_write: true,
             color_attachment: true,
+            blendable: true,
             depth_stencil: false,
             copy_source: true,
             copy_destination: true,
@@ -1724,6 +1853,7 @@ mod tests {
             storage_read: false,
             storage_write: false,
             color_attachment: false,
+            blendable: false,
             depth_stencil: true,
             copy_source: true,
             copy_destination: true,
@@ -1783,6 +1913,7 @@ mod tests {
             storage_read: false,
             storage_write: false,
             color_attachment: false,
+            blendable: false,
             depth_stencil: true,
             copy_source: true,
             copy_destination: true,
