@@ -11,6 +11,9 @@ mod retained_depth_bias;
 #[path = "gpu_r2_depth_clip_control.rs"]
 mod retained_depth_clip_control;
 #[cfg(target_arch = "wasm32")]
+#[path = "gpu_r2_dual_source_blending.rs"]
+mod retained_dual_source_blending;
+#[cfg(target_arch = "wasm32")]
 #[path = "gpu_fixed_binding_array/mod.rs"]
 mod retained_fixed_binding_array;
 #[cfg(target_arch = "wasm32")]
@@ -48,10 +51,11 @@ mod retained_vertex_packed;
 mod browser {
     use super::{
         retained_bc, retained_blend_state, retained_depth_bias, retained_depth_clip_control,
-        retained_fixed_binding_array, retained_indirect_first_instance,
-        retained_non_uniform_binding_array, retained_offscreen_indexed, retained_prefix_scan,
-        retained_sampler_anisotropy, retained_shader_f16, retained_transient_attachment,
-        retained_vertex_packed, retained_vertex8, retained_vertex16,
+        retained_dual_source_blending, retained_fixed_binding_array,
+        retained_indirect_first_instance, retained_non_uniform_binding_array,
+        retained_offscreen_indexed, retained_prefix_scan, retained_sampler_anisotropy,
+        retained_shader_f16, retained_transient_attachment, retained_vertex_packed,
+        retained_vertex8, retained_vertex16,
     };
     use runen_gpu::*;
     use std::cell::RefCell;
@@ -72,6 +76,7 @@ mod browser {
         static PACKED32_COLOR_ATTACHMENT_MASK: RefCell<u32> = RefCell::new(0);
         static BC_EXERCISED_MASK: RefCell<u32> = RefCell::new(0);
         static BLEND_STATE_EXERCISED_MASK: RefCell<u32> = RefCell::new(0);
+        static DUAL_SOURCE_BLEND_MASK: RefCell<u32> = RefCell::new(0);
         static DEPTH_BIAS_EXERCISED_MASK: RefCell<u32> = RefCell::new(0);
         static SAMPLER_ANISOTROPY_EXERCISED: RefCell<u32> = RefCell::new(0);
         static SHADER_F16_EXERCISED_MASK: RefCell<u32> = RefCell::new(0);
@@ -2242,6 +2247,9 @@ fn cs_main() {
         BC_EXERCISED_MASK.with(|slot| *slot.borrow_mut() = bc_mask);
         let blend_state_mask = retained_blend_state::run_browser_blend_state().await;
         BLEND_STATE_EXERCISED_MASK.with(|slot| *slot.borrow_mut() = blend_state_mask);
+        let dual_source_mask =
+            retained_dual_source_blending::run_browser_dual_source_blending().await;
+        DUAL_SOURCE_BLEND_MASK.with(|slot| *slot.borrow_mut() = dual_source_mask);
         let depth_bias_mask = retained_depth_bias::run_browser_depth_bias().await;
         DEPTH_BIAS_EXERCISED_MASK.with(|slot| *slot.borrow_mut() = depth_bias_mask);
         let depth_clip_mask = retained_depth_clip_control::run_browser_depth_clip_control().await;
@@ -2356,6 +2364,11 @@ fn cs_main() {
     #[unsafe(no_mangle)]
     pub extern "C" fn runengpu_browser_blend_state_exercised_mask() -> u32 {
         BLEND_STATE_EXERCISED_MASK.with(|mask| *mask.borrow())
+    }
+
+    #[unsafe(no_mangle)]
+    pub extern "C" fn runengpu_browser_dual_source_blend_mask() -> u32 {
+        DUAL_SOURCE_BLEND_MASK.with(|mask| *mask.borrow())
     }
 
     #[unsafe(no_mangle)]

@@ -134,9 +134,9 @@ renderers without importing renderer policy.
 - full blend factors and operations with independent color/alpha state;
 - depth bias, slope scale, and applicable clamp semantics;
 - complete stencil front/back operations and masks;
-- mature portable optional raster capabilities behind truthful capability gates,
-  such as depth-clip control and dual-source blending when their prerequisites are
-  satisfied;
+- normalized depth-clip control and dual-source blending are `CURRENT` behind
+  truthful capability gates; dual-source blending retains exact primary/secondary
+  fragment-output parity and a single-color-target first contract;
 - keep native-only raster modes deferred until a stable RunenGPU contract is
   justified.
 

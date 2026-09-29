@@ -131,7 +131,7 @@ jobs:
           report_path, expected_revision = sys.argv[1:3]
           with open(report_path, encoding="utf-8") as handle:
               report = json.load(handle)
-          assert report["schema_version"] == 7
+          assert report["schema_version"] == 8
           assert report["qualification_level"] == "generic_metal"
           assert report["revision"] == expected_revision
           assert report["environment"]["architecture"] == "arm64"
@@ -150,6 +150,7 @@ jobs:
               "timestamp_query",
               "indirect_first_instance",
               "depth_clip_control",
+              "dual_source_blending",
               "texture_binding_array",
               "buffer_binding_array",
               "storage_resource_binding_array",
@@ -242,6 +243,11 @@ jobs:
           assert report["proofs"]["vertex16_mask"] == 0x7FFF
           assert report["proofs"]["vertex_packed_mask"] == 0x3
           assert report["proofs"]["blend_state_mask"] == 0x3
+          assert report["proofs"]["dual_source_blending"] in {"EXERCISED", "UNSUPPORTED"}
+          if report["capabilities"]["DualSourceBlending"]["supported"]:
+              assert report["proofs"]["dual_source_blending"] == "EXERCISED"
+          else:
+              assert report["proofs"]["dual_source_blending"] == "UNSUPPORTED"
           assert report["proofs"]["depth_bias_baseline_mask"] == 0x7
           assert report["proofs"]["depth_clip_control"] == "EXERCISED"
           assert report["proofs"]["indirect_first_instance"] in {"EXERCISED", "UNSUPPORTED"}

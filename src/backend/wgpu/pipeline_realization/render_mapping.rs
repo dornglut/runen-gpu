@@ -22,6 +22,10 @@ pub(super) const fn blend_factor(value: GpuBlendFactor) -> BlendFactor {
         GpuBlendFactor::SrcAlphaSaturated => BlendFactor::SrcAlphaSaturated,
         GpuBlendFactor::Constant => BlendFactor::Constant,
         GpuBlendFactor::OneMinusConstant => BlendFactor::OneMinusConstant,
+        GpuBlendFactor::Src1 => BlendFactor::Src1,
+        GpuBlendFactor::OneMinusSrc1 => BlendFactor::OneMinusSrc1,
+        GpuBlendFactor::Src1Alpha => BlendFactor::Src1Alpha,
+        GpuBlendFactor::OneMinusSrc1Alpha => BlendFactor::OneMinusSrc1Alpha,
     }
 }
 
@@ -285,6 +289,13 @@ mod tests {
             (
                 GpuBlendFactor::OneMinusConstant,
                 BlendFactor::OneMinusConstant,
+            ),
+            (GpuBlendFactor::Src1, BlendFactor::Src1),
+            (GpuBlendFactor::OneMinusSrc1, BlendFactor::OneMinusSrc1),
+            (GpuBlendFactor::Src1Alpha, BlendFactor::Src1Alpha),
+            (
+                GpuBlendFactor::OneMinusSrc1Alpha,
+                BlendFactor::OneMinusSrc1Alpha,
             ),
         ] {
             assert_eq!(blend_factor(normalized), native);

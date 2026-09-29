@@ -440,6 +440,7 @@ fn wgpu_features_for(feature: GpuCapabilityFeature) -> Features {
             Features::STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING
         }
         GpuCapabilityFeature::ShaderF16 => Features::SHADER_F16,
+        GpuCapabilityFeature::DualSourceBlending => Features::DUAL_SOURCE_BLENDING,
         GpuCapabilityFeature::DepthClipControl => Features::DEPTH_CLIP_CONTROL,
         GpuCapabilityFeature::DepthBiasClamp => Features::empty(),
         _ => Features::empty(),
@@ -920,6 +921,20 @@ mod tests {
         assert_eq!(
             wgpu_features_for(GpuCapabilityFeature::ShaderF16),
             Features::SHADER_F16
+        );
+    }
+
+    #[test]
+    fn dual_source_blending_requests_the_exact_wgpu_feature() {
+        assert_eq!(
+            wgpu_features_for(GpuCapabilityFeature::DualSourceBlending),
+            Features::DUAL_SOURCE_BLENDING
+        );
+        assert_eq!(
+            requested_features(&candidate_with_enabled_features([
+                GpuCapabilityFeature::DualSourceBlending,
+            ])),
+            Features::DUAL_SOURCE_BLENDING
         );
     }
 

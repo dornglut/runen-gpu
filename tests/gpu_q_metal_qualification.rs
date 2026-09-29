@@ -13,6 +13,8 @@ mod retained_blend;
 mod retained_depth_bias;
 #[path = "gpu_r2_depth_clip_control.rs"]
 mod retained_depth_clip_control;
+#[path = "gpu_r2_dual_source_blending.rs"]
+mod retained_dual_source_blending;
 #[path = "gpu_fixed_binding_array/mod.rs"]
 mod retained_fixed_binding_array;
 #[path = "gpu_compute_generated_indirect_native.rs"]
@@ -36,7 +38,7 @@ mod retained_vertex8;
 #[path = "gpu_r1_vertex_packed_formats.rs"]
 mod retained_vertex_packed;
 
-const FEATURES: [GpuCapabilityFeature; 19] = [
+const FEATURES: [GpuCapabilityFeature; 20] = [
     GpuCapabilityFeature::Compute,
     GpuCapabilityFeature::RenderPipeline,
     GpuCapabilityFeature::Copy,
@@ -53,6 +55,7 @@ const FEATURES: [GpuCapabilityFeature; 19] = [
     GpuCapabilityFeature::DepthAttachment,
     GpuCapabilityFeature::DepthBiasClamp,
     GpuCapabilityFeature::DepthClipControl,
+    GpuCapabilityFeature::DualSourceBlending,
     GpuCapabilityFeature::ShaderF16,
     GpuCapabilityFeature::TimestampQuery,
     GpuCapabilityFeature::Presentation,
@@ -325,6 +328,7 @@ fn wgpu_characterization(
             "indirect_first_instance":
                 features.contains(wgpu::Features::INDIRECT_FIRST_INSTANCE),
             "depth_clip_control": features.contains(wgpu::Features::DEPTH_CLIP_CONTROL),
+            "dual_source_blending": features.contains(wgpu::Features::DUAL_SOURCE_BLENDING),
             "texture_binding_array": features.contains(wgpu::Features::TEXTURE_BINDING_ARRAY),
             "buffer_binding_array": features.contains(wgpu::Features::BUFFER_BINDING_ARRAY),
             "storage_resource_binding_array":
@@ -524,6 +528,11 @@ fn metal_qualification_records_exact_public_api_evidence() {
     let vertex16_mask = pollster::block_on(retained_vertex16::run_suite(&context));
     let vertex_packed_mask = pollster::block_on(retained_vertex_packed::run_suite(&context));
     let blend_mask = pollster::block_on(retained_blend::run_suite(&context));
+    let dual_source_blending = pollster::block_on(retained_dual_source_blending::run_on_adapter(
+        GpuBackendFamily::Metal,
+        None,
+        &context,
+    ));
     let depth_bias_mask = pollster::block_on(retained_depth_bias::run_baseline(&context));
     pollster::block_on(retained_depth_clip_control::run_case(
         &context,
@@ -605,7 +614,7 @@ fn metal_qualification_records_exact_public_api_evidence() {
     assert_eq!(stats.pending_readbacks(), 0);
 
     let report = json!({
-        "schema_version": 7,
+        "schema_version": 8,
         "qualification_level": mode.report_name(),
         "revision": revision,
         "environment": {
@@ -645,6 +654,8 @@ fn metal_qualification_records_exact_public_api_evidence() {
             "vertex16_mask": vertex16_mask,
             "vertex_packed_mask": vertex_packed_mask,
             "blend_state_mask": blend_mask,
+            "dual_source_blending":
+                proof_disposition(dual_source_blending.exercised),
             "depth_bias_baseline_mask": depth_bias_mask,
             "depth_clip_control": "EXERCISED",
             "indirect_first_instance":
