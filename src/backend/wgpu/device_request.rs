@@ -965,8 +965,7 @@ mod tests {
 
     #[test]
     fn multiview_requests_the_exact_wgpu_feature_and_baseline_limit() {
-        let candidate =
-            candidate_with_enabled_features([GpuCapabilityFeature::Multiview]);
+        let candidate = candidate_with_enabled_features([GpuCapabilityFeature::Multiview]);
         assert_eq!(
             wgpu_features_for(GpuCapabilityFeature::Multiview),
             Features::MULTIVIEW
