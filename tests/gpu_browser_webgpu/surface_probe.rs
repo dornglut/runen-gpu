@@ -231,14 +231,14 @@ async fn run_public_surface(window: Arc<Window>) -> Result<u32, u32> {
 
     let (context, surface) = GpuContext::request_for_surface(descriptor, window)
         .await
-        .map_err(|_| 101)?;
+        .map_err(|_| 101u32)?;
     if context.adapter_facts().backend() != GpuBackendFamily::BrowserWebGpu {
-        return Err(102);
+        return Err(102u32);
     }
 
-    let capabilities = context.surface_capabilities(surface).map_err(|_| 103)?;
+    let capabilities = context.surface_capabilities(surface).map_err(|_| 103u32)?;
     if !capabilities.supports_usage(GpuTextureUsage::ColorAttachment) {
-        return Err(104);
+        return Err(104u32);
     }
     let format = capabilities
         .formats()
@@ -251,19 +251,19 @@ async fn run_public_surface(window: Arc<Window>) -> Result<u32, u32> {
             )
         })
         .or_else(|| capabilities.formats().first().copied())
-        .ok_or(105)?;
+        .ok_or(105u32)?;
     let present_mode = capabilities
         .present_modes()
         .iter()
         .copied()
         .find(|mode| *mode == GpuSurfacePresentMode::Fifo)
-        .ok_or(106)?;
+        .ok_or(106u32)?;
     let alpha_mode = capabilities
         .alpha_modes()
         .iter()
         .copied()
         .find(|mode| *mode == GpuSurfaceAlphaMode::Opaque)
-        .ok_or(107)?;
+        .ok_or(107u32)?;
 
     let configuration = GpuSurfaceConfiguration::new(
         WIDTH,
@@ -275,26 +275,26 @@ async fn run_public_surface(window: Arc<Window>) -> Result<u32, u32> {
         2,
         [],
     )
-    .map_err(|_| 108)?;
+    .map_err(|_| 108u32)?;
     let configured = context
         .configure_surface(surface, configuration)
-        .map_err(|_| 109)?;
-    let image = context.acquire_surface_image(configured).map_err(|_| 110)?;
+        .map_err(|_| 109u32)?;
+    let image = context.acquire_surface_image(configured).map_err(|_| 110u32)?;
     if image.texture().descriptor().common().ownership() != GpuResourceOwnership::SurfaceAcquired {
-        return Err(111);
+        return Err(111u32);
     }
     let graph = clear_and_present_graph(&image);
-    let prepared = context.prepare_submission(graph).await.map_err(|_| 112)?;
-    let submission = context.submit_prepared(prepared).map_err(|_| 113)?;
+    let prepared = context.prepare_submission(graph).await.map_err(|_| 112u32)?;
+    let submission = context.submit_prepared(prepared).map_err(|_| 113u32)?;
     if !terminalize(&context, &submission).await {
-        return Err(114);
+        return Err(114u32);
     }
 
-    let next = context.acquire_surface_image(configured).map_err(|_| 115)?;
+    let next = context.acquire_surface_image(configured).map_err(|_| 115u32)?;
     if next.lease_id() == image.lease_id() {
-        return Err(116);
+        return Err(116u32);
     }
-    context.detach_surface(configured).map_err(|_| 117)?;
+    context.detach_surface(configured).map_err(|_| 117u32)?;
     next.abandon();
     drop(image);
 
@@ -305,7 +305,7 @@ async fn run_public_surface(window: Arc<Window>) -> Result<u32, u32> {
         || stats.readback_bytes_in_flight() != 0
         || stats.pending_readbacks() != 0
     {
-        return Err(118);
+        return Err(118u32);
     }
 
     Ok(normalized_format_code(format))
