@@ -1027,8 +1027,8 @@ fn normalize_vertex_input(
                 Ok(GpuShaderIoLocation::new(location, value_type))
             },
             &mut |builtin| match builtin {
-                BuiltIn::VertexIndex => Ok(GpuVertexInputBuiltin::Vertex),
-                BuiltIn::InstanceIndex => Ok(GpuVertexInputBuiltin::Instance),
+                BuiltIn::VertexIndex => Ok(GpuVertexInputBuiltin::VertexIndex),
+                BuiltIn::InstanceIndex => Ok(GpuVertexInputBuiltin::InstanceIndex),
                 BuiltIn::ViewIndex => Ok(GpuVertexInputBuiltin::View),
                 _ => Err("vertex input uses an unsupported builtin"),
             },
