@@ -325,6 +325,29 @@ fn primary_graph() -> (GpuPreparedWorkGraph, [GpuReadbackId; 3]) {
             GpuCapabilityFeature::Multiview
         ))
     ));
+
+    let has_dependency = |before, after| {
+        graph.dependencies().iter().any(|dependency| {
+            dependency.before().local_node() == before
+                && dependency.after().local_node() == after
+        })
+    };
+    assert!(
+        !has_dependency(1, 2),
+        "disjoint parent layer zero must not gain a false dependency on the multiview writer"
+    );
+    assert!(
+        has_dependency(1, 3) && !has_dependency(2, 3),
+        "layer-zero readback must depend only on the disjoint sentinel writer"
+    );
+    assert!(
+        !has_dependency(1, 4) && has_dependency(2, 4),
+        "first selected multiview layer readback must depend only on the multiview writer"
+    );
+    assert!(
+        !has_dependency(1, 5) && has_dependency(2, 5),
+        "second selected multiview layer readback must depend only on the multiview writer"
+    );
     (graph, ids)
 }
 
@@ -742,6 +765,29 @@ fn layered_attachment_boundaries_and_initialization_are_structural() {
     .expect_err("one-layer D2Array attachment remains outside the first multiview contract");
     assert_eq!(one_layer.cause(), GpuWorkOperationCause::InvalidAttachment);
 
+    let initialized_layer = texture_view(
+        &mut scope,
+        &texture,
+        "R4 partially initialized layer zero",
+        GpuTextureViewDimension::D2,
+        0,
+        1,
+    );
+    let initialize_one = GpuRenderOperation::new(
+        [GpuRenderColorAttachment::new(
+            initialized_layer,
+            GpuColorAttachmentLoad::Clear(
+                GpuColorClearValue::new(0.25, 0.5, 0.75, 1.0).unwrap(),
+            ),
+            GpuAttachmentStore::Store,
+            None,
+        )
+        .unwrap()],
+        None,
+        std::iter::empty::<GpuRenderDraw>(),
+        None,
+    )
+    .unwrap();
     let load = GpuRenderOperation::new(
         [GpuRenderColorAttachment::new(
             layered,
@@ -752,22 +798,25 @@ fn layered_attachment_boundaries_and_initialization_are_structural() {
         .unwrap()],
         None,
         [render_draw(multiview_pipeline(
-            "proof.r4.multiview.uninitialized-load",
+            "proof.r4.multiview.partially-initialized-load",
             NO_VIEW_INDEX_WGSL,
         ))],
         None,
     )
     .unwrap();
-    let fragment = GpuWorkFragment::build("R4 multiview uninitialized load", |builder| {
-        builder.operation("load uninitialized layered attachment", load)?;
+    let fragment = GpuWorkFragment::build("R4 multiview partially initialized load", |builder| {
+        builder.operation("initialize only selected layer zero", initialize_one)?;
+        builder.operation("load both selected multiview layers", load)?;
         Ok(())
     })
     .unwrap();
-    let error =
-        GpuPreparedWorkGraph::prepare(label("R4 multiview uninitialized load graph"), [fragment])
-            .expect_err(
-                "Load + Store must require every selected multiview layer to be initialized",
-            );
+    let error = GpuPreparedWorkGraph::prepare(
+        label("R4 multiview partially initialized load graph"),
+        [fragment],
+    )
+    .expect_err(
+        "Load + Store must reject when even one selected multiview layer remains uninitialized",
+    );
     assert_eq!(error.cause(), GpuWorkGraphCause::ReadBeforeInitialization);
 
     let multisampled_label = label("R4 multisampled D2Array rejection");
