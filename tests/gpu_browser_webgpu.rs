@@ -2295,8 +2295,10 @@ fn cs_main() {
         let surface_evidence = surface_probe::run().await;
         SURFACE_EVIDENCE_DISPOSITION.with(|slot| *slot.borrow_mut() = surface_evidence.disposition);
         SURFACE_EVIDENCE_BITS.with(|slot| *slot.borrow_mut() = surface_evidence.bits);
-        SURFACE_EVIDENCE_PUBLIC_FORMAT.with(|slot| *slot.borrow_mut() = surface_evidence.public_format);
-        SURFACE_EVIDENCE_DIRECT_FORMAT.with(|slot| *slot.borrow_mut() = surface_evidence.direct_format);
+        SURFACE_EVIDENCE_PUBLIC_FORMAT
+            .with(|slot| *slot.borrow_mut() = surface_evidence.public_format);
+        SURFACE_EVIDENCE_DIRECT_FORMAT
+            .with(|slot| *slot.borrow_mut() = surface_evidence.direct_format);
         SURFACE_EVIDENCE_COLOR_SPACES.with(|slot| {
             *slot.borrow_mut() = surface_evidence.advertised_color_spaces;
         });
