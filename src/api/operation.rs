@@ -377,6 +377,7 @@ impl GpuWorkOperation {
                 }
             }
             Self::Render(operation) => {
+                requirements = requirements.merge(&operation.signature().requirements())?;
                 for draw in operation.draws() {
                     requirements = requirements.merge(draw.requirements())?;
                     requirements = requirements.merge(&draw.draw().derived_requirements()?)?;
