@@ -3,8 +3,8 @@ use core::fmt::Debug;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub(crate) enum GpuVertexInputBuiltin {
-    Vertex,
-    Instance,
+    VertexIndex,
+    InstanceIndex,
     View,
 }
 
