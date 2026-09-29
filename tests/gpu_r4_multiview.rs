@@ -369,7 +369,8 @@ fn two_layer_graph(
             GpuTextureDescriptor::new(
                 common(format!("{name} texture")),
                 GpuTextureDimension::D2,
-                GpuTextureExtent::new(&texture_label, GpuTextureDimension::D2, WIDTH, HEIGHT, 2).unwrap(),
+                GpuTextureExtent::new(&texture_label, GpuTextureDimension::D2, WIDTH, HEIGHT, 2)
+                    .unwrap(),
                 1,
                 1,
                 GpuTextureFormat::Rgba8Unorm,
@@ -674,7 +675,8 @@ fn layered_attachment_boundaries_and_initialization_are_structural() {
             GpuTextureDescriptor::new(
                 common("R4 multiview attachment boundaries"),
                 GpuTextureDimension::D2,
-                GpuTextureExtent::new(&resource_label, GpuTextureDimension::D2, WIDTH, HEIGHT, 2).unwrap(),
+                GpuTextureExtent::new(&resource_label, GpuTextureDimension::D2, WIDTH, HEIGHT, 2)
+                    .unwrap(),
                 1,
                 1,
                 GpuTextureFormat::Rgba8Unorm,
