@@ -328,8 +328,7 @@ fn primary_graph() -> (GpuPreparedWorkGraph, [GpuReadbackId; 3]) {
 
     let has_dependency = |before, after| {
         graph.dependencies().iter().any(|dependency| {
-            dependency.before().local_node() == before
-                && dependency.after().local_node() == after
+            dependency.before().local_node() == before && dependency.after().local_node() == after
         })
     };
     assert!(
@@ -776,9 +775,7 @@ fn layered_attachment_boundaries_and_initialization_are_structural() {
     let initialize_one = GpuRenderOperation::new(
         [GpuRenderColorAttachment::new(
             initialized_layer,
-            GpuColorAttachmentLoad::Clear(
-                GpuColorClearValue::new(0.25, 0.5, 0.75, 1.0).unwrap(),
-            ),
+            GpuColorAttachmentLoad::Clear(GpuColorClearValue::new(0.25, 0.5, 0.75, 1.0).unwrap()),
             GpuAttachmentStore::Store,
             None,
         )
