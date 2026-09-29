@@ -207,7 +207,18 @@ async fn terminalize(context: &GpuContext, submission: &GpuSubmission) -> Result
         context.progress();
         match submission.status() {
             GpuSubmissionStatus::Completed => return Ok(()),
-            GpuSubmissionStatus::Failed(_) => return Err(114u32),
+            GpuSubmissionStatus::Failed(failure) => {
+                let stage = match failure.kind() {
+                    GpuSubmissionFailureKind::BackendValidation => 1141u32,
+                    GpuSubmissionFailureKind::BackendResourceExhaustion => 1142u32,
+                    GpuSubmissionFailureKind::ContextOrDeviceUnavailableOrLost => 1143u32,
+                    GpuSubmissionFailureKind::SurfaceLease => 1144u32,
+                    GpuSubmissionFailureKind::ReadbackMapping => 1145u32,
+                    GpuSubmissionFailureKind::ContextDropped => 1146u32,
+                    GpuSubmissionFailureKind::InternalInvariant => 1147u32,
+                };
+                return Err(stage);
+            },
             GpuSubmissionStatus::Accepted => {}
         }
         super::browser_yield().await;
