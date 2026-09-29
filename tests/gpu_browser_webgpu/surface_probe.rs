@@ -214,7 +214,13 @@ async fn terminalize(context: &GpuContext, submission: &GpuSubmission) -> Result
                     GpuSubmissionFailureKind::ContextOrDeviceUnavailableOrLost => {
                         let detail = failure.detail();
                         if detail.starts_with("device became unavailable") {
-                            11431u32
+                            if detail.contains("Destroyed") {
+                                114311u32
+                            } else if detail.contains("Unknown") {
+                                114312u32
+                            } else {
+                                114319u32
+                            }
                         } else if detail.starts_with("uncaptured WGPU backend error") {
                             11432u32
                         } else if detail.contains("prepared initial-content") {
