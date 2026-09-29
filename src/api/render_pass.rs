@@ -472,8 +472,14 @@ mod tests {
         let mut allocator =
             GpuWorkResourceIdAllocator::for_owner_scope(NonZeroU64::new(93).unwrap());
         let first = layered_color_attachment(&mut allocator, "layered first", 1, 2);
-        assert_eq!(first.source().descriptor().subresources().base_array_layer(), 1);
-        assert_eq!(first.source().descriptor().subresources().array_layer_count(), 2);
+        assert_eq!(
+            first.source().descriptor().subresources().base_array_layer(),
+            1
+        );
+        assert_eq!(
+            first.source().descriptor().subresources().array_layer_count(),
+            2
+        );
         let second = layered_color_attachment(&mut allocator, "layered second", 4, 2);
         let signature = GpuRenderPassSignature::from_attachments(&[first, second], None).unwrap();
         assert_eq!(
@@ -490,21 +496,19 @@ mod tests {
         ));
         assert!(
             signature
-                .validate_limits(GpuLimits::new(
-                    1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1,
+                .validate_limits(
+                    GpuLimits::new(1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1,)
+                        .unwrap()
+                        .with_multiview_limit(1)
                 )
-                .unwrap()
-                .with_multiview_limit(1))
                 .is_err()
         );
         assert!(
             signature
                 .validate_limits(
-                    GpuLimits::new(
-                        1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1,
-                    )
-                    .unwrap()
-                    .with_multiview_limit(2)
+                    GpuLimits::new(1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1,)
+                        .unwrap()
+                        .with_multiview_limit(2)
                 )
                 .is_ok()
         );
