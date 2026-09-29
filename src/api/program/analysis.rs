@@ -84,11 +84,8 @@ pub(crate) fn analyze_program(
             &source_label,
         )?;
     reject_f16_overrides(&module, &source_label)?;
-    let entry_point_view_index = derive_view_index_requirements(
-        &module,
-        &source_label,
-        &mut required_features,
-    )?;
+    let entry_point_view_index =
+        derive_view_index_requirements(&module, &source_label, &mut required_features)?;
     let mut validator_capabilities =
         analysis_capabilities | non_uniform_binding_array_analysis_capabilities();
     if required_features.contains(&GpuCapabilityFeature::Multiview) {
@@ -353,22 +350,12 @@ fn entry_point_uses_view_index(
     let stage = runen_stage(entry_point.stage);
     let mut uses_view_index = false;
     for argument in &entry_point.function.arguments {
-        uses_view_index |= io_uses_view_index(
-            module,
-            argument.ty,
-            argument.binding.as_ref(),
-            stage,
-            true,
-        )?;
+        uses_view_index |=
+            io_uses_view_index(module, argument.ty, argument.binding.as_ref(), stage, true)?;
     }
     if let Some(result) = &entry_point.function.result {
-        uses_view_index |= io_uses_view_index(
-            module,
-            result.ty,
-            result.binding.as_ref(),
-            stage,
-            false,
-        )?;
+        uses_view_index |=
+            io_uses_view_index(module, result.ty, result.binding.as_ref(), stage, false)?;
     }
     Ok(uses_view_index)
 }
@@ -384,13 +371,8 @@ fn io_uses_view_index(
         if let TypeInner::Struct { members, .. } = &module.types[ty].inner {
             let mut uses_view_index = false;
             for member in members {
-                uses_view_index |= io_uses_view_index(
-                    module,
-                    member.ty,
-                    member.binding.as_ref(),
-                    stage,
-                    input,
-                )?;
+                uses_view_index |=
+                    io_uses_view_index(module, member.ty, member.binding.as_ref(), stage, input)?;
             }
             return Ok(uses_view_index);
         }
