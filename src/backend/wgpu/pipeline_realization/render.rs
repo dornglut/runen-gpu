@@ -1,3 +1,4 @@
+use super::contiguous_multiview_mask;
 use super::diagnostics::PipelineCacheFamily;
 use super::publication::{ensure_available, scoped_create};
 use super::records::RenderPipelineRealizationRecord;
@@ -78,6 +79,23 @@ impl GpuContext {
                 error.to_string(),
             )
         })?;
+        if let Some(multiview) = descriptor.state().multiview() {
+            let admitted = self
+                .device_facts()
+                .workload_budget()
+                .limits()
+                .max_multiview_view_count();
+            if multiview.view_count() > admitted {
+                return Err(GpuPipelineRealizationError::new(
+                    GpuPipelineRealizationErrorCategory::FormatOrAlignmentNotAdmitted,
+                    render_request_name(descriptor),
+                    format!(
+                        "render pipeline requests {} multiview views but the admitted workload maximum is {admitted}",
+                        multiview.view_count()
+                    ),
+                ));
+            }
+        }
 
         // Complete private lowering validates current device limits and attachment sample support
         // before the WGPU creation call. Shader-stage IO was already validated by the logical
@@ -171,7 +189,7 @@ impl GpuContext {
                         depth_stencil: lowered.depth_stencil.clone(),
                         multisample: lowered.multisample,
                         fragment,
-                        multiview_mask: None,
+                        multiview_mask: contiguous_multiview_mask(descriptor.state().multiview()),
                         cache: None,
                     })
             },
