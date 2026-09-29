@@ -1,11 +1,22 @@
 use crate::{
     GpuBlendFactor, GpuBlendOperation, GpuColorWriteMask, GpuCompareFunction, GpuCullMode,
-    GpuFrontFace, GpuIndexFormat, GpuPrimitiveTopology, GpuVertexFormat, GpuVertexStepMode,
+    GpuFrontFace, GpuIndexFormat, GpuMultiviewState, GpuPrimitiveTopology, GpuVertexFormat,
+    GpuVertexStepMode,
 };
+use std::num::NonZeroU32;
 use wgpu::{
     BlendFactor, BlendOperation, ColorWrites, CompareFunction, Face, FrontFace, IndexFormat,
     PrimitiveTopology, VertexFormat, VertexStepMode,
 };
+
+pub(crate) fn contiguous_multiview_mask(
+    multiview: Option<GpuMultiviewState>,
+) -> Option<NonZeroU32> {
+    multiview.map(|state| {
+        let mask = (1_u32 << state.view_count()) - 1;
+        NonZeroU32::new(mask).expect("checked multiview state always lowers to a nonzero mask")
+    })
+}
 
 pub(super) const fn blend_factor(value: GpuBlendFactor) -> BlendFactor {
     match value {
