@@ -586,16 +586,21 @@ pub(crate) async fn run_on_adapter(
             limit_rejected.category(),
             GpuContextRequestErrorCategory::NoAdmissibleCandidate
         );
-        assert!(limit_rejected.candidate_dispositions().iter().any(|disposition| {
-            matches!(
-                disposition,
-                GpuCandidateDisposition::Rejected(report)
-                    if report.category()
-                        == GpuContextRequestErrorCategory::LimitBelowRequiredMinimum
-                        && report.limit_rejection()
-                            == Some((GpuLimitKind::MaxMultiviewViewCount, 2, 0))
-            )
-        }));
+        assert!(
+            limit_rejected
+                .candidate_dispositions()
+                .iter()
+                .any(|disposition| {
+                    matches!(
+                        disposition,
+                        GpuCandidateDisposition::Rejected(report)
+                            if report.category()
+                                == GpuContextRequestErrorCategory::LimitBelowRequiredMinimum
+                                && report.limit_rejection()
+                                    == Some((GpuLimitKind::MaxMultiviewViewCount, 2, 0))
+                    )
+                })
+        );
         return MultiviewProofOutcome {
             supported: false,
             normalized_max,
