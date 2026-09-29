@@ -419,11 +419,8 @@ mod tests {
                     1,
                     1,
                     GpuTextureFormat::Rgba8Unorm,
-                    GpuTextureUsages::new(
-                        &resource_label,
-                        [GpuTextureUsage::ColorAttachment],
-                    )
-                    .unwrap(),
+                    GpuTextureUsages::new(&resource_label, [GpuTextureUsage::ColorAttachment])
+                        .unwrap(),
                     GpuTextureInitialization::Uninitialized,
                 )
                 .unwrap(),
@@ -473,11 +470,19 @@ mod tests {
             GpuWorkResourceIdAllocator::for_owner_scope(NonZeroU64::new(93).unwrap());
         let first = layered_color_attachment(&mut allocator, "layered first", 1, 2);
         assert_eq!(
-            first.source().descriptor().subresources().base_array_layer(),
+            first
+                .source()
+                .descriptor()
+                .subresources()
+                .base_array_layer(),
             1
         );
         assert_eq!(
-            first.source().descriptor().subresources().array_layer_count(),
+            first
+                .source()
+                .descriptor()
+                .subresources()
+                .array_layer_count(),
             2
         );
         let second = layered_color_attachment(&mut allocator, "layered second", 4, 2);
