@@ -123,7 +123,8 @@ const done = arguments[arguments.length - 1];
         typeof wasm.runengpu_browser_surface_evidence_bits !== "function" ||
         typeof wasm.runengpu_browser_surface_evidence_public_format !== "function" ||
         typeof wasm.runengpu_browser_surface_evidence_direct_format !== "function" ||
-        typeof wasm.runengpu_browser_surface_evidence_color_spaces !== "function") {
+        typeof wasm.runengpu_browser_surface_evidence_color_spaces !== "function" ||
+        typeof wasm.runengpu_browser_surface_evidence_diagnostic_stage !== "function") {
       throw new Error("RunenGPU browser proof control exports are absent");
     }
     wasm.runengpu_browser_start();
@@ -164,6 +165,7 @@ const done = arguments[arguments.length - 1];
           surfaceEvidencePublicFormat: wasm.runengpu_browser_surface_evidence_public_format(),
           surfaceEvidenceDirectFormat: wasm.runengpu_browser_surface_evidence_direct_format(),
           surfaceEvidenceColorSpaces: wasm.runengpu_browser_surface_evidence_color_spaces(),
+          surfaceEvidenceDiagnosticStage: wasm.runengpu_browser_surface_evidence_diagnostic_stage(),
         });
         return;
       }
@@ -212,12 +214,14 @@ def report_browser_surface_evidence(
     public_format_code = value.get("surfaceEvidencePublicFormat")
     direct_format_code = value.get("surfaceEvidenceDirectFormat")
     color_space_mask = value.get("surfaceEvidenceColorSpaces")
+    diagnostic_stage = value.get("surfaceEvidenceDiagnosticStage")
     integers = (
         disposition_code,
         bits,
         public_format_code,
         direct_format_code,
         color_space_mask,
+        diagnostic_stage,
     )
     if any(type(item) is not int for item in integers):
         raise RuntimeError(f"invalid browser surface evidence payload: {value!r}")
@@ -267,6 +271,7 @@ def report_browser_surface_evidence(
             "surface_lifecycle_exercised": public_executed,
             "selected_format": SURFACE_FORMATS[public_format_code],
         },
+        "diagnostic_stage": diagnostic_stage,
         "direct_wgpu": {
             "backend": "BrowserWebGpu",
             "adapter_name": None,
@@ -303,6 +308,7 @@ def report_browser_surface_evidence(
     print(
         "RunenGPU browser surface evidence disposition: "
         + disposition
+        + f" (diagnostic_stage={diagnostic_stage})"
     )
 
     required_positive_bits = 0xF
