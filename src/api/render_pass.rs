@@ -518,8 +518,7 @@ mod tests {
                 .is_ok()
         );
 
-        let four_view =
-            layered_color_attachment(&mut allocator, "layered four-view", 0, 4);
+        let four_view = layered_color_attachment(&mut allocator, "layered four-view", 0, 4);
         let four_view_signature =
             GpuRenderPassSignature::from_attachments(&[four_view], None).unwrap();
         assert_eq!(
