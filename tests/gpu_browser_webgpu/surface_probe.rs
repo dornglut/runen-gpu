@@ -211,7 +211,18 @@ async fn terminalize(context: &GpuContext, submission: &GpuSubmission) -> Result
                 let stage = match failure.kind() {
                     GpuSubmissionFailureKind::BackendValidation => 1141u32,
                     GpuSubmissionFailureKind::BackendResourceExhaustion => 1142u32,
-                    GpuSubmissionFailureKind::ContextOrDeviceUnavailableOrLost => 1143u32,
+                    GpuSubmissionFailureKind::ContextOrDeviceUnavailableOrLost => {
+                        let detail = failure.detail();
+                        if detail.starts_with("device became unavailable") {
+                            11431u32
+                        } else if detail.starts_with("uncaptured WGPU backend error") {
+                            11432u32
+                        } else if detail.contains("prepared initial-content") {
+                            11433u32
+                        } else {
+                            11439u32
+                        }
+                    },
                     GpuSubmissionFailureKind::SurfaceLease => 1144u32,
                     GpuSubmissionFailureKind::ReadbackMapping => 1145u32,
                     GpuSubmissionFailureKind::ContextDropped => 1146u32,
