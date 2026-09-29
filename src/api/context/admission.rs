@@ -1267,10 +1267,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(
-            raised
-                .workload_budget()
-                .limits()
-                .max_multiview_view_count(),
+            raised.workload_budget().limits().max_multiview_view_count(),
             4
         );
 
