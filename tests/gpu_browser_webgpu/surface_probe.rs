@@ -365,11 +365,12 @@ fn clear_direct_surface(device: &wgpu::Device, queue: &wgpu::Queue, frame: wgpu:
         });
     }
     queue.submit([encoder.finish()]);
-    frame.present();
+    queue.present(frame);
 }
 
 async fn run_direct_wgpu(window: Arc<Window>) -> Result<SurfaceEvidence, u32> {
-    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::default());
+    let instance =
+        wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle());
     let surface = instance
         .create_surface(window)
         .map_err(|_| DISPOSITION_CHARACTERIZATION_UNQUALIFIED)?;
@@ -434,13 +435,21 @@ async fn run_direct_wgpu(window: Arc<Window>) -> Result<SurfaceEvidence, u32> {
     };
     surface.configure(&device, &config);
 
-    let first = surface
-        .get_current_texture()
-        .map_err(|_| DISPOSITION_BACKEND_CAPABILITY_INCONSISTENT)?;
+    let acquire = || match surface.get_current_texture() {
+        wgpu::CurrentSurfaceTexture::Success(frame)
+        | wgpu::CurrentSurfaceTexture::Suboptimal(frame) => Ok(frame),
+        wgpu::CurrentSurfaceTexture::Timeout
+        | wgpu::CurrentSurfaceTexture::Occluded
+        | wgpu::CurrentSurfaceTexture::Outdated
+        | wgpu::CurrentSurfaceTexture::Lost
+        | wgpu::CurrentSurfaceTexture::Validation => {
+            Err(DISPOSITION_BACKEND_CAPABILITY_INCONSISTENT)
+        }
+    };
+
+    let first = acquire()?;
     clear_direct_surface(&device, &queue, first);
-    let second = surface
-        .get_current_texture()
-        .map_err(|_| DISPOSITION_BACKEND_CAPABILITY_INCONSISTENT)?;
+    let second = acquire()?;
     drop(second);
 
     evidence.bits |= BIT_DISPLAY_P3_EXECUTED;
