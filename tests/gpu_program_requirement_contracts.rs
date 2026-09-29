@@ -502,6 +502,21 @@ fn dual_fs() -> DualSourceOutput {
 }
 "#;
 
+const DUAL_SOURCE_PRIMARY_ONLY_WGSL: &str = r#"
+enable dual_source_blending;
+
+struct DualSourceOutput {
+    @location(0) @blend_src(0) primary: vec4<f32>,
+}
+
+@fragment
+fn dual_fs() -> DualSourceOutput {
+    var output: DualSourceOutput;
+    output.primary = vec4<f32>(1.0);
+    return output;
+}
+"#;
+
 const DUAL_SOURCE_ENABLE_ONLY_WGSL: &str = r#"
 enable dual_source_blending;
 
@@ -607,6 +622,25 @@ fn render_state_with_blend(blend: Option<GpuBlendState>) -> GpuRenderPipelineSta
         GpuMultisampleStateDescriptor::default(),
     )
     .unwrap()
+}
+
+#[test]
+fn canonical_dual_source_output_requires_the_complete_primary_secondary_pair() {
+    let (_registry, source) =
+        admitted_source_from("dual-source.primary-only", DUAL_SOURCE_PRIMARY_ONLY_WGSL);
+    let error = GpuProgramDescriptor::new(
+        source,
+        [entry_point("dual_fs")],
+        std::iter::empty::<GpuBindingLayoutRefinement>(),
+    )
+    .expect_err("a primary-only dual-source fragment output must fail canonical WGSL validation");
+
+    assert_eq!(error.cause(), GpuProgramContractCause::CanonicalWgslInvalid);
+    assert!(
+        error
+            .detail()
+            .is_some_and(|detail| detail.contains("canonical WGSL validation failed"))
+    );
 }
 
 #[test]
