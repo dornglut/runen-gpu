@@ -690,11 +690,7 @@ pub(crate) async fn run_on_adapter(
         .await
         .unwrap();
     let realization_error = context
-        .realize_render_pipeline(
-            &four_view_pipeline,
-            &four_view_program,
-            &four_view_layout,
-        )
+        .realize_render_pipeline(&four_view_pipeline, &four_view_program, &four_view_layout)
         .await
         .expect_err("four-view pipeline must reject against an admitted two-view workload budget");
     assert_eq!(
@@ -1081,14 +1077,8 @@ fn pass_and_pipeline_multiview_state_must_match_exactly() {
             GpuTextureDescriptor::new(
                 common("R4 multiview parity texture"),
                 GpuTextureDimension::D2,
-                GpuTextureExtent::new(
-                    &texture_label,
-                    GpuTextureDimension::D2,
-                    WIDTH,
-                    HEIGHT,
-                    4,
-                )
-                .unwrap(),
+                GpuTextureExtent::new(&texture_label, GpuTextureDimension::D2, WIDTH, HEIGHT, 4)
+                    .unwrap(),
                 1,
                 1,
                 GpuTextureFormat::Rgba8Unorm,
@@ -1127,25 +1117,17 @@ fn pass_and_pipeline_multiview_state_must_match_exactly() {
     let attachment = |view| {
         GpuRenderColorAttachment::new(
             view,
-            GpuColorAttachmentLoad::Clear(
-                GpuColorClearValue::new(0.0, 0.0, 0.0, 1.0).unwrap(),
-            ),
+            GpuColorAttachmentLoad::Clear(GpuColorClearValue::new(0.0, 0.0, 0.0, 1.0).unwrap()),
             GpuAttachmentStore::Store,
             None,
         )
         .unwrap()
     };
 
-    let two_pipeline = multiview_pipeline_with_count(
-        "proof.r4.multiview.parity-two",
-        NO_VIEW_INDEX_WGSL,
-        2,
-    );
-    let four_pipeline = multiview_pipeline_with_count(
-        "proof.r4.multiview.parity-four",
-        NO_VIEW_INDEX_WGSL,
-        4,
-    );
+    let two_pipeline =
+        multiview_pipeline_with_count("proof.r4.multiview.parity-two", NO_VIEW_INDEX_WGSL, 2);
+    let four_pipeline =
+        multiview_pipeline_with_count("proof.r4.multiview.parity-four", NO_VIEW_INDEX_WGSL, 4);
 
     let ordinary_with_multiview = GpuRenderOperation::new(
         [attachment(ordinary_view)],
