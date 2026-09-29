@@ -574,6 +574,27 @@ pub(crate) async fn run_on_adapter(
                     })
             )
         }));
+
+        let limit_rejected = GpuContext::request(
+            descriptor(backend, false, fallback)
+                .require_limit(GpuLimitKind::MaxMultiviewViewCount, 2),
+        )
+        .await
+        .expect_err("unsupported Multiview must reject a positive multiview limit request");
+        assert_eq!(
+            limit_rejected.category(),
+            GpuContextRequestErrorCategory::NoAdmissibleCandidate
+        );
+        assert!(limit_rejected.candidate_dispositions().iter().any(|disposition| {
+            matches!(
+                disposition,
+                GpuCandidateDisposition::Rejected(report)
+                    if report.category()
+                        == GpuContextRequestErrorCategory::LimitBelowRequiredMinimum
+                        && report.limit_rejection()
+                            == Some((GpuLimitKind::MaxMultiviewViewCount, 2, 0))
+            )
+        }));
         return MultiviewProofOutcome {
             supported: false,
             normalized_max,
