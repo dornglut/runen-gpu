@@ -131,7 +131,7 @@ jobs:
           report_path, expected_revision = sys.argv[1:3]
           with open(report_path, encoding="utf-8") as handle:
               report = json.load(handle)
-          assert report["schema_version"] == 8
+          assert report["schema_version"] == 9
           assert report["qualification_level"] == "generic_metal"
           assert report["revision"] == expected_revision
           assert report["environment"]["architecture"] == "arm64"
@@ -151,6 +151,7 @@ jobs:
               "indirect_first_instance",
               "depth_clip_control",
               "dual_source_blending",
+              "multiview",
               "texture_binding_array",
               "buffer_binding_array",
               "storage_resource_binding_array",
@@ -176,6 +177,7 @@ jobs:
               "max_binding_array_sampler_elements_per_shader_stage",
               "max_buffer_size",
               "max_compute_workgroups_per_dimension",
+              "max_multiview_view_count",
           }
           assert set(wgpu_characterization["limits"]) == expected_wgpu_limits
           assert all(
@@ -202,6 +204,7 @@ jobs:
               "max_vertex_buffer_array_stride",
               "max_binding_array_elements_per_shader_stage",
               "max_binding_array_sampler_elements_per_shader_stage",
+              "max_multiview_view_count",
           }
           for level in ("adapter", "device", "workload"):
               limits = report["limits"][level]
@@ -234,6 +237,17 @@ jobs:
               assert (
                   baseline_limits["max_binding_array_sampler_elements_per_shader_stage"] == 0
               ), "ordinary baseline sampler-array budget must remain zero"
+              assert (
+                  baseline_limits["max_multiview_view_count"] == 0
+              ), "ordinary baseline multiview budget must remain zero"
+
+          raw_multiview = wgpu_characterization["features"]["multiview"]
+          raw_multiview_max = wgpu_characterization["limits"]["max_multiview_view_count"]
+          normalized_multiview = capabilities["Multiview"]["supported"]
+          expected_normalized_multiview = raw_multiview and min(raw_multiview_max, 31) >= 2
+          assert normalized_multiview == expected_normalized_multiview
+          expected_normalized_max = min(raw_multiview_max, 31) if expected_normalized_multiview else 0
+          assert adapter_limits["max_multiview_view_count"] == expected_normalized_max
 
           assert report["proofs"]["prefix_scan_exclusive"] == "EXERCISED"
           assert report["proofs"]["prefix_scan_inclusive"] == "EXERCISED"
@@ -255,6 +269,15 @@ jobs:
               assert report["proofs"]["indirect_first_instance"] == "EXERCISED"
           else:
               assert report["proofs"]["indirect_first_instance"] == "UNSUPPORTED"
+
+          assert report["proofs"]["multiview"] in {"EXERCISED", "UNSUPPORTED"}
+          assert type(report["proofs"]["multiview_normalized_max"]) is int
+          assert report["proofs"]["multiview_normalized_max"] == expected_normalized_max
+          if normalized_multiview:
+              assert report["proofs"]["multiview"] == "EXERCISED"
+          else:
+              assert report["proofs"]["multiview"] == "UNSUPPORTED"
+
           assert report["proofs"]["sampler_anisotropy"] == "EXERCISED"
           assert report["proofs"]["transient_attachment"] == "EXERCISED"
           assert report["proofs"]["transient_depth"] == "EXERCISED"
