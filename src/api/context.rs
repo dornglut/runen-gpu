@@ -170,9 +170,12 @@ impl GpuContext {
                         })?;
                 }
                 GpuWorkOperation::Render(operation) => {
-                    operation.signature().validate_limits(limits).map_err(|error| {
-                        work_not_admitted(prepared, GpuWorkNotAdmittedSource::Operation(error))
-                    })?;
+                    operation
+                        .signature()
+                        .validate_limits(limits)
+                        .map_err(|error| {
+                            work_not_admitted(prepared, GpuWorkNotAdmittedSource::Operation(error))
+                        })?;
                     for draw in operation.draws() {
                         draw.bindings()
                             .validate_device_facts(&binding_facts)
