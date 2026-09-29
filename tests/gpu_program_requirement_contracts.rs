@@ -502,6 +502,13 @@ fn dual_fs() -> DualSourceOutput {
 }
 "#;
 
+const DUAL_SOURCE_ENABLE_ONLY_WGSL: &str = r#"
+enable dual_source_blending;
+
+@compute @workgroup_size(1)
+fn compute_main() {}
+"#;
+
 const DUAL_SOURCE_WITHOUT_ENABLE_WGSL: &str = r#"
 struct DualSourceOutput {
     @location(0) @blend_src(0) primary: vec4<f32>,
@@ -600,6 +607,27 @@ fn render_state_with_blend(blend: Option<GpuBlendState>) -> GpuRenderPipelineSta
         GpuMultisampleStateDescriptor::default(),
     )
     .unwrap()
+}
+
+#[test]
+fn dual_source_enable_directive_alone_derives_the_whole_module_requirement() {
+    let (_registry, source) =
+        admitted_source_from("dual-source.enable-only", DUAL_SOURCE_ENABLE_ONLY_WGSL);
+    let program = GpuProgramDescriptor::new(
+        source,
+        [entry_point("compute_main")],
+        std::iter::empty::<GpuBindingLayoutRefinement>(),
+    )
+    .expect("the accepted dual-source parse profile must admit the enable directive");
+
+    assert_required(
+        program.requirements(),
+        GpuCapabilityFeature::DualSourceBlending,
+    );
+    assert_eq!(
+        program.requirements().get(GpuCapabilityFeature::ShaderF16),
+        None
+    );
 }
 
 #[test]
