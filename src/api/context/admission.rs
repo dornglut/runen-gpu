@@ -431,8 +431,9 @@ pub(crate) fn admitted_device_facts(
 
 const FIXED_BINDING_ARRAY_ELEMENT_BASELINE: u32 = 500_000;
 const FIXED_BINDING_ARRAY_SAMPLER_ELEMENT_BASELINE: u32 = 1_000;
+const MULTIVIEW_VIEW_COUNT_BASELINE: u32 = 2;
 
-const ALL_LIMIT_KINDS: [GpuLimitKind; 19] = [
+const ALL_LIMIT_KINDS: [GpuLimitKind; 20] = [
     GpuLimitKind::MaxUniformBufferBindingSize,
     GpuLimitKind::MaxStorageBufferBindingSize,
     GpuLimitKind::MaxColorAttachments,
@@ -452,6 +453,7 @@ const ALL_LIMIT_KINDS: [GpuLimitKind; 19] = [
     GpuLimitKind::MaxVertexBufferArrayStride,
     GpuLimitKind::MaxBindingArrayElementsPerShaderStage,
     GpuLimitKind::MaxBindingArraySamplerElementsPerShaderStage,
+    GpuLimitKind::MaxMultiviewViewCount,
 ];
 
 const ALL_ALIGNMENT_KINDS: [GpuAlignmentKind; 5] = [
@@ -502,10 +504,18 @@ fn effective_workload_budget(
         } else {
             0
         };
-    let baseline = normalized_limit_baseline().with_binding_array_limits(
-        general_binding_array_baseline,
-        sampler_binding_array_baseline,
-    );
+    let baseline = normalized_limit_baseline()
+        .with_binding_array_limits(
+            general_binding_array_baseline,
+            sampler_binding_array_baseline,
+        )
+        .with_multiview_limit(
+            if enabled_features.contains(&GpuCapabilityFeature::Multiview) {
+                MULTIVIEW_VIEW_COUNT_BASELINE
+            } else {
+                0
+            },
+        );
     let value = |kind| {
         descriptor
             .limits
@@ -550,7 +560,8 @@ fn effective_workload_budget(
         .with_binding_array_limits(
             u32_value(GpuLimitKind::MaxBindingArrayElementsPerShaderStage)?,
             u32_value(GpuLimitKind::MaxBindingArraySamplerElementsPerShaderStage)?,
-        ),
+        )
+        .with_multiview_limit(u32_value(GpuLimitKind::MaxMultiviewViewCount)?),
         descriptor.alignments.clone(),
     ))
 }
@@ -588,6 +599,7 @@ pub(crate) const fn limit_value(limits: GpuLimits, kind: GpuLimitKind) -> u64 {
         GpuLimitKind::MaxBindingArraySamplerElementsPerShaderStage => {
             limits.max_binding_array_sampler_elements_per_shader_stage() as u64
         }
+        GpuLimitKind::MaxMultiviewViewCount => limits.max_multiview_view_count() as u64,
     }
 }
 
@@ -671,6 +683,7 @@ fn is_declared_extension(feature: GpuCapabilityFeature) -> bool {
             | GpuCapabilityFeature::StorageBufferBindingArrayNonUniformIndexing
             | GpuCapabilityFeature::StorageTextureBindingArrayNonUniformIndexing
             | GpuCapabilityFeature::DualSourceBlending
+            | GpuCapabilityFeature::Multiview
     )
 }
 
