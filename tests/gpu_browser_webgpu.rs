@@ -81,6 +81,7 @@ mod browser {
         static PACKED32_SAMPLED_MASK: RefCell<u32> = RefCell::new(0);
         static PACKED32_COLOR_ATTACHMENT_MASK: RefCell<u32> = RefCell::new(0);
         static BC_EXERCISED_MASK: RefCell<u32> = RefCell::new(0);
+        static COMPRESSION_FEATURE_MASK: RefCell<u32> = RefCell::new(0);
         static BLEND_STATE_EXERCISED_MASK: RefCell<u32> = RefCell::new(0);
         static DUAL_SOURCE_BLEND_MASK: RefCell<u32> = RefCell::new(0);
         static DEPTH_BIAS_EXERCISED_MASK: RefCell<u32> = RefCell::new(0);
@@ -200,6 +201,30 @@ mod browser {
             "browser compute evidence must execute through BrowserWebGpu"
         );
         context
+    }
+
+    async fn browser_compression_census(context: &GpuContext) -> u32 {
+        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle());
+        let adapter = instance
+            .request_adapter(&wgpu::RequestAdapterOptions {
+                power_preference: wgpu::PowerPreference::None,
+                force_fallback_adapter: false,
+                compatible_surface: None,
+                apply_limit_buckets: false,
+            })
+            .await
+            .expect("browser compression census requires a direct WGPU adapter");
+        let info = adapter.get_info();
+        assert_eq!(info.backend, wgpu::Backend::BrowserWebGpu);
+        assert_eq!(
+            context.adapter_facts().backend(),
+            GpuBackendFamily::BrowserWebGpu
+        );
+        assert_eq!(context.adapter_facts().vendor(), Some(info.vendor));
+        assert_eq!(context.adapter_facts().device(), Some(info.device));
+        let features = adapter.features();
+        u32::from(features.contains(wgpu::Features::TEXTURE_COMPRESSION_ETC2))
+            | (u32::from(features.contains(wgpu::Features::TEXTURE_COMPRESSION_ASTC)) << 1)
     }
 
     fn retained_prefix_scan_graph_label(mode: retained_prefix_scan::ScanMode) -> GpuResourceLabel {
@@ -2181,6 +2206,8 @@ fn cs_main() {
         ))
         .await
         .expect("actual-browser Conformance must provide transient attachment WebGPU support");
+        let compression_features = browser_compression_census(&transient_context).await;
+        COMPRESSION_FEATURE_MASK.with(|slot| *slot.borrow_mut() = compression_features);
         let (transient_graph, transient_readback_id) = retained_transient_attachment::graph();
         let transient_prepared = transient_context
             .prepare_submission(transient_graph)
@@ -2424,6 +2451,11 @@ fn cs_main() {
     #[unsafe(no_mangle)]
     pub extern "C" fn runengpu_browser_bc_exercised_mask() -> u32 {
         BC_EXERCISED_MASK.with(|mask| *mask.borrow())
+    }
+
+    #[unsafe(no_mangle)]
+    pub extern "C" fn runengpu_browser_compression_feature_mask() -> u32 {
+        COMPRESSION_FEATURE_MASK.with(|mask| *mask.borrow())
     }
 
     #[unsafe(no_mangle)]

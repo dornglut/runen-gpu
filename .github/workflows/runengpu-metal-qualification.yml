@@ -131,7 +131,7 @@ jobs:
           report_path, expected_revision = sys.argv[1:3]
           with open(report_path, encoding="utf-8") as handle:
               report = json.load(handle)
-          assert report["schema_version"] == 9
+          assert report["schema_version"] == 10
           assert report["qualification_level"] == "generic_metal"
           assert report["revision"] == expected_revision
           assert report["environment"]["architecture"] == "arm64"
@@ -152,6 +152,8 @@ jobs:
               "depth_clip_control",
               "dual_source_blending",
               "multiview",
+              "texture_compression_etc2",
+              "texture_compression_astc",
               "texture_binding_array",
               "buffer_binding_array",
               "storage_resource_binding_array",

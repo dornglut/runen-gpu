@@ -333,6 +333,10 @@ fn wgpu_characterization(
             "depth_clip_control": features.contains(wgpu::Features::DEPTH_CLIP_CONTROL),
             "dual_source_blending": features.contains(wgpu::Features::DUAL_SOURCE_BLENDING),
             "multiview": features.contains(wgpu::Features::MULTIVIEW),
+            "texture_compression_etc2":
+                features.contains(wgpu::Features::TEXTURE_COMPRESSION_ETC2),
+            "texture_compression_astc":
+                features.contains(wgpu::Features::TEXTURE_COMPRESSION_ASTC),
             "texture_binding_array": features.contains(wgpu::Features::TEXTURE_BINDING_ARRAY),
             "buffer_binding_array": features.contains(wgpu::Features::BUFFER_BINDING_ARRAY),
             "storage_resource_binding_array":
@@ -631,7 +635,7 @@ fn metal_qualification_records_exact_public_api_evidence() {
     assert_eq!(stats.pending_readbacks(), 0);
 
     let report = json!({
-        "schema_version": 9,
+        "schema_version": 10,
         "qualification_level": mode.report_name(),
         "revision": revision,
         "environment": {

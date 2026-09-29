@@ -102,6 +102,7 @@ const done = arguments[arguments.length - 1];
         typeof wasm.runengpu_browser_packed32_sampled_mask !== "function" ||
         typeof wasm.runengpu_browser_packed32_color_attachment_mask !== "function" ||
         typeof wasm.runengpu_browser_bc_exercised_mask !== "function" ||
+        typeof wasm.runengpu_browser_compression_feature_mask !== "function" ||
         typeof wasm.runengpu_browser_blend_state_exercised_mask !== "function" ||
         typeof wasm.runengpu_browser_dual_source_blend_mask !== "function" ||
         typeof wasm.runengpu_browser_depth_bias_exercised_mask !== "function" ||
@@ -144,6 +145,7 @@ const done = arguments[arguments.length - 1];
           packed32SampledMask: wasm.runengpu_browser_packed32_sampled_mask(),
           packed32ColorAttachmentMask: wasm.runengpu_browser_packed32_color_attachment_mask(),
           bcMask: wasm.runengpu_browser_bc_exercised_mask(),
+          compressionFeatureMask: wasm.runengpu_browser_compression_feature_mask(),
           blendStateMask: wasm.runengpu_browser_blend_state_exercised_mask(),
           dualSourceBlendMask: wasm.runengpu_browser_dual_source_blend_mask(),
           depthBiasMask: wasm.runengpu_browser_depth_bias_exercised_mask(),
@@ -190,6 +192,36 @@ SURFACE_DISPOSITIONS = {
     3: "CHARACTERIZATION_UNQUALIFIED",
     4: "BACKEND_CAPABILITY_INCONSISTENT",
 }
+
+
+def report_browser_compression_features(
+    value: dict[str, object], *, artifact_dir: pathlib.Path, revision: str
+) -> None:
+    mask = value.get("compressionFeatureMask")
+    if type(mask) is not int or mask < 0 or mask & ~0b11:
+        raise RuntimeError(f"invalid browser compression feature census: {mask!r}")
+    report = {
+        "schema_version": 1,
+        "repository_revision": revision,
+        "authority": "direct_wgpu_adapter_characterization_only",
+        "backend": "BrowserWebGpu",
+        "adapter_correlation": "backend_vendor_device_equal_to_runengpu_context",
+        "features": {
+            "texture_compression_etc2": bool(mask & 1),
+            "texture_compression_astc": bool(mask & 2),
+        },
+    }
+    report_root = artifact_dir / "browser-compression"
+    report_root.mkdir(parents=True, exist_ok=True)
+    report_path = report_root / "report.json"
+    report_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
+    print(
+        "RunenGPU direct WGPU browser compression census: "
+        f"ETC2={report['features']['texture_compression_etc2']}, "
+        f"ASTC={report['features']['texture_compression_astc']}"
+    )
+
+
 SURFACE_FORMATS = {
     0: "Unknown",
     1: "Rgba8Unorm",
@@ -1229,6 +1261,9 @@ def main() -> int:
             artifact_dir=args.artifact_dir,
             revision=args.revision,
             chrome_version=chrome_version,
+        )
+        report_browser_compression_features(
+            value, artifact_dir=args.artifact_dir, revision=args.revision
         )
         print("RunenGPU actual-browser WebGPU conformance: PASS")
         return 0
