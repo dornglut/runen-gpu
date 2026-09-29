@@ -1206,6 +1206,88 @@ mod tests {
     }
 
     #[test]
+    fn multiview_feature_uses_two_view_baseline_and_explicit_higher_budget() {
+        let ordinary = evaluate_candidate(
+            &GpuContextDescriptor::new(GpuCapabilityRequirements::new()),
+            adapter([]),
+            true,
+        )
+        .unwrap();
+        assert_eq!(
+            ordinary
+                .workload_budget()
+                .limits()
+                .max_multiview_view_count(),
+            0
+        );
+
+        let mut requirements = GpuCapabilityRequirements::new();
+        requirements
+            .insert(GpuCapabilityRequirement::Required(
+                GpuCapabilityFeature::Multiview,
+            ))
+            .unwrap();
+
+        let multiview_adapter = |max_multiview_view_count| {
+            let limits = limits().with_multiview_limit(max_multiview_view_count);
+            GpuAdapterFacts::new(
+                GpuBackendFamily::Vulkan,
+                GpuAdapterClass::Discrete,
+                GpuSoftwareStatus::Hardware,
+                GpuFallbackStatus::ConfirmedNotFallback,
+                GpuCapabilities::from_normalized_facts(
+                    [GpuCapabilityFeature::Multiview],
+                    limits,
+                    [],
+                ),
+                GpuAdapterLimits::new(limits),
+                alignments(),
+            )
+        };
+
+        let baseline = evaluate_candidate(
+            &GpuContextDescriptor::new(requirements.clone()),
+            multiview_adapter(31),
+            true,
+        )
+        .unwrap();
+        assert_eq!(
+            baseline
+                .workload_budget()
+                .limits()
+                .max_multiview_view_count(),
+            2
+        );
+
+        let raised = evaluate_candidate(
+            &GpuContextDescriptor::new(requirements.clone())
+                .require_limit(GpuLimitKind::MaxMultiviewViewCount, 4),
+            multiview_adapter(31),
+            true,
+        )
+        .unwrap();
+        assert_eq!(
+            raised
+                .workload_budget()
+                .limits()
+                .max_multiview_view_count(),
+            4
+        );
+
+        let rejected = evaluate_candidate(
+            &GpuContextDescriptor::new(requirements)
+                .require_limit(GpuLimitKind::MaxMultiviewViewCount, 4),
+            multiview_adapter(3),
+            true,
+        )
+        .unwrap_err();
+        assert_eq!(
+            rejected.limit_rejection(),
+            Some((GpuLimitKind::MaxMultiviewViewCount, 4, 3))
+        );
+    }
+
+    #[test]
     fn texture_binding_array_feature_rejects_sampler_budget_below_guaranteed_minimum() {
         let mut requirements = GpuCapabilityRequirements::new();
         requirements
