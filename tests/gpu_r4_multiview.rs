@@ -728,13 +728,72 @@ fn layered_attachment_boundaries_and_initialization_are_structural() {
     assert_eq!(error.cause(), GpuWorkGraphCause::ReadBeforeInitialization);
 
     let multisampled_label = label("R4 multisampled D2Array rejection");
-    let multisampled = scope
+    let multisampled_error = GpuTextureDescriptor::new(
+        common("R4 multisampled D2Array rejection"),
+        GpuTextureDimension::D2,
+        GpuTextureExtent::new(
+            &multisampled_label,
+            GpuTextureDimension::D2,
+            WIDTH,
+            HEIGHT,
+            2,
+        )
+        .unwrap(),
+        1,
+        4,
+        GpuTextureFormat::Rgba8Unorm,
+        GpuTextureUsages::new(
+            &multisampled_label,
+            [GpuTextureUsage::ColorAttachment],
+        )
+        .unwrap(),
+        GpuTextureInitialization::Uninitialized,
+    )
+    .expect_err("multisampled texture arrays must reject before multiview attachment construction");
+    assert_eq!(
+        multisampled_error.cause(),
+        GpuResourceDescriptorCause::InvalidSampleCount
+    );
+
+    let transient_label = label("R4 transient D2Array rejection");
+    let transient_error = GpuTextureDescriptor::new(
+        common("R4 transient D2Array rejection"),
+        GpuTextureDimension::D2,
+        GpuTextureExtent::new(
+            &transient_label,
+            GpuTextureDimension::D2,
+            WIDTH,
+            HEIGHT,
+            2,
+        )
+        .unwrap(),
+        1,
+        1,
+        GpuTextureFormat::Rgba8Unorm,
+        GpuTextureUsages::new(
+            &transient_label,
+            [
+                GpuTextureUsage::ColorAttachment,
+                GpuTextureUsage::TransientAttachment,
+            ],
+        )
+        .unwrap(),
+        GpuTextureInitialization::Uninitialized,
+    )
+    .expect_err("layered transient attachments remain outside the accepted transient slice");
+    assert_eq!(
+        transient_error.cause(),
+        GpuResourceDescriptorCause::InvalidExtent
+    );
+
+    let depth_label = label("R4 multiview depth discard");
+    let depth = scope
         .texture(
             GpuTextureDescriptor::new(
-                common("R4 multisampled D2Array rejection"),
+                common("R4 multiview depth discard"),
                 GpuTextureDimension::D2,
                 GpuTextureExtent::new(
-                    &multisampled_label,
+                    &depth_label,
                     GpuTextureDimension::D2,
                     WIDTH,
                     HEIGHT,
@@ -742,11 +801,11 @@ fn layered_attachment_boundaries_and_initialization_are_structural() {
                 )
                 .unwrap(),
                 1,
-                4,
-                GpuTextureFormat::Rgba8Unorm,
+                1,
+                GpuTextureFormat::Depth32Float,
                 GpuTextureUsages::new(
-                    &multisampled_label,
-                    [GpuTextureUsage::ColorAttachment],
+                    &depth_label,
+                    [GpuTextureUsage::DepthStencilAttachment],
                 )
                 .unwrap(),
                 GpuTextureInitialization::Uninitialized,
@@ -754,23 +813,42 @@ fn layered_attachment_boundaries_and_initialization_are_structural() {
             .unwrap(),
         )
         .unwrap();
-    let multisampled_view = texture_view(
-        &mut scope,
-        &multisampled,
-        "R4 multisampled D2Array view",
-        GpuTextureViewDimension::D2Array,
+    let depth_range = GpuTextureSubresourceRange::new(
+        depth.descriptor().common().label(),
+        0,
+        1,
         0,
         2,
-    );
-    let multisampled_error = GpuRenderColorAttachment::new(
-        multisampled_view,
-        GpuColorAttachmentLoad::Clear(GpuColorClearValue::new(0.0, 0.0, 0.0, 1.0).unwrap()),
-        GpuAttachmentStore::Store,
+        GpuTextureAspect::DepthOnly,
+    )
+    .unwrap();
+    let depth_view = scope
+        .texture_view(
+            GpuTextureViewDescriptor::new(
+                common("R4 multiview depth discard view"),
+                &depth,
+                None,
+                GpuTextureViewDimension::D2Array,
+                depth_range,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+    let depth_discard = GpuRenderDepthStencilAttachment::new(
+        depth_view,
+        Some(
+            GpuDepthAttachmentState::new(
+                GpuDepthStencilAccess::ReadWrite,
+                GpuDepthAttachmentLoad::Clear(GpuDepthClearValue::new(0.5).unwrap()),
+                GpuAttachmentStore::Discard,
+            )
+            .unwrap(),
+        ),
         None,
     )
-    .expect_err("multisampled D2Array is outside the first multiview contract");
+    .expect_err("writable layered depth Discard must reject before private realization");
     assert_eq!(
-        multisampled_error.cause(),
+        depth_discard.cause(),
         GpuWorkOperationCause::InvalidAttachment
     );
 }
