@@ -199,6 +199,7 @@ fn qualification_context(
         .unwrap();
     let descriptor = GpuContextDescriptor::new(requirements)
         .require_format_role(GpuTextureFormat::Rgba8Unorm, GpuFormatRole::ColorAttachment)
+        .require_format_role(GpuTextureFormat::Rgba8Unorm, GpuFormatRole::Blendable)
         .require_format_role(GpuTextureFormat::Rgba8Unorm, GpuFormatRole::CopySource)
         .require_format_role(GpuTextureFormat::Depth16Unorm, GpuFormatRole::DepthStencil)
         .with_allowed_backends([GpuBackendFamily::Metal])

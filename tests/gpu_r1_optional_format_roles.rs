@@ -497,16 +497,16 @@ pub(crate) async fn run_on_adapter(
         }
         match role {
             GpuFormatRole::Filterable => assert!(
-                format_facts.sampled,
-                "advertised float32 filtering lacks the sampled proof prerequisite"
+                format_facts.sampled && format_facts.copy_destination,
+                "advertised float32 filtering lacks sampled/upload proof prerequisites"
             ),
             GpuFormatRole::StorageWrite => assert!(
                 format_facts.copy_source,
                 "advertised BGRA8 storage write lacks the readback proof prerequisite"
             ),
             GpuFormatRole::Blendable => assert!(
-                format_facts.color_attachment,
-                "advertised float32 blending lacks the color-attachment prerequisite"
+                format_facts.color_attachment && format_facts.copy_source,
+                "advertised float32 blending lacks color-attachment/readback proof prerequisites"
             ),
             _ => {}
         }
@@ -534,10 +534,14 @@ pub(crate) async fn run_on_adapter(
         }
         match role {
             GpuFormatRole::Filterable => {
-                descriptor = descriptor.require_format_role(format, GpuFormatRole::Sampled)
+                descriptor = descriptor
+                    .require_format_role(format, GpuFormatRole::Sampled)
+                    .require_format_role(format, GpuFormatRole::CopyDestination)
             }
             GpuFormatRole::Blendable => {
-                descriptor = descriptor.require_format_role(format, GpuFormatRole::ColorAttachment)
+                descriptor = descriptor
+                    .require_format_role(format, GpuFormatRole::ColorAttachment)
+                    .require_format_role(format, GpuFormatRole::CopySource)
             }
             GpuFormatRole::StorageWrite => {
                 descriptor = descriptor.require_format_role(format, GpuFormatRole::CopySource)
@@ -589,4 +593,11 @@ fn optional_format_roles_vulkan_execution() {
         Some(GpuSoftwareFallbackPolicy::Require),
         None,
     ));
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+#[ignore = "requires a Direct3D12 adapter"]
+fn optional_format_roles_direct3d12_execution() {
+    pollster::block_on(run_on_adapter(GpuBackendFamily::Direct3D12, None, None));
 }
