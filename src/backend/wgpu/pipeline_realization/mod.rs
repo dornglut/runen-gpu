@@ -11,6 +11,7 @@ mod render_mapping;
 mod render_validation;
 
 pub(crate) use records::{ComputePipelineRealizationRecord, RenderPipelineRealizationRecord};
+pub(crate) use render_mapping::contiguous_multiview_mask;
 
 use super::program_binding_realization::ProgramBindingRealizationState;
 use super::{WgpuDeviceHealth, WgpuErrorAttributionGate};
