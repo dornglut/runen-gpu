@@ -62,11 +62,20 @@ impl FromStr for GpuEntryPointName {
 pub struct GpuEntryPointDescriptor {
     name: GpuEntryPointName,
     stage: GpuShaderStage,
+    uses_view_index: bool,
 }
 
 impl GpuEntryPointDescriptor {
-    pub(crate) const fn derived(name: GpuEntryPointName, stage: GpuShaderStage) -> Self {
-        Self { name, stage }
+    pub(crate) const fn derived(
+        name: GpuEntryPointName,
+        stage: GpuShaderStage,
+        uses_view_index: bool,
+    ) -> Self {
+        Self {
+            name,
+            stage,
+            uses_view_index,
+        }
     }
 
     pub fn name(&self) -> &GpuEntryPointName {
@@ -75,5 +84,9 @@ impl GpuEntryPointDescriptor {
 
     pub const fn stage(&self) -> GpuShaderStage {
         self.stage
+    }
+
+    pub const fn uses_view_index(&self) -> bool {
+        self.uses_view_index
     }
 }
