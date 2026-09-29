@@ -614,24 +614,26 @@ fn ensure_surface_health(
 }
 
 fn normalize_surface_capabilities(native: &wgpu::SurfaceCapabilities) -> GpuSurfaceCapabilities {
-    let mut formats = Vec::new();
+    let mut formats: Vec<(GpuTextureFormat, Vec<GpuSurfaceColorSpace>)> = Vec::new();
     for entry in &native.format_capabilities {
         let Some(format) = normalize_texture_format(entry.format) else {
             continue;
         };
-        if formats
-            .iter()
-            .any(|known: &GpuSurfaceFormatCapabilities| known.format() == format)
+        let color_spaces = normalize_color_spaces(entry.color_spaces);
+        if let Some((_, known_color_spaces)) =
+            formats.iter_mut().find(|(known, _)| *known == format)
         {
-            continue;
-        }
-        if let Some(facts) = GpuSurfaceFormatCapabilities::from_normalized_facts(
-            format,
-            normalize_color_spaces(entry.color_spaces),
-        ) {
-            formats.push(facts);
+            known_color_spaces.extend(color_spaces);
+        } else {
+            formats.push((format, color_spaces));
         }
     }
+    let formats = formats
+        .into_iter()
+        .filter_map(|(format, color_spaces)| {
+            GpuSurfaceFormatCapabilities::from_normalized_facts(format, color_spaces)
+        })
+        .collect();
 
     let mut usages = Vec::new();
     for (native_usage, normalized) in [
@@ -1122,6 +1124,10 @@ mod tests {
                     color_spaces: SurfaceColorSpaces::EXTENDED_SRGB_LINEAR,
                 },
                 wgpu::SurfaceFormatCapabilities {
+                    format: TextureFormat::Bgra8UnormSrgb,
+                    color_spaces: SurfaceColorSpaces::EXTENDED_SRGB,
+                },
+                wgpu::SurfaceFormatCapabilities {
                     format: TextureFormat::Depth32Float,
                     color_spaces: SurfaceColorSpaces::SRGB,
                 },
@@ -1144,7 +1150,11 @@ mod tests {
         );
         assert_eq!(
             normalized.format_capabilities()[0].color_spaces(),
-            &[GpuSurfaceColorSpace::Srgb, GpuSurfaceColorSpace::DisplayP3]
+            &[
+                GpuSurfaceColorSpace::Srgb,
+                GpuSurfaceColorSpace::DisplayP3,
+                GpuSurfaceColorSpace::ExtendedSrgb,
+            ]
         );
         assert_eq!(
             normalized.format_capabilities()[1].format(),
