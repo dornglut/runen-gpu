@@ -349,39 +349,52 @@ fn entry_point_uses_view_index(
 ) -> Result<bool, String> {
     let stage = runen_stage(entry_point.stage);
     let mut uses_view_index = false;
+    let mut ignored_locations = Vec::<()>::new();
+    let mut ignored_builtins = Vec::<()>::new();
+
     for argument in &entry_point.function.arguments {
-        uses_view_index |=
-            io_uses_view_index(module, argument.ty, argument.binding.as_ref(), stage, true)?;
+        collect_io(
+            module,
+            argument.ty,
+            argument.binding.as_ref(),
+            &mut ignored_locations,
+            &mut |_, _, _| Ok(()),
+            &mut |builtin, ty| {
+                if matches!(builtin, BuiltIn::ViewIndex) {
+                    validate_view_index_builtin(module, ty, stage, true)?;
+                    uses_view_index = true;
+                }
+                Ok(())
+            },
+            &mut ignored_builtins,
+        )?;
     }
     if let Some(result) = &entry_point.function.result {
-        uses_view_index |=
-            io_uses_view_index(module, result.ty, result.binding.as_ref(), stage, false)?;
+        collect_io(
+            module,
+            result.ty,
+            result.binding.as_ref(),
+            &mut ignored_locations,
+            &mut |_, _, _| Ok(()),
+            &mut |builtin, ty| {
+                if matches!(builtin, BuiltIn::ViewIndex) {
+                    validate_view_index_builtin(module, ty, stage, false)?;
+                    uses_view_index = true;
+                }
+                Ok(())
+            },
+            &mut ignored_builtins,
+        )?;
     }
     Ok(uses_view_index)
 }
 
-fn io_uses_view_index(
+fn validate_view_index_builtin(
     module: &naga::Module,
     ty: naga::Handle<naga::Type>,
-    binding: Option<&Binding>,
     stage: GpuShaderStage,
     input: bool,
-) -> Result<bool, String> {
-    if binding.is_none() {
-        if let TypeInner::Struct { members, .. } = &module.types[ty].inner {
-            let mut uses_view_index = false;
-            for member in members {
-                uses_view_index |=
-                    io_uses_view_index(module, member.ty, member.binding.as_ref(), stage, input)?;
-            }
-            return Ok(uses_view_index);
-        }
-        return Ok(false);
-    }
-
-    if !matches!(binding, Some(Binding::BuiltIn(BuiltIn::ViewIndex))) {
-        return Ok(false);
-    }
+) -> Result<(), String> {
     if !input || !matches!(stage, GpuShaderStage::Vertex | GpuShaderStage::Fragment) {
         return Err(
             "view_index is normalized only as a vertex/fragment stage input builtin".to_string(),
@@ -394,7 +407,7 @@ fn io_uses_view_index(
     {
         return Err("view_index must use the normalized scalar u32 input type".to_string());
     }
-    Ok(true)
+    Ok(())
 }
 
 fn non_uniform_binding_array_analysis_capabilities() -> naga::valid::Capabilities {
@@ -1018,19 +1031,22 @@ fn normalize_vertex_input(
             argument.ty,
             argument.binding.as_ref(),
             &mut locations,
-            &mut |location, blend_src, value_type| {
+            &mut |location, blend_src, ty| {
                 if blend_src.is_some() {
                     return Err(
                         "dual-source blend identity is only valid for fragment output".to_string(),
                     );
                 }
-                Ok(GpuShaderIoLocation::new(location, value_type))
+                Ok(GpuShaderIoLocation::new(
+                    location,
+                    io_value_type(module, ty)?,
+                ))
             },
-            &mut |builtin| match builtin {
+            &mut |builtin, _| match builtin {
                 BuiltIn::VertexIndex => Ok(GpuVertexInputBuiltin::VertexIndex),
                 BuiltIn::InstanceIndex => Ok(GpuVertexInputBuiltin::InstanceIndex),
                 BuiltIn::ViewIndex => Ok(GpuVertexInputBuiltin::View),
-                _ => Err("vertex input uses an unsupported builtin"),
+                _ => Err("vertex input uses an unsupported builtin".to_string()),
             },
             &mut builtins,
         )
@@ -1053,7 +1069,7 @@ fn normalize_fragment_output(
             result.ty,
             result.binding.as_ref(),
             &mut locations,
-            &mut |location, blend_src, value_type| {
+            &mut |location, blend_src, ty| {
                 let blend_source = match blend_src {
                     None => None,
                     Some(0) => Some(GpuBlendSource::Primary),
@@ -1067,13 +1083,13 @@ fn normalize_fragment_output(
                 Ok(GpuFragmentOutputLocation::new(
                     location,
                     blend_source,
-                    value_type,
+                    io_value_type(module, ty)?,
                 ))
             },
-            &mut |builtin| match builtin {
+            &mut |builtin, _| match builtin {
                 BuiltIn::FragDepth => Ok(GpuFragmentOutputBuiltin::FragDepth),
                 BuiltIn::SampleMask => Ok(GpuFragmentOutputBuiltin::SampleMask),
-                _ => Err("fragment output uses an unsupported builtin"),
+                _ => Err("fragment output uses an unsupported builtin".to_string()),
             },
             &mut builtins,
         )
@@ -1087,8 +1103,12 @@ fn collect_io<L, B>(
     ty: naga::Handle<naga::Type>,
     binding: Option<&Binding>,
     locations: &mut Vec<L>,
-    map_location: &mut impl FnMut(u32, Option<u32>, GpuShaderIoValueType) -> Result<L, String>,
-    map_builtin: &mut impl FnMut(BuiltIn) -> Result<B, &'static str>,
+    map_location: &mut impl FnMut(
+        u32,
+        Option<u32>,
+        naga::Handle<naga::Type>,
+    ) -> Result<L, String>,
+    map_builtin: &mut impl FnMut(BuiltIn, naga::Handle<naga::Type>) -> Result<B, String>,
     builtins: &mut Vec<B>,
 ) -> Result<(), String> {
     if binding.is_none() {
@@ -1113,15 +1133,11 @@ fn collect_io<L, B>(
             blend_src,
             ..
         }) => {
-            locations.push(map_location(
-                *location,
-                *blend_src,
-                io_value_type(module, ty)?,
-            )?);
+            locations.push(map_location(*location, *blend_src, ty)?);
             Ok(())
         }
         Some(Binding::BuiltIn(builtin)) => {
-            builtins.push(map_builtin(*builtin).map_err(str::to_string)?);
+            builtins.push(map_builtin(*builtin, ty)?);
             Ok(())
         }
         None => Err(
