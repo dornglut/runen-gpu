@@ -519,7 +519,11 @@ pub(crate) async fn run_on_adapter(
         .adapter_facts()
         .supported()
         .supports(GpuCapabilityFeature::Multiview);
-    let normalized_max = census.adapter_facts().limits().max_multiview_view_count();
+    let normalized_max = census
+        .adapter_facts()
+        .adapter_limits()
+        .values()
+        .max_multiview_view_count();
 
     if !supported {
         assert_eq!(
