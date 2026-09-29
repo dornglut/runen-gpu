@@ -751,7 +751,10 @@ fn layered_attachment_boundaries_and_initialization_are_structural() {
         )
         .unwrap()],
         None,
-        std::iter::empty::<GpuRenderDraw>(),
+        [render_draw(multiview_pipeline(
+            "proof.r4.multiview.uninitialized-load",
+            NO_VIEW_INDEX_WGSL,
+        ))],
         None,
     )
     .unwrap();
