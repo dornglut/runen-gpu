@@ -449,8 +449,26 @@ jobs:
         run: |
           set -euo pipefail
           messages="${RUNNER_TEMP}/runengpu-browser-webgpu-cargo.json"
+          set +e
           cargo +stable test --test gpu_browser_webgpu \
             --target wasm32-unknown-unknown --locked --no-run --message-format=json > "${messages}"
+          cargo_status=$?
+          set -e
+          if [ "${cargo_status}" -ne 0 ]; then
+            python3 - "${messages}" <<'PY'
+          import json
+          import sys
+
+          for line in open(sys.argv[1], encoding="utf-8"):
+              message = json.loads(line)
+              if message.get("reason") != "compiler-message":
+                  continue
+              rendered = message.get("message", {}).get("rendered")
+              if rendered:
+                  print(rendered, end="")
+          PY
+            exit "${cargo_status}"
+          fi
           browser_wasm="$(python3 -c 'import json,sys; artifacts={path for message in map(json.loads, open(sys.argv[1])) if message.get("reason") == "compiler-artifact" and message.get("target", {}).get("name") == "gpu_browser_webgpu" for path in ([message.get("executable")] + message.get("filenames", [])) if isinstance(path, str) and path.endswith(".wasm")}; assert len(artifacts) == 1, artifacts; print(artifacts.pop())' "${messages}")"
           test -s "${browser_wasm}"
           out_dir="${RUNNER_TEMP}/runengpu-browser-webgpu"
