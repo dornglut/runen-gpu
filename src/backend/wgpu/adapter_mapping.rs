@@ -60,7 +60,8 @@ pub(super) fn adapter_facts(
     if multiview_view_count >= 2 {
         supported.push(GpuCapabilityFeature::Multiview);
     }
-    let adapter_limits = normalized_limits(&native_limits).with_multiview_limit(multiview_view_count);
+    let adapter_limits =
+        normalized_limits(&native_limits).with_multiview_limit(multiview_view_count);
     GpuAdapterFacts::new(
         map_backend(info.backend),
         map_class(info.device_type),
