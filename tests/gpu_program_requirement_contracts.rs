@@ -502,6 +502,21 @@ fn dual_fs() -> DualSourceOutput {
 }
 "#;
 
+const DUAL_SOURCE_WITHOUT_ENABLE_WGSL: &str = r#"
+struct DualSourceOutput {
+    @location(0) @blend_src(0) primary: vec4<f32>,
+    @location(0) @blend_src(1) secondary: vec4<f32>,
+}
+
+@fragment
+fn dual_fs() -> DualSourceOutput {
+    var output: DualSourceOutput;
+    output.primary = vec4<f32>(1.0);
+    output.secondary = vec4<f32>(0.0);
+    return output;
+}
+"#;
+
 const DUAL_SOURCE_UNUSED_WGSL: &str = r#"
 enable dual_source_blending;
 
@@ -624,6 +639,22 @@ fn combined_f16_and_dual_source_profile_derives_both_requirements() {
         program.requirements(),
         GpuCapabilityFeature::DualSourceBlending,
     );
+}
+
+#[test]
+fn dual_source_attributes_require_the_canonical_enable_extension() {
+    let (_registry, source) = admitted_source_from(
+        "dual-source.missing-enable",
+        DUAL_SOURCE_WITHOUT_ENABLE_WGSL,
+    );
+    let error = GpuProgramDescriptor::new(
+        source,
+        [entry_point("dual_fs")],
+        std::iter::empty::<GpuBindingLayoutRefinement>(),
+    )
+    .expect_err("blend_src must require enable dual_source_blending");
+
+    assert_eq!(error.cause(), GpuProgramContractCause::CanonicalWgslInvalid);
 }
 
 #[test]
