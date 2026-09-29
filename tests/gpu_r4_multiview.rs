@@ -8,6 +8,8 @@ const HEIGHT: u32 = 8;
 const SENTINEL_PIXEL: [u8; 4] = [0, 0, 255, 255];
 const VIEW_ZERO_PIXEL: [u8; 4] = [255, 0, 0, 255];
 const VIEW_ONE_PIXEL: [u8; 4] = [0, 255, 0, 255];
+const SHARED_VIEW_PIXEL: [u8; 4] = [0, 255, 255, 255];
+const CLEAR_ONLY_PIXEL: [u8; 4] = [255, 0, 255, 255];
 
 const VIEW_INDEX_WGSL: &str = r#"
 struct VertexOutput {
@@ -64,6 +66,16 @@ pub(crate) struct MultiviewProofOutcome {
     pub supported: bool,
     pub normalized_max: u32,
     pub primary_exercised: bool,
+    pub shader_without_view_index_exercised: bool,
+    pub clear_only_exercised: bool,
+}
+
+impl MultiviewProofOutcome {
+    pub(crate) const fn fully_exercised(self) -> bool {
+        self.primary_exercised
+            && self.shader_without_view_index_exercised
+            && self.clear_only_exercised
+    }
 }
 
 fn label(value: impl AsRef<str>) -> GpuResourceLabel {
@@ -318,6 +330,163 @@ async fn run_primary_oracle(context: &GpuContext) {
     assert_eq!(pixel_at(&outputs[2], WIDTH / 2, HEIGHT / 2), VIEW_ONE_PIXEL);
 }
 
+
+fn two_layer_graph(
+    name: &str,
+    source: Option<(&'static str, &'static str)>,
+    clear: GpuColorClearValue,
+) -> (GpuPreparedWorkGraph, [GpuReadbackId; 2]) {
+    let mut scope = GpuResourceScope::new();
+    let texture_label = label(format!("{name} texture"));
+    let texture = scope
+        .texture(
+            GpuTextureDescriptor::new(
+                common(format!("{name} texture")),
+                GpuTextureDimension::D2,
+                GpuTextureExtent::new(
+                    &texture_label,
+                    GpuTextureDimension::D2,
+                    WIDTH,
+                    HEIGHT,
+                    2,
+                )
+                .unwrap(),
+                1,
+                1,
+                GpuTextureFormat::Rgba8Unorm,
+                GpuTextureUsages::new(
+                    &texture_label,
+                    [
+                        GpuTextureUsage::ColorAttachment,
+                        GpuTextureUsage::CopySource,
+                    ],
+                )
+                .unwrap(),
+                GpuTextureInitialization::Uninitialized,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+    let view = texture_view(
+        &mut scope,
+        &texture,
+        &format!("{name} view"),
+        GpuTextureViewDimension::D2Array,
+        0,
+        2,
+    );
+    let draws = source
+        .map(|(key, text)| render_draw(multiview_pipeline(key, text)))
+        .into_iter();
+    let render = GpuRenderOperation::new(
+        [GpuRenderColorAttachment::new(
+            view,
+            GpuColorAttachmentLoad::Clear(clear),
+            GpuAttachmentStore::Store,
+            None,
+        )
+        .unwrap()],
+        None,
+        draws,
+        None,
+    )
+    .unwrap();
+    assert_eq!(
+        render.signature().multiview(),
+        Some(GpuMultiviewState::new(2).unwrap())
+    );
+
+    let ids = [
+        GpuReadbackId::allocate().unwrap(),
+        GpuReadbackId::allocate().unwrap(),
+    ];
+    let readbacks = ids.into_iter().enumerate().map(|(layer, id)| {
+        let region = GpuTextureCopyRegion::new(
+            &texture,
+            0,
+            GpuTextureOrigin::new(0, 0, u32::try_from(layer).unwrap()),
+            GpuTextureAspect::Color,
+            GpuCopyExtent::new(WIDTH, HEIGHT, 1).unwrap(),
+        )
+        .unwrap();
+        GpuReadbackOperation::new(region.into(), id).unwrap()
+    });
+
+    let fragment = GpuWorkFragment::build(name, |builder| {
+        builder.operation(format!("{name} render"), render)?;
+        for (layer, readback) in readbacks.enumerate() {
+            builder.operation(format!("{name} read layer {layer}"), readback)?;
+        }
+        Ok(())
+    })
+    .unwrap();
+    let graph = GpuPreparedWorkGraph::prepare(label(format!("{name} graph")), [fragment]).unwrap();
+    assert!(matches!(
+        graph.requirements().get(GpuCapabilityFeature::Multiview),
+        Some(GpuCapabilityRequirement::Required(
+            GpuCapabilityFeature::Multiview
+        ))
+    ));
+    (graph, ids)
+}
+
+async fn run_two_layer_oracle(
+    context: &GpuContext,
+    name: &str,
+    graph: GpuPreparedWorkGraph,
+    ids: [GpuReadbackId; 2],
+    expected: [u8; 4],
+) {
+    let prepared = context.prepare_submission(graph).await.unwrap();
+    let submission = context.submit_prepared(prepared).unwrap();
+    for (layer, id) in ids.into_iter().enumerate() {
+        let bytes = readback_wait::wait_for_readback(
+            context,
+            &submission,
+            id,
+            format!("{name} layer {layer}"),
+        )
+        .await;
+        assert_eq!(
+            pixel_at(&bytes, WIDTH / 2, HEIGHT / 2),
+            expected,
+            "{name} must produce the exact expected pixel on layer {layer}"
+        );
+    }
+}
+
+async fn run_shader_without_view_index_oracle(context: &GpuContext) {
+    let (graph, ids) = two_layer_graph(
+        "R4 multiview shader-without-view-index oracle",
+        Some(("proof.r4.multiview.no-view-index", NO_VIEW_INDEX_WGSL)),
+        GpuColorClearValue::new(0.0, 0.0, 0.0, 1.0).unwrap(),
+    );
+    run_two_layer_oracle(
+        context,
+        "R4 multiview shader-without-view-index",
+        graph,
+        ids,
+        SHARED_VIEW_PIXEL,
+    )
+    .await;
+}
+
+async fn run_clear_only_oracle(context: &GpuContext) {
+    let (graph, ids) = two_layer_graph(
+        "R4 multiview clear-only oracle",
+        None,
+        GpuColorClearValue::new(1.0, 0.0, 1.0, 1.0).unwrap(),
+    );
+    run_two_layer_oracle(
+        context,
+        "R4 multiview clear-only",
+        graph,
+        ids,
+        CLEAR_ONLY_PIXEL,
+    )
+    .await;
+}
+
 fn descriptor(
     backend: GpuBackendFamily,
     require_multiview: bool,
@@ -386,6 +555,8 @@ pub(crate) async fn run_on_adapter(
             supported: false,
             normalized_max,
             primary_exercised: false,
+            shader_without_view_index_exercised: false,
+            clear_only_exercised: false,
         };
     }
 
@@ -426,10 +597,14 @@ pub(crate) async fn run_on_adapter(
     );
 
     run_primary_oracle(&context).await;
+    run_shader_without_view_index_oracle(&context).await;
+    run_clear_only_oracle(&context).await;
     MultiviewProofOutcome {
         supported: true,
         normalized_max,
         primary_exercised: true,
+        shader_without_view_index_exercised: true,
+        clear_only_exercised: true,
     }
 }
 
@@ -444,6 +619,160 @@ pub(crate) async fn prove_browser_webgpu_unsupported() {
         "pinned BrowserWebGpu must remain normalized unsupported for the first Multiview contract"
     );
     assert_eq!(outcome.normalized_max, 0);
+}
+
+#[test]
+fn layered_attachment_boundaries_and_initialization_are_structural() {
+    let mut scope = GpuResourceScope::new();
+    let resource_label = label("R4 multiview attachment boundaries");
+    let texture = scope
+        .texture(
+            GpuTextureDescriptor::new(
+                common("R4 multiview attachment boundaries"),
+                GpuTextureDimension::D2,
+                GpuTextureExtent::new(
+                    &resource_label,
+                    GpuTextureDimension::D2,
+                    WIDTH,
+                    HEIGHT,
+                    2,
+                )
+                .unwrap(),
+                1,
+                1,
+                GpuTextureFormat::Rgba8Unorm,
+                GpuTextureUsages::new(
+                    &resource_label,
+                    [GpuTextureUsage::ColorAttachment],
+                )
+                .unwrap(),
+                GpuTextureInitialization::Uninitialized,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+
+    let layered = texture_view(
+        &mut scope,
+        &texture,
+        "R4 multiview boundary layered",
+        GpuTextureViewDimension::D2Array,
+        0,
+        2,
+    );
+    let discard = GpuRenderColorAttachment::new(
+        layered.clone(),
+        GpuColorAttachmentLoad::Clear(GpuColorClearValue::new(0.0, 0.0, 0.0, 1.0).unwrap()),
+        GpuAttachmentStore::Discard,
+        None,
+    )
+    .expect_err("layered multiview Discard must reject before private realization");
+    assert_eq!(discard.cause(), GpuWorkOperationCause::InvalidAttachment);
+
+    let ordinary = texture_view(
+        &mut scope,
+        &texture,
+        "R4 ordinary one-layer discard",
+        GpuTextureViewDimension::D2,
+        0,
+        1,
+    );
+    GpuRenderColorAttachment::new(
+        ordinary,
+        GpuColorAttachmentLoad::Clear(GpuColorClearValue::new(0.0, 0.0, 0.0, 1.0).unwrap()),
+        GpuAttachmentStore::Discard,
+        None,
+    )
+    .expect("ordinary one-layer Discard must remain valid");
+
+    let one_layer_array = texture_view(
+        &mut scope,
+        &texture,
+        "R4 D2Array one-layer rejection",
+        GpuTextureViewDimension::D2Array,
+        0,
+        1,
+    );
+    let one_layer = GpuRenderColorAttachment::new(
+        one_layer_array,
+        GpuColorAttachmentLoad::Clear(GpuColorClearValue::new(0.0, 0.0, 0.0, 1.0).unwrap()),
+        GpuAttachmentStore::Store,
+        None,
+    )
+    .expect_err("one-layer D2Array attachment remains outside the first multiview contract");
+    assert_eq!(one_layer.cause(), GpuWorkOperationCause::InvalidAttachment);
+
+    let load = GpuRenderOperation::new(
+        [GpuRenderColorAttachment::new(
+            layered,
+            GpuColorAttachmentLoad::Load,
+            GpuAttachmentStore::Store,
+            None,
+        )
+        .unwrap()],
+        None,
+        std::iter::empty::<GpuRenderDraw>(),
+        None,
+    )
+    .unwrap();
+    let fragment = GpuWorkFragment::build("R4 multiview uninitialized load", |builder| {
+        builder.operation("load uninitialized layered attachment", load)?;
+        Ok(())
+    })
+    .unwrap();
+    let error = GpuPreparedWorkGraph::prepare(
+        label("R4 multiview uninitialized load graph"),
+        [fragment],
+    )
+    .expect_err("Load + Store must require every selected multiview layer to be initialized");
+    assert_eq!(error.cause(), GpuWorkGraphCause::ReadBeforeInitialization);
+
+    let multisampled_label = label("R4 multisampled D2Array rejection");
+    let multisampled = scope
+        .texture(
+            GpuTextureDescriptor::new(
+                common("R4 multisampled D2Array rejection"),
+                GpuTextureDimension::D2,
+                GpuTextureExtent::new(
+                    &multisampled_label,
+                    GpuTextureDimension::D2,
+                    WIDTH,
+                    HEIGHT,
+                    2,
+                )
+                .unwrap(),
+                1,
+                4,
+                GpuTextureFormat::Rgba8Unorm,
+                GpuTextureUsages::new(
+                    &multisampled_label,
+                    [GpuTextureUsage::ColorAttachment],
+                )
+                .unwrap(),
+                GpuTextureInitialization::Uninitialized,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+    let multisampled_view = texture_view(
+        &mut scope,
+        &multisampled,
+        "R4 multisampled D2Array view",
+        GpuTextureViewDimension::D2Array,
+        0,
+        2,
+    );
+    let multisampled_error = GpuRenderColorAttachment::new(
+        multisampled_view,
+        GpuColorAttachmentLoad::Clear(GpuColorClearValue::new(0.0, 0.0, 0.0, 1.0).unwrap()),
+        GpuAttachmentStore::Store,
+        None,
+    )
+    .expect_err("multisampled D2Array is outside the first multiview contract");
+    assert_eq!(
+        multisampled_error.cause(),
+        GpuWorkOperationCause::InvalidAttachment
+    );
 }
 
 #[test]
@@ -560,7 +889,7 @@ fn multiview_native_execution_matches_normalized_adapter_facts() {
         &census,
     ));
     if outcome.supported {
-        assert!(outcome.primary_exercised);
+        assert!(outcome.fully_exercised());
         println!(
             "Multiview Vulkan: EXERCISED (normalized max={})",
             outcome.normalized_max
