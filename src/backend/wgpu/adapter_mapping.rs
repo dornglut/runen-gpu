@@ -223,37 +223,6 @@ pub(super) fn select_device_request_profile(
     }
 }
 
-/// Closed G7A presentation vocabulary retained for the surface owner.
-/// Ordinary texture-format growth is enumerated by `TEXTURE_FORMATS` and cannot expand this set.
-pub(super) fn known_formats() -> Vec<(GpuTextureFormat, TextureFormat)> {
-    TEXTURE_FORMATS
-        .iter()
-        .copied()
-        .filter(|(format, _)| is_g7a_presentation_format(*format))
-        .collect()
-}
-
-const fn is_g7a_presentation_format(format: GpuTextureFormat) -> bool {
-    matches!(
-        format,
-        GpuTextureFormat::R8Unorm
-            | GpuTextureFormat::Rgba8Unorm
-            | GpuTextureFormat::Rgba8UnormSrgb
-            | GpuTextureFormat::Bgra8Unorm
-            | GpuTextureFormat::Bgra8UnormSrgb
-            | GpuTextureFormat::R32Uint
-            | GpuTextureFormat::R32Sint
-            | GpuTextureFormat::R32Float
-            | GpuTextureFormat::Rg32Uint
-            | GpuTextureFormat::Rg32Sint
-            | GpuTextureFormat::Rg32Float
-            | GpuTextureFormat::Rgba32Uint
-            | GpuTextureFormat::Rgba32Sint
-            | GpuTextureFormat::Rgba32Float
-            | GpuTextureFormat::Depth32Float
-    )
-}
-
 fn format_prerequisites_available(format: GpuTextureFormat, features: Features) -> bool {
     if matches!(
         texture_format::compression_family(format),
@@ -841,25 +810,6 @@ mod tests {
     }
 
     #[test]
-    fn presentation_format_census_is_closed_against_texture_growth() {
-        assert_eq!(known_formats().len(), 15);
-        assert!(
-            known_formats().contains(&(GpuTextureFormat::Rgba32Float, TextureFormat::Rgba32Float))
-        );
-        for pair in [
-            (GpuTextureFormat::Rgba8Snorm, TextureFormat::Rgba8Snorm),
-            (GpuTextureFormat::Rgba8Uint, TextureFormat::Rgba8Uint),
-            (GpuTextureFormat::Rgba8Sint, TextureFormat::Rgba8Sint),
-            (GpuTextureFormat::Rgba16Uint, TextureFormat::Rgba16Uint),
-            (GpuTextureFormat::Rgba16Sint, TextureFormat::Rgba16Sint),
-            (GpuTextureFormat::Rgba16Float, TextureFormat::Rgba16Float),
-        ] {
-            assert!(!known_formats().contains(&pair));
-            assert!(TEXTURE_FORMATS.contains(&pair));
-        }
-    }
-
-    #[test]
     fn baseline_32bit_format_census_is_complete() {
         for pair in [
             (GpuTextureFormat::R32Uint, TextureFormat::R32Uint),
@@ -1052,7 +1002,6 @@ mod tests {
     fn stencil8_maps_exactly_and_preserves_observed_roles() {
         let format = GpuTextureFormat::Stencil8;
         assert!(TEXTURE_FORMATS.contains(&(format, TextureFormat::Stencil8)));
-        assert!(!is_g7a_presentation_format(format));
         assert_eq!(format.copy_block_size(GpuTextureAspect::All), Some(1));
         let facts = format_capabilities(
             format,
@@ -1085,7 +1034,6 @@ mod tests {
             ),
         ] {
             assert!(TEXTURE_FORMATS.contains(&(format, native)));
-            assert!(!is_g7a_presentation_format(format));
         }
 
         let native = wgpu::TextureFormatFeatures {
@@ -1133,7 +1081,6 @@ mod tests {
     fn depth32float_stencil8_roles_fail_closed_without_private_prerequisite() {
         let format = GpuTextureFormat::Depth32FloatStencil8;
         assert!(TEXTURE_FORMATS.contains(&(format, TextureFormat::Depth32FloatStencil8)));
-        assert!(!is_g7a_presentation_format(format));
 
         let native = wgpu::TextureFormatFeatures {
             allowed_usages: TextureUsages::TEXTURE_BINDING
@@ -1192,7 +1139,6 @@ mod tests {
             ),
         ] {
             assert!(TEXTURE_FORMATS.contains(&(format, native)));
-            assert!(!is_g7a_presentation_format(format));
             assert_eq!(
                 format.copy_block_size(GpuTextureAspect::All),
                 expected_copy_size
@@ -1227,7 +1173,7 @@ mod r1_r_rg8_mapping_tests {
     use super::*;
 
     #[test]
-    fn shared_texture_mapping_is_unique_and_preserves_closed_presentation() {
+    fn shared_texture_mapping_is_unique() {
         let mappings = TEXTURE_FORMATS;
         assert_eq!(mappings.len(), 57);
         let mut normalized = Vec::new();
@@ -1238,7 +1184,6 @@ mod r1_r_rg8_mapping_tests {
             normalized.push(format);
             native.push(wgpu_format);
         }
-        assert_eq!(known_formats().len(), 15);
         for (format, wgpu_format) in [
             (GpuTextureFormat::R8Snorm, TextureFormat::R8Snorm),
             (GpuTextureFormat::R8Uint, TextureFormat::R8Uint),
@@ -1254,7 +1199,6 @@ mod r1_r_rg8_mapping_tests {
             (GpuTextureFormat::Rg16Sint, TextureFormat::Rg16Sint),
             (GpuTextureFormat::Rg16Float, TextureFormat::Rg16Float),
         ] {
-            assert!(!is_g7a_presentation_format(format));
             assert_eq!(
                 TEXTURE_FORMATS
                     .iter()

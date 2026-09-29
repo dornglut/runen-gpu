@@ -311,18 +311,21 @@ fn native_surface_context(window: Arc<Window>) -> (GpuContext, GpuSurfaceHandle,
     let capabilities = context.surface_capabilities(surface).unwrap();
     assert!(capabilities.supports_usage(GpuTextureUsage::ColorAttachment));
     let format = capabilities
-        .formats()
+        .format_capabilities()
         .iter()
-        .copied()
-        .find(|format| SURFACE_FORMAT_CANDIDATES.contains(format) && format.is_srgb())
-        .or_else(|| {
-            capabilities
-                .formats()
-                .iter()
-                .copied()
-                .find(|format| SURFACE_FORMAT_CANDIDATES.contains(format))
+        .find(|entry| {
+            SURFACE_FORMAT_CANDIDATES.contains(&entry.format())
+                && entry.format().is_srgb()
+                && entry.supports_color_space(GpuSurfaceColorSpace::Srgb)
         })
-        .expect("surface must expose an admitted SDR color-attachment format");
+        .or_else(|| {
+            capabilities.format_capabilities().iter().find(|entry| {
+                SURFACE_FORMAT_CANDIDATES.contains(&entry.format())
+                    && entry.supports_color_space(GpuSurfaceColorSpace::Srgb)
+            })
+        })
+        .expect("surface must expose an admitted sRGB color-attachment pair")
+        .format();
     let present_mode = capabilities
         .present_modes()
         .iter()
@@ -344,6 +347,7 @@ fn native_surface_context(window: Arc<Window>) -> (GpuContext, GpuSurfaceHandle,
                 SURFACE_WIDTH,
                 SURFACE_HEIGHT,
                 format,
+                GpuSurfaceColorSpace::Srgb,
                 [GpuTextureUsage::ColorAttachment],
                 present_mode,
                 alpha_mode,

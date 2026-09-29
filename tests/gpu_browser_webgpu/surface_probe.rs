@@ -24,6 +24,7 @@ const BIT_DISPLAY_P3_ADVERTISED: u32 = 1 << 2;
 const BIT_DISPLAY_P3_EXECUTED: u32 = 1 << 3;
 const BIT_RGBA16FLOAT_ADVERTISED: u32 = 1 << 4;
 const BIT_EXTENDED_PAIR_EXECUTED: u32 = 1 << 5;
+const BIT_PUBLIC_DISPLAY_P3_EXECUTED: u32 = 1 << 6;
 
 const FORMAT_UNKNOWN: u32 = 0;
 const FORMAT_RGBA8_UNORM: u32 = 1;
@@ -243,17 +244,17 @@ async fn run_public_surface(window: Arc<Window>) -> Result<u32, u32> {
         return Err(104u32);
     }
     let format = capabilities
-        .formats()
+        .format_capabilities()
         .iter()
-        .copied()
-        .find(|format| {
+        .find(|entry| {
             matches!(
-                format,
+                entry.format(),
                 GpuTextureFormat::Rgba8Unorm | GpuTextureFormat::Bgra8Unorm
-            )
+            ) && entry.supports_color_space(GpuSurfaceColorSpace::Srgb)
+                && entry.supports_color_space(GpuSurfaceColorSpace::DisplayP3)
         })
-        .or_else(|| capabilities.formats().first().copied())
-        .ok_or(105u32)?;
+        .ok_or(105u32)?
+        .format();
     let present_mode = capabilities
         .present_modes()
         .iter()
@@ -267,36 +268,57 @@ async fn run_public_surface(window: Arc<Window>) -> Result<u32, u32> {
         .find(|mode| *mode == GpuSurfaceAlphaMode::Opaque)
         .ok_or(107u32)?;
 
-    let configuration = GpuSurfaceConfiguration::new(
-        WIDTH,
-        HEIGHT,
-        format,
-        [GpuTextureUsage::ColorAttachment],
-        present_mode,
-        alpha_mode,
-        2,
-        [],
-    )
-    .map_err(|_| 108u32)?;
-    let configured = context
-        .configure_surface(surface, configuration)
-        .map_err(|_| 109u32)?;
-    let image = context.acquire_surface_image(configured).map_err(|_| 110u32)?;
-    if image.texture().descriptor().common().ownership() != GpuResourceOwnership::SurfaceAcquired {
-        return Err(111u32);
-    }
-    let graph = clear_and_present_graph(&image);
-    let prepared = context.prepare_submission(graph).await.map_err(|_| 112u32)?;
-    let submission = context.submit_prepared(prepared).map_err(|_| 113u32)?;
-    terminalize(&context, &submission).await?;
+    let mut configured = surface;
+    for (index, color_space) in [GpuSurfaceColorSpace::Srgb, GpuSurfaceColorSpace::DisplayP3]
+        .into_iter()
+        .enumerate()
+    {
+        let stage = (index as u32) * 10;
+        let configuration = GpuSurfaceConfiguration::new(
+            WIDTH,
+            HEIGHT,
+            format,
+            color_space,
+            [GpuTextureUsage::ColorAttachment],
+            present_mode,
+            alpha_mode,
+            2,
+            [],
+        )
+        .map_err(|_| 108u32 + stage)?;
+        configured = context
+            .configure_surface(configured, configuration)
+            .map_err(|_| 109u32 + stage)?;
+        let image = context
+            .acquire_surface_image(configured)
+            .map_err(|_| 110u32 + stage)?;
+        if image.texture().descriptor().common().ownership()
+            != GpuResourceOwnership::SurfaceAcquired
+        {
+            return Err(111u32 + stage);
+        }
+        let graph = clear_and_present_graph(&image);
+        let prepared = context
+            .prepare_submission(graph)
+            .await
+            .map_err(|_| 112u32 + stage)?;
+        let submission = context
+            .submit_prepared(prepared)
+            .map_err(|_| 113u32 + stage)?;
+        terminalize(&context, &submission)
+            .await
+            .map_err(|failure| failure + stage)?;
 
-    let next = context.acquire_surface_image(configured).map_err(|_| 115u32)?;
-    if next.lease_id() == image.lease_id() {
-        return Err(116u32);
+        let next = context
+            .acquire_surface_image(configured)
+            .map_err(|_| 115u32 + stage)?;
+        if next.lease_id() == image.lease_id() {
+            return Err(116u32 + stage);
+        }
+        next.abandon();
+        drop(image);
     }
     context.detach_surface(configured).map_err(|_| 117u32)?;
-    next.abandon();
-    drop(image);
 
     let stats = context.execution_stats();
     if stats.prepared_submissions() != 0
@@ -510,24 +532,26 @@ pub(super) async fn run() -> SurfaceEvidence {
             stop_event_loop(proxy).await;
             return SurfaceEvidence {
                 disposition,
-                bits: BIT_PUBLIC_SURFACE,
+                bits: BIT_PUBLIC_SURFACE | BIT_PUBLIC_DISPLAY_P3_EXECUTED,
                 public_format,
                 ..SurfaceEvidence::default()
             };
         }
     };
-    evidence.bits |= BIT_PUBLIC_SURFACE;
+    evidence.bits |= BIT_PUBLIC_SURFACE | BIT_PUBLIC_DISPLAY_P3_EXECUTED;
     evidence.public_format = public_format;
 
     if evidence.bits
         & (BIT_PUBLIC_SURFACE
             | BIT_DIRECT_CENSUS
             | BIT_DISPLAY_P3_ADVERTISED
-            | BIT_DISPLAY_P3_EXECUTED)
+            | BIT_DISPLAY_P3_EXECUTED
+            | BIT_PUBLIC_DISPLAY_P3_EXECUTED)
         == (BIT_PUBLIC_SURFACE
             | BIT_DIRECT_CENSUS
             | BIT_DISPLAY_P3_ADVERTISED
-            | BIT_DISPLAY_P3_EXECUTED)
+            | BIT_DISPLAY_P3_EXECUTED
+            | BIT_PUBLIC_DISPLAY_P3_EXECUTED)
     {
         evidence.disposition = DISPOSITION_PREREQUISITE_ESTABLISHED;
     }

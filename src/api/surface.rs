@@ -101,9 +101,54 @@ pub enum GpuSurfaceAlphaMode {
     Inherit,
 }
 
+/// Physical interpretation of a configured surface image.
+///
+/// Image formation and encoding remain the caller's responsibility.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum GpuSurfaceColorSpace {
+    Srgb,
+    ExtendedSrgbLinear,
+    DisplayP3,
+    Bt2100Pq,
+    Bt2100Hlg,
+    ExtendedSrgb,
+    ExtendedDisplayP3,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GpuSurfaceFormatCapabilities {
+    format: GpuTextureFormat,
+    color_spaces: Vec<GpuSurfaceColorSpace>,
+}
+
+impl GpuSurfaceFormatCapabilities {
+    pub(crate) fn from_normalized_facts(
+        format: GpuTextureFormat,
+        color_spaces: impl IntoIterator<Item = GpuSurfaceColorSpace>,
+    ) -> Option<Self> {
+        let color_spaces = color_spaces.into_iter().collect::<BTreeSet<_>>();
+        (!color_spaces.is_empty()).then(|| Self {
+            format,
+            color_spaces: color_spaces.into_iter().collect(),
+        })
+    }
+
+    pub const fn format(&self) -> GpuTextureFormat {
+        self.format
+    }
+
+    pub fn color_spaces(&self) -> &[GpuSurfaceColorSpace] {
+        &self.color_spaces
+    }
+
+    pub fn supports_color_space(&self, color_space: GpuSurfaceColorSpace) -> bool {
+        self.color_spaces.contains(&color_space)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GpuSurfaceCapabilities {
-    formats: Vec<GpuTextureFormat>,
+    format_capabilities: Vec<GpuSurfaceFormatCapabilities>,
     usages: Vec<GpuTextureUsage>,
     present_modes: Vec<GpuSurfacePresentMode>,
     alpha_modes: Vec<GpuSurfaceAlphaMode>,
@@ -111,21 +156,21 @@ pub struct GpuSurfaceCapabilities {
 
 impl GpuSurfaceCapabilities {
     pub(crate) fn from_normalized_facts(
-        formats: Vec<GpuTextureFormat>,
+        format_capabilities: Vec<GpuSurfaceFormatCapabilities>,
         usages: Vec<GpuTextureUsage>,
         present_modes: Vec<GpuSurfacePresentMode>,
         alpha_modes: Vec<GpuSurfaceAlphaMode>,
     ) -> Self {
         Self {
-            formats,
+            format_capabilities,
             usages,
             present_modes,
             alpha_modes,
         }
     }
 
-    pub fn formats(&self) -> &[GpuTextureFormat] {
-        &self.formats
+    pub fn format_capabilities(&self) -> &[GpuSurfaceFormatCapabilities] {
+        &self.format_capabilities
     }
 
     pub fn usages(&self) -> &[GpuTextureUsage] {
@@ -141,7 +186,19 @@ impl GpuSurfaceCapabilities {
     }
 
     pub fn supports_format(&self, format: GpuTextureFormat) -> bool {
-        self.formats.contains(&format)
+        self.format_capabilities
+            .iter()
+            .any(|entry| entry.format() == format)
+    }
+
+    pub fn supports_pair(
+        &self,
+        format: GpuTextureFormat,
+        color_space: GpuSurfaceColorSpace,
+    ) -> bool {
+        self.format_capabilities
+            .iter()
+            .any(|entry| entry.format() == format && entry.supports_color_space(color_space))
     }
 
     pub fn supports_usage(&self, usage: GpuTextureUsage) -> bool {
@@ -162,6 +219,7 @@ pub struct GpuSurfaceConfiguration {
     width: u32,
     height: u32,
     format: GpuTextureFormat,
+    color_space: GpuSurfaceColorSpace,
     usages: Vec<GpuTextureUsage>,
     present_mode: GpuSurfacePresentMode,
     alpha_mode: GpuSurfaceAlphaMode,
@@ -175,6 +233,7 @@ impl GpuSurfaceConfiguration {
         width: u32,
         height: u32,
         format: GpuTextureFormat,
+        color_space: GpuSurfaceColorSpace,
         usages: impl IntoIterator<Item = GpuTextureUsage>,
         present_mode: GpuSurfacePresentMode,
         alpha_mode: GpuSurfaceAlphaMode,
@@ -236,6 +295,7 @@ impl GpuSurfaceConfiguration {
             width,
             height,
             format,
+            color_space,
             usages: usages.into_iter().collect(),
             present_mode,
             alpha_mode,
@@ -254,6 +314,10 @@ impl GpuSurfaceConfiguration {
 
     pub const fn format(&self) -> GpuTextureFormat {
         self.format
+    }
+
+    pub const fn color_space(&self) -> GpuSurfaceColorSpace {
+        self.color_space
     }
 
     pub fn usages(&self) -> &[GpuTextureUsage] {
@@ -334,10 +398,10 @@ pub enum GpuSurfaceErrorCategory {
     ForeignContext,
     StaleGeneration,
     UnsupportedFormat,
+    UnsupportedColorSpace,
     UnsupportedUsage,
     UnsupportedPresentMode,
     UnsupportedAlphaMode,
-    UnsupportedViewFormat,
     ContextOrDeviceUnavailableOrLost,
     IdentityExhausted,
     GenerationExhausted,
@@ -439,6 +503,7 @@ mod tests {
             1280,
             720,
             GpuTextureFormat::Bgra8Unorm,
+            GpuSurfaceColorSpace::Srgb,
             [
                 GpuTextureUsage::CopySource,
                 GpuTextureUsage::ColorAttachment,
@@ -469,6 +534,43 @@ mod tests {
                 GpuTextureFormat::Bgra8UnormSrgb
             ]
         );
+        assert_eq!(configuration.color_space(), GpuSurfaceColorSpace::Srgb);
+    }
+
+    #[test]
+    fn surface_format_facts_keep_one_nonempty_color_space_authority() {
+        assert!(
+            GpuSurfaceFormatCapabilities::from_normalized_facts(GpuTextureFormat::Rgba8Unorm, [],)
+                .is_none()
+        );
+        let entry = GpuSurfaceFormatCapabilities::from_normalized_facts(
+            GpuTextureFormat::Rgba8Unorm,
+            [
+                GpuSurfaceColorSpace::DisplayP3,
+                GpuSurfaceColorSpace::Srgb,
+                GpuSurfaceColorSpace::DisplayP3,
+            ],
+        )
+        .unwrap();
+        assert_eq!(
+            entry.color_spaces(),
+            &[GpuSurfaceColorSpace::Srgb, GpuSurfaceColorSpace::DisplayP3]
+        );
+        let capabilities = GpuSurfaceCapabilities::from_normalized_facts(
+            vec![entry],
+            vec![GpuTextureUsage::ColorAttachment],
+            vec![GpuSurfacePresentMode::Fifo],
+            vec![GpuSurfaceAlphaMode::Opaque],
+        );
+        assert!(capabilities.supports_pair(
+            GpuTextureFormat::Rgba8Unorm,
+            GpuSurfaceColorSpace::DisplayP3
+        ));
+        assert!(
+            !capabilities
+                .supports_pair(GpuTextureFormat::Rgba8Unorm, GpuSurfaceColorSpace::Bt2100Pq)
+        );
+        assert!(!capabilities.supports_format(GpuTextureFormat::Rgba16Float));
     }
 
     #[test]
@@ -494,6 +596,7 @@ mod tests {
                 0,
                 720,
                 GpuTextureFormat::Bgra8Unorm,
+                GpuSurfaceColorSpace::Srgb,
                 [GpuTextureUsage::ColorAttachment],
                 GpuSurfacePresentMode::Fifo,
                 GpuSurfaceAlphaMode::Opaque,
@@ -507,6 +610,7 @@ mod tests {
                 1280,
                 720,
                 GpuTextureFormat::Depth32Float,
+                GpuSurfaceColorSpace::Srgb,
                 [GpuTextureUsage::ColorAttachment],
                 GpuSurfacePresentMode::Fifo,
                 GpuSurfaceAlphaMode::Opaque,
@@ -520,6 +624,7 @@ mod tests {
                 1280,
                 720,
                 GpuTextureFormat::Bgra8Unorm,
+                GpuSurfaceColorSpace::Srgb,
                 [GpuTextureUsage::Sampled],
                 GpuSurfacePresentMode::Fifo,
                 GpuSurfaceAlphaMode::Opaque,
@@ -533,6 +638,7 @@ mod tests {
                 1280,
                 720,
                 GpuTextureFormat::Bgra8Unorm,
+                GpuSurfaceColorSpace::Srgb,
                 [
                     GpuTextureUsage::ColorAttachment,
                     GpuTextureUsage::TransientAttachment,

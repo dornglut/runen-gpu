@@ -41,10 +41,12 @@ fn configured_surface(window: Arc<Window>) -> (GpuContext, GpuSurfaceHandle, Gpu
         capabilities.supports_usage(GpuTextureUsage::ColorAttachment),
         "presentation surface must admit color-attachment usage"
     );
-    let format = *capabilities
-        .formats()
-        .first()
-        .expect("presentation surface must publish at least one normalized color format");
+    let format = capabilities
+        .format_capabilities()
+        .iter()
+        .find(|entry| entry.supports_color_space(GpuSurfaceColorSpace::Srgb))
+        .expect("presentation surface must publish an explicit sRGB pair")
+        .format();
     let present_mode = capabilities
         .present_modes()
         .iter()
@@ -63,6 +65,7 @@ fn configured_surface(window: Arc<Window>) -> (GpuContext, GpuSurfaceHandle, Gpu
         WIDTH,
         HEIGHT,
         format,
+        GpuSurfaceColorSpace::Srgb,
         [GpuTextureUsage::ColorAttachment],
         present_mode,
         alpha_mode,
