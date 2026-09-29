@@ -20,6 +20,8 @@ pub(super) fn adapter_facts(
     let downlevel = adapter.get_downlevel_capabilities();
     let native_limits = adapter.limits();
     let adapter_features = adapter.features();
+    let multiview_view_count =
+        normalized_multiview_view_count(adapter_features, native_limits.max_multiview_view_count);
     let formats = TEXTURE_FORMATS.iter().copied().map(|(normalized, native)| {
         let capabilities = apply_format_prerequisites(
             normalized,
@@ -55,7 +57,10 @@ pub(super) fn adapter_facts(
     if downlevel.is_webgpu_compliant() && supports_depth_attachment {
         supported.push(GpuCapabilityFeature::DepthAttachment);
     }
-    let adapter_limits = normalized_limits(&native_limits);
+    if multiview_view_count >= 2 {
+        supported.push(GpuCapabilityFeature::Multiview);
+    }
+    let adapter_limits = normalized_limits(&native_limits).with_multiview_limit(multiview_view_count);
     GpuAdapterFacts::new(
         map_backend(info.backend),
         map_class(info.device_type),
@@ -86,6 +91,14 @@ pub(super) fn adapter_facts(
         info.driver,
         info.driver_info,
     )
+}
+
+fn normalized_multiview_view_count(features: Features, raw_max: u32) -> u32 {
+    if !features.contains(Features::MULTIVIEW) {
+        return 0;
+    }
+    let effective = raw_max.min(31);
+    if effective >= 2 { effective } else { 0 }
 }
 
 fn normalized_limits(native: &wgpu::Limits) -> GpuLimits {
@@ -512,6 +525,26 @@ mod tests {
                 "{backend:?}"
             );
         }
+    }
+
+    #[test]
+    fn multiview_normalization_requires_feature_and_executable_limit() {
+        assert_eq!(
+            normalized_multiview_view_count(Features::empty(), 32),
+            0,
+            "raw limits without the feature must not advertise normalized multiview"
+        );
+        assert_eq!(
+            normalized_multiview_view_count(Features::MULTIVIEW, 1),
+            0,
+            "a one-view backend limit does not satisfy RunenGPU's multiview domain"
+        );
+        assert_eq!(normalized_multiview_view_count(Features::MULTIVIEW, 2), 2);
+        assert_eq!(
+            normalized_multiview_view_count(Features::MULTIVIEW, 32),
+            31,
+            "pinned WGPU's unsafe 32-view validation edge must be clamped"
+        );
     }
 
     #[test]
