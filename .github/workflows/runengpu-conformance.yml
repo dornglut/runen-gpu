@@ -484,6 +484,37 @@ jobs:
               --artifact-dir "${artifact_dir}" \
               --revision "${{ steps.revision.outputs.expected_revision }}"
 
+      - name: Validate browser compression feature census
+        env:
+          EXPECTED_REVISION: ${{ steps.revision.outputs.expected_revision }}
+        run: |
+          set -euo pipefail
+          report="${RUNNER_TEMP}/runengpu-browser-proof/browser-compression/report.json"
+          test -s "${report}"
+          python3 - "${report}" "${EXPECTED_REVISION}" <<'PY'
+          import json
+          import sys
+
+          with open(sys.argv[1], encoding="utf-8") as handle:
+              report = json.load(handle)
+          assert report["schema_version"] == 1
+          assert report["repository_revision"] == sys.argv[2]
+          assert report["authority"] == "direct_wgpu_adapter_characterization_only"
+          assert report["backend"] == "BrowserWebGpu"
+          assert report["adapter_correlation"] == "backend_vendor_device_equal_to_runengpu_context"
+          assert set(report["features"]) == {
+              "texture_compression_etc2", "texture_compression_astc"
+          }
+          assert all(type(value) is bool for value in report["features"].values())
+          PY
+
+      - name: Retain browser compression feature census
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: runengpu-browser-compression-${{ steps.revision.outputs.expected_revision }}
+          path: ${{ runner.temp }}/runengpu-browser-proof/browser-compression/report.json
+          if-no-files-found: error
+
       - name: Validate retained browser surface evidence report
         env:
           EXPECTED_REVISION: ${{ steps.revision.outputs.expected_revision }}
