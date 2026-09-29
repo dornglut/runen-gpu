@@ -38,6 +38,33 @@ fn fs_main(@builtin(view_index) view_index: u32) -> @location(0) vec4<f32> {
 }
 "#;
 
+const VERTEX_VIEW_INDEX_WGSL: &str = r#"
+struct VertexOutput {
+    @builtin(position) position: vec4<f32>,
+};
+
+@vertex
+fn vs_main(
+    @builtin(vertex_index) vertex_index: u32,
+    @builtin(view_index) view_index: u32,
+) -> VertexOutput {
+    var positions = array<vec2<f32>, 3>(
+        vec2<f32>(-1.0, -1.0),
+        vec2<f32>(3.0, -1.0),
+        vec2<f32>(-1.0, 3.0),
+    );
+    var output: VertexOutput;
+    let view_offset = f32(view_index) * 0.0;
+    output.position = vec4<f32>(positions[vertex_index] + vec2<f32>(view_offset), 0.0, 1.0);
+    return output;
+}
+
+@fragment
+fn fs_main() -> @location(0) vec4<f32> {
+    return vec4<f32>(0.0, 1.0, 1.0, 1.0);
+}
+"#;
+
 const NO_VIEW_INDEX_WGSL: &str = r#"
 struct VertexOutput {
     @builtin(position) position: vec4<f32>,
@@ -815,6 +842,24 @@ fn layered_attachment_boundaries_and_initialization_are_structural() {
     assert_eq!(
         depth_discard.cause(),
         GpuWorkOperationCause::InvalidAttachment
+    );
+}
+
+#[test]
+fn vertex_view_index_is_a_supported_multiview_input() {
+    let pipeline = multiview_pipeline(
+        "proof.r4.multiview.vertex-view-index",
+        VERTEX_VIEW_INDEX_WGSL,
+    );
+    assert!(matches!(
+        pipeline.requirements().get(GpuCapabilityFeature::Multiview),
+        Some(GpuCapabilityRequirement::Required(
+            GpuCapabilityFeature::Multiview
+        ))
+    ));
+    assert_eq!(
+        pipeline.state().multiview(),
+        Some(GpuMultiviewState::new(2).unwrap())
     );
 }
 
