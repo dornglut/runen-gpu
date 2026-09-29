@@ -747,12 +747,10 @@ fn lower_configuration(configuration: &GpuSurfaceConfiguration) -> SurfaceConfig
 }
 
 fn normalize_texture_format(native: TextureFormat) -> Option<GpuTextureFormat> {
-    TEXTURE_FORMATS
-        .iter()
-        .find_map(|(normalized, candidate)| {
-            (*candidate == native && !normalized.is_depth() && !normalized.is_stencil())
-                .then_some(*normalized)
-        })
+    TEXTURE_FORMATS.iter().find_map(|(normalized, candidate)| {
+        (*candidate == native && !normalized.is_depth() && !normalized.is_stencil())
+            .then_some(*normalized)
+    })
 }
 
 fn normalize_color_spaces(native: SurfaceColorSpaces) -> Vec<GpuSurfaceColorSpace> {
