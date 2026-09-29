@@ -748,8 +748,11 @@ fn lower_configuration(configuration: &GpuSurfaceConfiguration) -> SurfaceConfig
 
 fn normalize_texture_format(native: TextureFormat) -> Option<GpuTextureFormat> {
     TEXTURE_FORMATS.iter().find_map(|(normalized, candidate)| {
-        (*candidate == native && !normalized.is_depth() && !normalized.is_stencil())
-            .then_some(*normalized)
+        (*candidate == native
+            && !normalized.is_depth()
+            && !normalized.is_stencil()
+            && !crate::api::texture_format::is_block_compressed(*normalized))
+        .then_some(*normalized)
     })
 }
 
@@ -1120,6 +1123,10 @@ mod tests {
                 },
                 wgpu::SurfaceFormatCapabilities {
                     format: TextureFormat::Depth32Float,
+                    color_spaces: SurfaceColorSpaces::SRGB,
+                },
+                wgpu::SurfaceFormatCapabilities {
+                    format: TextureFormat::Bc1RgbaUnorm,
                     color_spaces: SurfaceColorSpaces::SRGB,
                 },
             ],
