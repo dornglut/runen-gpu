@@ -435,6 +435,8 @@ jobs:
           set -euo pipefail
           google-chrome --version
           chromedriver --version
+          command -v xvfb-run
+
 
       - name: Install lock-matched wasm-bindgen CLI
         run: |
@@ -477,9 +479,10 @@ jobs:
             --out-dir "${out_dir}" --out-name gpu_browser_webgpu
           artifact_dir="${RUNNER_TEMP}/runengpu-browser-proof"
           rm -rf "${artifact_dir}"
-          python3 tests/gpu_browser_webgpu/run.py "${out_dir}" \
-            --artifact-dir "${artifact_dir}" \
-            --revision "${{ steps.revision.outputs.expected_revision }}"
+          xvfb-run --auto-servernum --server-args='-screen 0 1024x768x24' \
+            python3 tests/gpu_browser_webgpu/run.py "${out_dir}" \
+              --artifact-dir "${artifact_dir}" \
+              --revision "${{ steps.revision.outputs.expected_revision }}"
 
       - name: Validate retained browser surface evidence report
         env:
