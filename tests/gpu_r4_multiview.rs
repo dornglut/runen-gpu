@@ -330,7 +330,6 @@ async fn run_primary_oracle(context: &GpuContext) {
     assert_eq!(pixel_at(&outputs[2], WIDTH / 2, HEIGHT / 2), VIEW_ONE_PIXEL);
 }
 
-
 fn two_layer_graph(
     name: &str,
     source: Option<(&'static str, &'static str)>,
@@ -343,14 +342,7 @@ fn two_layer_graph(
             GpuTextureDescriptor::new(
                 common(format!("{name} texture")),
                 GpuTextureDimension::D2,
-                GpuTextureExtent::new(
-                    &texture_label,
-                    GpuTextureDimension::D2,
-                    WIDTH,
-                    HEIGHT,
-                    2,
-                )
-                .unwrap(),
+                GpuTextureExtent::new(&texture_label, GpuTextureDimension::D2, WIDTH, HEIGHT, 2).unwrap(),
                 1,
                 1,
                 GpuTextureFormat::Rgba8Unorm,
@@ -630,22 +622,11 @@ fn layered_attachment_boundaries_and_initialization_are_structural() {
             GpuTextureDescriptor::new(
                 common("R4 multiview attachment boundaries"),
                 GpuTextureDimension::D2,
-                GpuTextureExtent::new(
-                    &resource_label,
-                    GpuTextureDimension::D2,
-                    WIDTH,
-                    HEIGHT,
-                    2,
-                )
-                .unwrap(),
+                GpuTextureExtent::new(&resource_label, GpuTextureDimension::D2, WIDTH, HEIGHT, 2).unwrap(),
                 1,
                 1,
                 GpuTextureFormat::Rgba8Unorm,
-                GpuTextureUsages::new(
-                    &resource_label,
-                    [GpuTextureUsage::ColorAttachment],
-                )
-                .unwrap(),
+                GpuTextureUsages::new(&resource_label, [GpuTextureUsage::ColorAttachment]).unwrap(),
                 GpuTextureInitialization::Uninitialized,
             )
             .unwrap(),
@@ -720,11 +701,11 @@ fn layered_attachment_boundaries_and_initialization_are_structural() {
         Ok(())
     })
     .unwrap();
-    let error = GpuPreparedWorkGraph::prepare(
-        label("R4 multiview uninitialized load graph"),
-        [fragment],
-    )
-    .expect_err("Load + Store must require every selected multiview layer to be initialized");
+    let error =
+        GpuPreparedWorkGraph::prepare(label("R4 multiview uninitialized load graph"), [fragment])
+            .expect_err(
+                "Load + Store must require every selected multiview layer to be initialized",
+            );
     assert_eq!(error.cause(), GpuWorkGraphCause::ReadBeforeInitialization);
 
     let multisampled_label = label("R4 multisampled D2Array rejection");
@@ -742,11 +723,7 @@ fn layered_attachment_boundaries_and_initialization_are_structural() {
         1,
         4,
         GpuTextureFormat::Rgba8Unorm,
-        GpuTextureUsages::new(
-            &multisampled_label,
-            [GpuTextureUsage::ColorAttachment],
-        )
-        .unwrap(),
+        GpuTextureUsages::new(&multisampled_label, [GpuTextureUsage::ColorAttachment]).unwrap(),
         GpuTextureInitialization::Uninitialized,
     )
     .expect_err("multisampled texture arrays must reject before multiview attachment construction");
@@ -759,14 +736,7 @@ fn layered_attachment_boundaries_and_initialization_are_structural() {
     let transient_error = GpuTextureDescriptor::new(
         common("R4 transient D2Array rejection"),
         GpuTextureDimension::D2,
-        GpuTextureExtent::new(
-            &transient_label,
-            GpuTextureDimension::D2,
-            WIDTH,
-            HEIGHT,
-            2,
-        )
-        .unwrap(),
+        GpuTextureExtent::new(&transient_label, GpuTextureDimension::D2, WIDTH, HEIGHT, 2).unwrap(),
         1,
         1,
         GpuTextureFormat::Rgba8Unorm,
@@ -792,22 +762,13 @@ fn layered_attachment_boundaries_and_initialization_are_structural() {
             GpuTextureDescriptor::new(
                 common("R4 multiview depth discard"),
                 GpuTextureDimension::D2,
-                GpuTextureExtent::new(
-                    &depth_label,
-                    GpuTextureDimension::D2,
-                    WIDTH,
-                    HEIGHT,
-                    2,
-                )
-                .unwrap(),
+                GpuTextureExtent::new(&depth_label, GpuTextureDimension::D2, WIDTH, HEIGHT, 2)
+                    .unwrap(),
                 1,
                 1,
                 GpuTextureFormat::Depth32Float,
-                GpuTextureUsages::new(
-                    &depth_label,
-                    [GpuTextureUsage::DepthStencilAttachment],
-                )
-                .unwrap(),
+                GpuTextureUsages::new(&depth_label, [GpuTextureUsage::DepthStencilAttachment])
+                    .unwrap(),
                 GpuTextureInitialization::Uninitialized,
             )
             .unwrap(),
