@@ -244,7 +244,7 @@ This is intentionally family-level rather than a mirror of WGPU's feature list.
 | Backend-neutral resource/work/submission/surface execution foundation | `CORE` | `CURRENT` |
 | Contract integrity and normalized admission limits | `CORE` | `PLAN` — R0 |
 | Portable texture/view/vertex/depth-stencil vocabulary | `CORE` | `PLAN` — R1 |
-| BC/ETC2/ASTC compression | `ADVANCED` | `CURRENT` — BC and ETC2/EAC R1 capability-gated; `PLAN` — ASTC requires separate accepted authority and execution proof |
+| BC/ETC2/ASTC compression | `ADVANCED` | `CURRENT` — BC, ETC2/EAC, and ASTC LDR R1 capability-gated; ASTC HDR and sliced-3D compression remain separate deferred work |
 | Anisotropy and complete portable raster/blend/depth/stencil state | `CORE` | `PLAN` — R2 |
 | Transient attachment content semantics | `ADVANCED` | `CURRENT` — first owned D2 single-layer R1/R2 slice; broader layered/external/aliasing forms require separate authority |
 | WGSL `f16` and mature standardized optional shader features | `ADVANCED` | `PLAN` — R3 |
