@@ -147,6 +147,22 @@ fn multiview_pipeline_with_count_and_samples(
     view_count: u32,
     sample_count: u32,
 ) -> GpuRenderPipelineDescriptor {
+    multiview_pipeline_with_count_samples_and_depth(
+        source_key,
+        source_text,
+        view_count,
+        sample_count,
+        false,
+    )
+}
+
+fn multiview_pipeline_with_count_samples_and_depth(
+    source_key: &'static str,
+    source_text: &'static str,
+    view_count: u32,
+    sample_count: u32,
+    depth: bool,
+) -> GpuRenderPipelineDescriptor {
     let [source] = admit_static_wgsl_sources([(source_key, 1, source_text)]).unwrap();
     let vertex = GpuEntryPointName::new("vs_main").unwrap();
     let fragment = GpuEntryPointName::new("fs_main").unwrap();
@@ -162,11 +178,25 @@ fn multiview_pipeline_with_count_and_samples(
         GpuColorWriteMask::ALL,
     )
     .unwrap();
+    let depth_stencil = depth
+        .then(|| {
+            GpuDepthStencilStateDescriptor::new(
+                GpuTextureFormat::Depth32Float,
+                Some(GpuDepthStateDescriptor::new(
+                    true,
+                    GpuCompareFunction::LessEqual,
+                )),
+                None,
+                GpuDepthBiasState::default(),
+            )
+        })
+        .transpose()
+        .unwrap();
     let state = GpuRenderPipelineStateDescriptor::new(
         GpuVertexInputStateDescriptor::new([]).unwrap(),
         Some(GpuFragmentOutputStateDescriptor::new([target])),
         GpuPrimitiveStateDescriptor::default(),
-        None,
+        depth_stencil,
         GpuMultisampleStateDescriptor::new(sample_count, (1_u64 << sample_count) - 1, false)
             .unwrap(),
     )
@@ -190,13 +220,33 @@ fn texture_view(
     base_layer: u32,
     layer_count: u32,
 ) -> GpuTextureViewHandle {
+    texture_view_with_aspect(
+        scope,
+        texture,
+        name,
+        dimension,
+        base_layer,
+        layer_count,
+        GpuTextureAspect::Color,
+    )
+}
+
+fn texture_view_with_aspect(
+    scope: &mut GpuResourceScope,
+    texture: &GpuTextureHandle,
+    name: &str,
+    dimension: GpuTextureViewDimension,
+    base_layer: u32,
+    layer_count: u32,
+    aspect: GpuTextureAspect,
+) -> GpuTextureViewHandle {
     let range = GpuTextureSubresourceRange::new(
         texture.descriptor().common().label(),
         0,
         1,
         base_layer,
         layer_count,
-        GpuTextureAspect::Color,
+        aspect,
     )
     .unwrap();
     scope
@@ -368,7 +418,7 @@ fn primary_graph() -> (GpuPreparedWorkGraph, [GpuReadbackId; 3]) {
     (graph, ids)
 }
 
-fn layered_multisample_graph() -> (GpuPreparedWorkGraph, [GpuReadbackId; 3]) {
+fn layered_multisample_graph(include_depth: bool) -> (GpuPreparedWorkGraph, [GpuReadbackId; 3]) {
     let mut scope = GpuResourceScope::new();
     let source_label = label("R4 layered MSAA source");
     let source = scope
@@ -441,6 +491,61 @@ fn layered_multisample_graph() -> (GpuPreparedWorkGraph, [GpuReadbackId; 3]) {
         1,
         2,
     );
+    let depth_attachment = if include_depth {
+        let depth_label = label("R4 layered MSAA depth");
+        let depth = scope
+            .texture(
+                GpuTextureDescriptor::new(
+                    common("R4 layered MSAA depth"),
+                    GpuTextureDimension::D2,
+                    GpuTextureExtent::new(
+                        &depth_label,
+                        GpuTextureDimension::D2,
+                        WIDTH,
+                        HEIGHT,
+                        3,
+                    )
+                    .unwrap(),
+                    1,
+                    4,
+                    GpuTextureFormat::Depth32Float,
+                    GpuTextureUsages::new(
+                        &depth_label,
+                        [GpuTextureUsage::DepthStencilAttachment],
+                    )
+                    .unwrap(),
+                    GpuTextureInitialization::Uninitialized,
+                )
+                .unwrap(),
+            )
+            .unwrap();
+        let depth_view = texture_view_with_aspect(
+            &mut scope,
+            &depth,
+            "R4 layered MSAA depth layers 1 2",
+            GpuTextureViewDimension::D2Array,
+            1,
+            2,
+            GpuTextureAspect::DepthOnly,
+        );
+        Some(
+            GpuRenderDepthStencilAttachment::new(
+                depth_view,
+                Some(
+                    GpuDepthAttachmentState::new(
+                        GpuDepthStencilAccess::ReadWrite,
+                        GpuDepthAttachmentLoad::Clear(GpuDepthClearValue::new(1.0).unwrap()),
+                        GpuAttachmentStore::Store,
+                    )
+                    .unwrap(),
+                ),
+                None,
+            )
+            .unwrap(),
+        )
+    } else {
+        None
+    };
     let sentinel = GpuRenderOperation::new(
         [GpuRenderColorAttachment::new(
             sentinel_view,
@@ -454,11 +559,12 @@ fn layered_multisample_graph() -> (GpuPreparedWorkGraph, [GpuReadbackId; 3]) {
         None,
     )
     .unwrap();
-    let pipeline = multiview_pipeline_with_count_and_samples(
+    let pipeline = multiview_pipeline_with_count_samples_and_depth(
         "proof.r4.layered-msaa.view-index",
         VIEW_INDEX_WGSL,
         2,
         4,
+        include_depth,
     );
     let layered = GpuRenderOperation::new(
         [GpuRenderColorAttachment::new(
@@ -468,7 +574,7 @@ fn layered_multisample_graph() -> (GpuPreparedWorkGraph, [GpuReadbackId; 3]) {
             Some(GpuMultisampleResolveTarget::new(destination_view).unwrap()),
         )
         .unwrap()],
-        None,
+        depth_attachment,
         [render_draw(pipeline)],
         None,
     )
@@ -525,7 +631,7 @@ fn layered_multisample_graph() -> (GpuPreparedWorkGraph, [GpuReadbackId; 3]) {
 
 #[test]
 fn layered_multisample_graph_tracks_selected_layers_and_independent_capabilities() {
-    let (graph, _) = layered_multisample_graph();
+    let (graph, _) = layered_multisample_graph(false);
     assert_eq!(graph.nodes().len(), 5);
 
     let mut scope = GpuResourceScope::new();
@@ -619,8 +725,8 @@ async fn run_primary_oracle(context: &GpuContext) {
     assert_eq!(pixel_at(&outputs[2], WIDTH / 2, HEIGHT / 2), VIEW_ONE_PIXEL);
 }
 
-async fn run_layered_multisample_oracle(context: &GpuContext) {
-    let (graph, ids) = layered_multisample_graph();
+async fn run_layered_multisample_oracle(context: &GpuContext, include_depth: bool) {
+    let (graph, ids) = layered_multisample_graph(include_depth);
     let prepared = context.prepare_submission(graph).await.unwrap();
     let submission = context.submit_prepared(prepared).unwrap();
     for (layer, (id, expected)) in ids
@@ -824,12 +930,15 @@ fn descriptor(
 pub(crate) struct LayeredMultisampleProofOutcome {
     pub multisample_array_supported: bool,
     pub multiview_supported: bool,
+    pub depth_stencil_supported: bool,
+    pub depth_stencil_exercised: bool,
     pub exercised: bool,
 }
 
 fn layered_multisample_descriptor(
     backend: GpuBackendFamily,
     fallback: Option<GpuSoftwareFallbackPolicy>,
+    include_depth: bool,
 ) -> GpuContextDescriptor {
     let mut requirements = GpuCapabilityProfile::OffscreenGraphicsBaseline.requirements();
     for feature in [
@@ -846,6 +955,12 @@ fn layered_multisample_descriptor(
         .require_limit(GpuLimitKind::MaxMultiviewViewCount, 2)
         .with_allowed_backends([backend])
         .with_label("R4 layered MSAA retained proof");
+    if include_depth {
+        descriptor = descriptor.require_format_role(
+            GpuTextureFormat::Depth32Float,
+            GpuFormatRole::DepthStencilAttachment,
+        );
+    }
     if let Some(fallback) = fallback {
         descriptor = descriptor.with_fallback_policy(fallback);
     }
@@ -860,6 +975,9 @@ pub(crate) async fn run_layered_multisample_on_adapter(
     let supported = census.adapter_facts().supported();
     let multisample_array_supported = supported.supports(GpuCapabilityFeature::MultisampleArray);
     let multiview_supported = supported.supports(GpuCapabilityFeature::Multiview);
+    let depth_stencil_supported = supported
+        .format(GpuTextureFormat::Depth32Float)
+        .is_some_and(|facts| facts.depth_stencil);
     assert!(
         !census
             .device_facts()
@@ -867,7 +985,7 @@ pub(crate) async fn run_layered_multisample_on_adapter(
         "census context must not enable optional MultisampleArray implicitly"
     );
     if !multisample_array_supported {
-        let rejected = GpuContext::request(layered_multisample_descriptor(backend, fallback))
+        let rejected = GpuContext::request(layered_multisample_descriptor(backend, fallback, depth_stencil_supported))
             .await
             .expect_err("unsupported MultisampleArray must reject a required context");
         assert_eq!(
@@ -883,10 +1001,12 @@ pub(crate) async fn run_layered_multisample_on_adapter(
         return LayeredMultisampleProofOutcome {
             multisample_array_supported,
             multiview_supported,
+            depth_stencil_supported,
+            depth_stencil_exercised: false,
             exercised: false,
         };
     }
-    let (graph, _) = layered_multisample_graph();
+    let (graph, _) = layered_multisample_graph(false);
     let error = census
         .prepare_submission(graph)
         .await
@@ -899,10 +1019,12 @@ pub(crate) async fn run_layered_multisample_on_adapter(
         return LayeredMultisampleProofOutcome {
             multisample_array_supported,
             multiview_supported,
+            depth_stencil_supported,
+            depth_stencil_exercised: false,
             exercised: false,
         };
     }
-    let context = GpuContext::request(layered_multisample_descriptor(backend, fallback))
+    let context = GpuContext::request(layered_multisample_descriptor(backend, fallback, depth_stencil_supported))
         .await
         .expect("advertised layered MSAA capability must admit the retained proof context");
     assert_eq!(context.adapter_facts(), census.adapter_facts());
@@ -916,10 +1038,12 @@ pub(crate) async fn run_layered_multisample_on_adapter(
             .device_facts()
             .is_enabled(GpuCapabilityFeature::Multiview)
     );
-    run_layered_multisample_oracle(&context).await;
+    run_layered_multisample_oracle(&context, depth_stencil_supported).await;
     LayeredMultisampleProofOutcome {
         multisample_array_supported,
         multiview_supported,
+        depth_stencil_supported,
+        depth_stencil_exercised: depth_stencil_supported,
         exercised: true,
     }
 }
@@ -1595,7 +1719,13 @@ fn layered_multisample_native_execution_matches_normalized_adapter_facts() {
     ));
     if outcome.multisample_array_supported && outcome.multiview_supported {
         assert!(outcome.exercised);
-        println!("Layered MSAA Vulkan: EXERCISED");
+        if outcome.depth_stencil_supported {
+            assert!(outcome.depth_stencil_exercised);
+        }
+        println!(
+            "Layered MSAA Vulkan: EXERCISED (depth={})",
+            outcome.depth_stencil_exercised
+        );
     } else {
         println!(
             "Layered MSAA Vulkan: UNSUPPORTED (array={}, multiview={})",

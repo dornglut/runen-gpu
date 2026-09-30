@@ -1202,8 +1202,7 @@ fn validate_texture_view_dimension(
     };
     let multisample_compatible = parent.sample_count() == 1
         || dimension == GpuTextureViewDimension::D2
-        || (dimension == GpuTextureViewDimension::D2Array
-            && parent.extent().depth_or_layers() > 1);
+        || (dimension == GpuTextureViewDimension::D2Array && parent.extent().depth_or_layers() > 1);
     if !shape_compatible || !multisample_compatible {
         return Err(GpuResourceDescriptorError::invalid(
             "construct GPU texture-view descriptor",

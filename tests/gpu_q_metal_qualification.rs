@@ -609,6 +609,12 @@ fn metal_qualification_records_exact_public_api_evidence() {
             layered_multisample.exercised,
             "advertised Metal layered MSAA must execute the public resolve oracle"
         );
+        if layered_multisample.depth_stencil_supported {
+            assert!(
+                layered_multisample.depth_stencil_exercised,
+                "advertised Metal layered depth/stencil MSAA must execute with the public resolve oracle"
+            );
+        }
     }
     retained_sampler_anisotropy::realize_anisotropic_sampler(&context);
     let (transient_graph, transient_readback_id) = retained_transient_attachment::graph();
@@ -717,6 +723,10 @@ fn metal_qualification_records_exact_public_api_evidence() {
             "multiview": proof_disposition(multiview.fully_exercised()),
             "multiview_normalized_max": multiview.normalized_max,
             "layered_multisample": proof_disposition(layered_multisample.exercised),
+            "layered_multisample_depth_supported":
+                layered_multisample.depth_stencil_supported,
+            "layered_multisample_depth":
+                proof_disposition(layered_multisample.depth_stencil_exercised),
             "sampler_anisotropy": "EXERCISED",
             "transient_attachment": "EXERCISED",
             "transient_depth": "EXERCISED",

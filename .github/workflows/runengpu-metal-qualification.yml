@@ -288,6 +288,9 @@ jobs:
               assert report["proofs"]["multiview"] == "UNSUPPORTED"
           expected_layered_msaa = "EXERCISED" if normalized_multisample_array and normalized_multiview else "UNSUPPORTED"
           assert report["proofs"]["layered_multisample"] == expected_layered_msaa
+          depth_supported = report["proofs"]["layered_multisample_depth_supported"]
+          expected_layered_depth = "EXERCISED" if expected_layered_msaa == "EXERCISED" and depth_supported else "UNSUPPORTED"
+          assert report["proofs"]["layered_multisample_depth"] == expected_layered_depth
 
           assert report["proofs"]["sampler_anisotropy"] == "EXERCISED"
           assert report["proofs"]["transient_attachment"] == "EXERCISED"
