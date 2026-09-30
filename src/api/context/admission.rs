@@ -1845,6 +1845,83 @@ mod tests {
         }
     }
     #[test]
+    fn etc2_eac_roles_admit_only_supplied_supported_facts() {
+        let formats = [
+            GpuTextureFormat::Etc2Rgb8Unorm,
+            GpuTextureFormat::Etc2Rgb8UnormSrgb,
+            GpuTextureFormat::Etc2Rgb8A1Unorm,
+            GpuTextureFormat::Etc2Rgb8A1UnormSrgb,
+            GpuTextureFormat::Etc2Rgba8Unorm,
+            GpuTextureFormat::Etc2Rgba8UnormSrgb,
+            GpuTextureFormat::EacR11Unorm,
+            GpuTextureFormat::EacR11Snorm,
+            GpuTextureFormat::EacRg11Unorm,
+            GpuTextureFormat::EacRg11Snorm,
+        ];
+        let supported = GpuTextureFormatCapabilities {
+            sampled: true,
+            filterable: true,
+            copy_source: true,
+            copy_destination: true,
+            ..GpuTextureFormatCapabilities::none()
+        };
+        let adapter_for = |format, facts| {
+            GpuAdapterFacts::new(
+                GpuBackendFamily::Vulkan,
+                GpuAdapterClass::Discrete,
+                GpuSoftwareStatus::Hardware,
+                GpuFallbackStatus::ConfirmedNotFallback,
+                GpuCapabilities::from_normalized_facts([], limits(), [(format, facts)]),
+                GpuAdapterLimits::new(limits()),
+                alignments(),
+            )
+        };
+        for format in formats {
+            for role in [
+                GpuFormatRole::Sampled,
+                GpuFormatRole::Filterable,
+                GpuFormatRole::CopySource,
+                GpuFormatRole::CopyDestination,
+            ] {
+                let descriptor = GpuContextDescriptor::new(GpuCapabilityRequirements::new())
+                    .require_format_role(format, role);
+                assert!(
+                    evaluate_candidate(&descriptor, adapter_for(format, supported), true).is_ok(),
+                    "{format:?} {role:?} supported role"
+                );
+                let error = evaluate_candidate(
+                    &descriptor,
+                    adapter_for(format, GpuTextureFormatCapabilities::none()),
+                    true,
+                )
+                .expect_err("absent ETC2/EAC role must reject before device creation");
+                assert_eq!(
+                    error.category(),
+                    GpuContextRequestErrorCategory::UnsupportedFormatRole,
+                    "{format:?} {role:?}"
+                );
+            }
+            for role in [
+                GpuFormatRole::StorageRead,
+                GpuFormatRole::StorageWrite,
+                GpuFormatRole::ColorAttachment,
+                GpuFormatRole::Blendable,
+                GpuFormatRole::DepthStencil,
+            ] {
+                let descriptor = GpuContextDescriptor::new(GpuCapabilityRequirements::new())
+                    .require_format_role(format, role);
+                let error = evaluate_candidate(&descriptor, adapter_for(format, supported), true)
+                    .expect_err("ETC2/EAC forbidden role must reject");
+                assert_eq!(
+                    error.category(),
+                    GpuContextRequestErrorCategory::UnsupportedFormatRole,
+                    "{format:?} {role:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
     fn stencil8_role_admission_preserves_supplied_adapter_facts() {
         let format = GpuTextureFormat::Stencil8;
         let supported = GpuTextureFormatCapabilities {

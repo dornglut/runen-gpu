@@ -102,6 +102,10 @@ const done = arguments[arguments.length - 1];
         typeof wasm.runengpu_browser_packed32_sampled_mask !== "function" ||
         typeof wasm.runengpu_browser_packed32_color_attachment_mask !== "function" ||
         typeof wasm.runengpu_browser_bc_exercised_mask !== "function" ||
+        typeof wasm.runengpu_browser_etc2_exercised_mask !== "function" ||
+        typeof wasm.runengpu_browser_etc2_decode_case !== "function" ||
+        typeof wasm.runengpu_browser_etc2_decode_actual !== "function" ||
+        typeof wasm.runengpu_browser_etc2_decode_expected !== "function" ||
         typeof wasm.runengpu_browser_compression_feature_mask !== "function" ||
         typeof wasm.runengpu_browser_blend_state_exercised_mask !== "function" ||
         typeof wasm.runengpu_browser_optional_format_roles_mask !== "function" ||
@@ -146,6 +150,10 @@ const done = arguments[arguments.length - 1];
           packed32SampledMask: wasm.runengpu_browser_packed32_sampled_mask(),
           packed32ColorAttachmentMask: wasm.runengpu_browser_packed32_color_attachment_mask(),
           bcMask: wasm.runengpu_browser_bc_exercised_mask(),
+          etc2Mask: wasm.runengpu_browser_etc2_exercised_mask(),
+          etc2DecodeCase: wasm.runengpu_browser_etc2_decode_case(),
+          etc2DecodeActual: wasm.runengpu_browser_etc2_decode_actual() >>> 0,
+          etc2DecodeExpected: wasm.runengpu_browser_etc2_decode_expected() >>> 0,
           compressionFeatureMask: wasm.runengpu_browser_compression_feature_mask(),
           blendStateMask: wasm.runengpu_browser_blend_state_exercised_mask(),
           optionalFormatRolesMask: wasm.runengpu_browser_optional_format_roles_mask(),
@@ -1067,6 +1075,46 @@ def main() -> int:
                 "RunenGPU actual-browser BC: PARTIAL SUPPORT IS NOT QUALIFIED "
                 f"(mask={bc_mask:#x}, expected 0 or {bc_full_mask:#x})"
             )
+
+        etc2_names = (
+            "Etc2Rgb8Unorm", "Etc2Rgb8UnormSrgb",
+            "Etc2Rgb8A1Unorm", "Etc2Rgb8A1UnormSrgb",
+            "Etc2Rgba8Unorm", "Etc2Rgba8UnormSrgb",
+            "EacR11Unorm", "EacR11Snorm", "EacRg11Unorm", "EacRg11Snorm",
+        )
+        etc2_mask = read_exercised_mask(value, "etc2Mask", "ETC2/EAC", len(etc2_names))
+        etc2_full_mask = (1 << len(etc2_names)) - 1
+        compression_mask = value["compressionFeatureMask"]
+        if not compression_mask & 1:
+            raise RuntimeError(
+                "RunenGPU browser ETC2/EAC acceptance requires positive correlated direct-WGPU ETC2 support"
+            )
+        if etc2_mask != etc2_full_mask:
+            raise RuntimeError(
+                "RunenGPU browser ETC2/EAC execution must cover all ten advertised formats "
+                f"(mask={etc2_mask:#x}, expected={etc2_full_mask:#x})"
+            )
+        decoded_names = (
+            "Etc2Rgb8Unorm", "Etc2Rgb8UnormSrgb",
+            "Etc2Rgba8Unorm", "Etc2Rgba8UnormSrgb",
+            "EacR11Unorm", "EacRg11Unorm", "EacR11Snorm", "EacRg11Snorm",
+        )
+        decoded_case = value.get("etc2DecodeCase")
+        decoded_actual = value.get("etc2DecodeActual")
+        decoded_expected = value.get("etc2DecodeExpected")
+        if (type(decoded_case) is not int or not 0 <= decoded_case <= len(decoded_names)
+                or type(decoded_actual) is not int or not 0 <= decoded_actual <= 0xffffffff
+                or type(decoded_expected) is not int or not 0 <= decoded_expected <= 0xffffffff):
+            raise RuntimeError("invalid browser ETC2 decoded-pixel diagnostic")
+        if decoded_case:
+            raise RuntimeError(
+                f"RunenGPU browser {decoded_names[decoded_case - 1]} decoded pixel differs: "
+                f"actual={decoded_actual.to_bytes(4, 'little').hex(' ')}, "
+                f"expected={decoded_expected.to_bytes(4, 'little').hex(' ')}"
+            )
+        for format_name in etc2_names:
+            print(f"RunenGPU actual-browser {format_name}: " +
+                  ("EXERCISED (compressed upload + copy + exact readback)" if etc2_mask else "UNSUPPORTED"))
 
         blend_state_names = ("independent_subtract", "min_max")
         blend_state_mask = read_exercised_mask(

@@ -409,6 +409,12 @@ fn requested_features(candidate: &crate::GpuCandidateAdmissionReport) -> Feature
         ) {
             features |= Features::TEXTURE_COMPRESSION_BC;
         }
+        if matches!(
+            texture_format::compression_family(format),
+            Some(texture_format::GpuTextureCompressionFamily::Etc2)
+        ) {
+            features |= Features::TEXTURE_COMPRESSION_ETC2;
+        }
         match (format, role) {
             (
                 GpuTextureFormat::R32Float
@@ -1233,6 +1239,39 @@ mod tests {
                 assert!(
                     requested_features(&candidate_with_format_role(format, role))
                         .contains(Features::TEXTURE_COMPRESSION_BC),
+                    "{format:?} {role:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn etc2_eac_format_roles_request_only_the_private_etc2_feature() {
+        assert!(!requested_features(&candidate()).contains(Features::TEXTURE_COMPRESSION_ETC2));
+        for format in [
+            GpuTextureFormat::Etc2Rgb8Unorm,
+            GpuTextureFormat::Etc2Rgb8UnormSrgb,
+            GpuTextureFormat::Etc2Rgb8A1Unorm,
+            GpuTextureFormat::Etc2Rgb8A1UnormSrgb,
+            GpuTextureFormat::Etc2Rgba8Unorm,
+            GpuTextureFormat::Etc2Rgba8UnormSrgb,
+            GpuTextureFormat::EacR11Unorm,
+            GpuTextureFormat::EacR11Snorm,
+            GpuTextureFormat::EacRg11Unorm,
+            GpuTextureFormat::EacRg11Snorm,
+        ] {
+            for role in [
+                GpuFormatRole::Sampled,
+                GpuFormatRole::CopySource,
+                GpuFormatRole::CopyDestination,
+            ] {
+                let features = requested_features(&candidate_with_format_role(format, role));
+                assert!(
+                    features.contains(Features::TEXTURE_COMPRESSION_ETC2),
+                    "{format:?} {role:?}"
+                );
+                assert!(
+                    !features.contains(Features::TEXTURE_COMPRESSION_BC),
                     "{format:?} {role:?}"
                 );
             }

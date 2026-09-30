@@ -1,5 +1,5 @@
 #[cfg(target_arch = "wasm32")]
-#[path = "gpu_r1_bc_texture_formats.rs"]
+#[path = "gpu_r1_compressed_texture_formats.rs"]
 mod retained_bc;
 #[cfg(target_arch = "wasm32")]
 #[path = "gpu_r2_blend_state.rs"]
@@ -84,6 +84,10 @@ mod browser {
         static PACKED32_SAMPLED_MASK: RefCell<u32> = RefCell::new(0);
         static PACKED32_COLOR_ATTACHMENT_MASK: RefCell<u32> = RefCell::new(0);
         static BC_EXERCISED_MASK: RefCell<u32> = RefCell::new(0);
+        static ETC2_EXERCISED_MASK: RefCell<u32> = RefCell::new(0);
+        static ETC2_DECODE_CASE: RefCell<u32> = RefCell::new(0);
+        static ETC2_DECODE_ACTUAL: RefCell<u32> = RefCell::new(0);
+        static ETC2_DECODE_EXPECTED: RefCell<u32> = RefCell::new(0);
         static COMPRESSION_FEATURE_MASK: RefCell<u32> = RefCell::new(0);
         static BLEND_STATE_EXERCISED_MASK: RefCell<u32> = RefCell::new(0);
         static OPTIONAL_FORMAT_ROLES_MASK: RefCell<u32> = RefCell::new(0);
@@ -2290,6 +2294,19 @@ fn cs_main() {
         run_browser_packed32().await;
         let bc_mask = retained_bc::run_browser_bc().await;
         BC_EXERCISED_MASK.with(|slot| *slot.borrow_mut() = bc_mask);
+        let (etc2_mask, decoded_mismatch) = if compression_features & 1 != 0 {
+            retained_bc::run_browser_etc2(transient_context.adapter_facts()).await
+        } else {
+            (0, None)
+        };
+        ETC2_EXERCISED_MASK.with(|slot| *slot.borrow_mut() = etc2_mask);
+        if let Some(mismatch) = decoded_mismatch {
+            ETC2_DECODE_CASE.with(|slot| *slot.borrow_mut() = mismatch.case);
+            ETC2_DECODE_ACTUAL
+                .with(|slot| *slot.borrow_mut() = u32::from_le_bytes(mismatch.actual));
+            ETC2_DECODE_EXPECTED
+                .with(|slot| *slot.borrow_mut() = u32::from_le_bytes(mismatch.expected));
+        }
         let blend_state_mask = retained_blend_state::run_browser_blend_state().await;
         BLEND_STATE_EXERCISED_MASK.with(|slot| *slot.borrow_mut() = blend_state_mask);
         let optional_roles_mask = retained_optional_format_roles::run_on_adapter(
@@ -2462,6 +2479,26 @@ fn cs_main() {
     #[unsafe(no_mangle)]
     pub extern "C" fn runengpu_browser_bc_exercised_mask() -> u32 {
         BC_EXERCISED_MASK.with(|mask| *mask.borrow())
+    }
+
+    #[unsafe(no_mangle)]
+    pub extern "C" fn runengpu_browser_etc2_exercised_mask() -> u32 {
+        ETC2_EXERCISED_MASK.with(|mask| *mask.borrow())
+    }
+
+    #[unsafe(no_mangle)]
+    pub extern "C" fn runengpu_browser_etc2_decode_case() -> u32 {
+        ETC2_DECODE_CASE.with(|value| *value.borrow())
+    }
+
+    #[unsafe(no_mangle)]
+    pub extern "C" fn runengpu_browser_etc2_decode_actual() -> u32 {
+        ETC2_DECODE_ACTUAL.with(|value| *value.borrow())
+    }
+
+    #[unsafe(no_mangle)]
+    pub extern "C" fn runengpu_browser_etc2_decode_expected() -> u32 {
+        ETC2_DECODE_EXPECTED.with(|value| *value.borrow())
     }
 
     #[unsafe(no_mangle)]
