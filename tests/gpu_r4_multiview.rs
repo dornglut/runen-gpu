@@ -498,22 +498,13 @@ fn layered_multisample_graph(include_depth: bool) -> (GpuPreparedWorkGraph, [Gpu
                 GpuTextureDescriptor::new(
                     common("R4 layered MSAA depth"),
                     GpuTextureDimension::D2,
-                    GpuTextureExtent::new(
-                        &depth_label,
-                        GpuTextureDimension::D2,
-                        WIDTH,
-                        HEIGHT,
-                        3,
-                    )
-                    .unwrap(),
+                    GpuTextureExtent::new(&depth_label, GpuTextureDimension::D2, WIDTH, HEIGHT, 3)
+                        .unwrap(),
                     1,
                     4,
                     GpuTextureFormat::Depth32Float,
-                    GpuTextureUsages::new(
-                        &depth_label,
-                        [GpuTextureUsage::DepthStencilAttachment],
-                    )
-                    .unwrap(),
+                    GpuTextureUsages::new(&depth_label, [GpuTextureUsage::DepthStencilAttachment])
+                        .unwrap(),
                     GpuTextureInitialization::Uninitialized,
                 )
                 .unwrap(),
@@ -949,6 +940,13 @@ fn layered_multisample_descriptor(
             .insert(GpuCapabilityRequirement::Required(feature))
             .unwrap();
     }
+    if include_depth {
+        requirements
+            .insert(GpuCapabilityRequirement::Required(
+                GpuCapabilityFeature::DepthAttachment,
+            ))
+            .unwrap();
+    }
     let mut descriptor = GpuContextDescriptor::new(requirements)
         .require_format_role(GpuTextureFormat::Rgba8Unorm, GpuFormatRole::ColorAttachment)
         .require_format_role(GpuTextureFormat::Rgba8Unorm, GpuFormatRole::CopySource)
@@ -956,10 +954,8 @@ fn layered_multisample_descriptor(
         .with_allowed_backends([backend])
         .with_label("R4 layered MSAA retained proof");
     if include_depth {
-        descriptor = descriptor.require_format_role(
-            GpuTextureFormat::Depth32Float,
-            GpuFormatRole::DepthStencil,
-        );
+        descriptor = descriptor
+            .require_format_role(GpuTextureFormat::Depth32Float, GpuFormatRole::DepthStencil);
     }
     if let Some(fallback) = fallback {
         descriptor = descriptor.with_fallback_policy(fallback);
@@ -985,9 +981,13 @@ pub(crate) async fn run_layered_multisample_on_adapter(
         "census context must not enable optional MultisampleArray implicitly"
     );
     if !multisample_array_supported {
-        let rejected = GpuContext::request(layered_multisample_descriptor(backend, fallback, depth_stencil_supported))
-            .await
-            .expect_err("unsupported MultisampleArray must reject a required context");
+        let rejected = GpuContext::request(layered_multisample_descriptor(
+            backend,
+            fallback,
+            depth_stencil_supported,
+        ))
+        .await
+        .expect_err("unsupported MultisampleArray must reject a required context");
         assert_eq!(
             rejected.category(),
             GpuContextRequestErrorCategory::NoAdmissibleCandidate
@@ -1024,9 +1024,13 @@ pub(crate) async fn run_layered_multisample_on_adapter(
             exercised: false,
         };
     }
-    let context = GpuContext::request(layered_multisample_descriptor(backend, fallback, depth_stencil_supported))
-        .await
-        .expect("advertised layered MSAA capability must admit the retained proof context");
+    let context = GpuContext::request(layered_multisample_descriptor(
+        backend,
+        fallback,
+        depth_stencil_supported,
+    ))
+    .await
+    .expect("advertised layered MSAA capability must admit the retained proof context");
     assert_eq!(context.adapter_facts(), census.adapter_facts());
     assert!(
         context
