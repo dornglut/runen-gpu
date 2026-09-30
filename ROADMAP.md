@@ -178,9 +178,15 @@ Goal: cover mature generic GPU-driven execution without adding renderer meaning.
 - occlusion queries alongside existing timestamp query authority;
 - normalized indirect-first-instance semantics are current: portable indirect draws retain an explicit zero-only contract while capability-gated draws that may consume a nonzero first instance require the normalized optional feature;
 - contiguous single-sampled multiview rendering is `CURRENT` behind truthful
-  capability and limit gates for the accepted 2..=31 D2Array slice; selective or
-  sparse view masks, multisampled arrays/layered MSAA, layered discard, and broader
-  layered execution remain outside this accepted contract;
+  capability and limit gates for the accepted 2..=31 D2Array slice;
+- owned multisampled D2 arrays and contiguous layered-MSAA rendering are `CURRENT`
+  behind the independent `MultisampleArray` gate and, for 2..=31 layered
+  attachments, the existing `Multiview` gate and view-count limit. The accepted
+  slice includes matching layered color resolve and depth/stencil attachment use
+  where the normalized format role is advertised, while ordinary one-layer D2
+  views remain usable without `Multiview`. Selective/sparse masks, layered
+  discard, transient layered arrays, and broader layered execution remain outside
+  this accepted contract;
 - keep multi-draw-count deferred while its backend/platform scope remains narrow;
   it is not a prerequisite for GPU-driven execution or for the Metal/M3 path;
 - add further GPU-driven execution only when each exact semantic contract meets
@@ -247,7 +253,7 @@ This is intentionally family-level rather than a mirror of WGPU's feature list.
 | Partially-bound/sparse binding arrays | `ADVANCED` | `DEFER` until target support and occupancy semantics justify stable authority |
 | Occlusion queries | `CORE` | `PLAN` — R4 |
 | Indirect-first-instance | `ADVANCED` | `CURRENT` — explicit zero-only / capability-gated may-be-nonzero indirect-draw semantics |
-| Multiview and multisampled arrays | `ADVANCED` | `CURRENT` — contiguous single-sampled D2Array multiview slice; selective/sparse masks, multisampled arrays/layered MSAA, layered discard, and broader layered execution remain separate R4 work |
+| Multiview and multisampled arrays | `ADVANCED` | `CURRENT` — contiguous single-sampled D2Array multiview plus owned multisampled D2 arrays and the accepted contiguous layered-MSAA/resolve/depth slice behind independent capability and limit admission; selective/sparse masks, layered discard, transient layered arrays, and broader layered execution remain separate R4 work |
 | Multi-draw-count and pipeline statistics | `ADVANCED` | `DEFER` while backend/platform scope remains narrow |
 | Explicit surface color spaces and wide-gamut/HDR physical presentation | `ADVANCED` | `CURRENT` — R5 per-format physical pair selection and public browser DisplayP3 execution; broader platform and HDR qualification remains open |
 | Normalized imported-resource contract | `ADVANCED` | `PLAN` — R6, contract investigation precedes implementation |
