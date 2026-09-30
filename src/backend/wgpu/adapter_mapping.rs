@@ -1325,7 +1325,7 @@ mod r1_r_rg8_mapping_tests {
     #[test]
     fn shared_texture_mapping_is_unique() {
         let mappings = TEXTURE_FORMATS;
-        assert_eq!(mappings.len(), 67);
+        assert_eq!(mappings.len(), 95);
         let mut normalized = Vec::new();
         let mut native = Vec::new();
         for &(format, wgpu_format) in mappings {
