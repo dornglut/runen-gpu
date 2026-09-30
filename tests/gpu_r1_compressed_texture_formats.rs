@@ -386,7 +386,6 @@ fn require_etc_roles(mut descriptor: GpuContextDescriptor) -> GpuContextDescript
     descriptor
 }
 
-
 fn require_astc_roles(mut descriptor: GpuContextDescriptor) -> GpuContextDescriptor {
     for case in ASTC_CASES {
         for role in [
@@ -403,7 +402,6 @@ fn require_astc_roles(mut descriptor: GpuContextDescriptor) -> GpuContextDescrip
         .require_format_role(GpuTextureFormat::Rgba8Unorm, GpuFormatRole::CopySource)
 }
 
-fn descriptor(
 fn descriptor(
     dimension: GpuTextureDimension,
     width: u32,
