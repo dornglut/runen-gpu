@@ -314,6 +314,7 @@ fn native_context() -> GpuContext {
     let descriptor =
         GpuContextDescriptor::new(GpuCapabilityProfile::OffscreenGraphicsBaseline.requirements())
             .require_format_role(GpuTextureFormat::Rgba8Unorm, GpuFormatRole::ColorAttachment)
+            .require_format_role(GpuTextureFormat::Rgba8Unorm, GpuFormatRole::Blendable)
             .require_format_role(GpuTextureFormat::Rgba8Unorm, GpuFormatRole::CopySource)
             .with_fallback_policy(GpuSoftwareFallbackPolicy::Require)
             .with_allowed_backends([GpuBackendFamily::Vulkan])
@@ -333,6 +334,7 @@ pub(crate) async fn run_browser_blend_state() -> u32 {
     let descriptor =
         GpuContextDescriptor::new(GpuCapabilityProfile::OffscreenGraphicsBaseline.requirements())
             .require_format_role(GpuTextureFormat::Rgba8Unorm, GpuFormatRole::ColorAttachment)
+            .require_format_role(GpuTextureFormat::Rgba8Unorm, GpuFormatRole::Blendable)
             .require_format_role(GpuTextureFormat::Rgba8Unorm, GpuFormatRole::CopySource)
             .with_allowed_backends([GpuBackendFamily::BrowserWebGpu])
             .with_label("R2 browser blend proof");

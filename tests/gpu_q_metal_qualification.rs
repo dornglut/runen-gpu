@@ -27,6 +27,8 @@ mod retained_multiview;
 mod retained_non_uniform_binding_array;
 #[path = "gpu_offscreen_indexed_native.rs"]
 mod retained_offscreen;
+#[path = "gpu_r1_optional_format_roles.rs"]
+mod retained_optional_format_roles;
 #[path = "gpu_prefix_scan_native.rs"]
 mod retained_prefix_scan;
 #[path = "gpu_r2_sampler_anisotropy.rs"]
@@ -197,6 +199,7 @@ fn qualification_context(
         .unwrap();
     let descriptor = GpuContextDescriptor::new(requirements)
         .require_format_role(GpuTextureFormat::Rgba8Unorm, GpuFormatRole::ColorAttachment)
+        .require_format_role(GpuTextureFormat::Rgba8Unorm, GpuFormatRole::Blendable)
         .require_format_role(GpuTextureFormat::Rgba8Unorm, GpuFormatRole::CopySource)
         .require_format_role(GpuTextureFormat::Depth16Unorm, GpuFormatRole::DepthStencil)
         .with_allowed_backends([GpuBackendFamily::Metal])
@@ -538,6 +541,12 @@ fn metal_qualification_records_exact_public_api_evidence() {
     let vertex16_mask = pollster::block_on(retained_vertex16::run_suite(&context));
     let vertex_packed_mask = pollster::block_on(retained_vertex_packed::run_suite(&context));
     let blend_mask = pollster::block_on(retained_blend::run_suite(&context));
+    let optional_format_roles_mask =
+        pollster::block_on(retained_optional_format_roles::run_on_adapter(
+            GpuBackendFamily::Metal,
+            None,
+            Some(context.adapter_facts()),
+        ));
     let dual_source_blending = pollster::block_on(retained_dual_source_blending::run_on_adapter(
         GpuBackendFamily::Metal,
         None,
@@ -635,7 +644,7 @@ fn metal_qualification_records_exact_public_api_evidence() {
     assert_eq!(stats.pending_readbacks(), 0);
 
     let report = json!({
-        "schema_version": 10,
+        "schema_version": 11,
         "qualification_level": mode.report_name(),
         "revision": revision,
         "environment": {
@@ -675,6 +684,7 @@ fn metal_qualification_records_exact_public_api_evidence() {
             "vertex16_mask": vertex16_mask,
             "vertex_packed_mask": vertex_packed_mask,
             "blend_state_mask": blend_mask,
+            "optional_format_roles_mask": optional_format_roles_mask,
             "dual_source_blending":
                 proof_disposition(dual_source_blending.exercised),
             "depth_bias_baseline_mask": depth_bias_mask,

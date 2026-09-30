@@ -222,7 +222,7 @@ fn relevant_format_roles(
         .flat_map(|output| {
             output
                 .color_targets()
-                .map(|target| (target.format(), GpuFormatRole::ColorAttachment))
+                .flat_map(|target| color_target_roles(target.format(), target.blend().is_some()))
         })
         .collect::<Vec<_>>();
     if let Some(depth) = descriptor.state().depth_stencil() {
@@ -231,4 +231,36 @@ fn relevant_format_roles(
     roles.sort_unstable();
     roles.dedup();
     roles
+}
+
+fn color_target_roles(
+    format: GpuTextureFormat,
+    has_blend: bool,
+) -> Vec<(GpuTextureFormat, GpuFormatRole)> {
+    let mut roles = vec![(format, GpuFormatRole::ColorAttachment)];
+    if has_blend {
+        roles.push((format, GpuFormatRole::Blendable));
+    }
+    roles
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn replacement_rendering_needs_only_color_attachment_but_blending_needs_its_own_role() {
+        let format = GpuTextureFormat::Rgba32Float;
+        assert_eq!(
+            color_target_roles(format, false),
+            [(format, GpuFormatRole::ColorAttachment)]
+        );
+        assert_eq!(
+            color_target_roles(format, true),
+            [
+                (format, GpuFormatRole::ColorAttachment),
+                (format, GpuFormatRole::Blendable),
+            ]
+        );
+    }
 }

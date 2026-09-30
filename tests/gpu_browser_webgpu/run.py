@@ -104,6 +104,7 @@ const done = arguments[arguments.length - 1];
         typeof wasm.runengpu_browser_bc_exercised_mask !== "function" ||
         typeof wasm.runengpu_browser_compression_feature_mask !== "function" ||
         typeof wasm.runengpu_browser_blend_state_exercised_mask !== "function" ||
+        typeof wasm.runengpu_browser_optional_format_roles_mask !== "function" ||
         typeof wasm.runengpu_browser_dual_source_blend_mask !== "function" ||
         typeof wasm.runengpu_browser_depth_bias_exercised_mask !== "function" ||
         typeof wasm.runengpu_browser_sampler_anisotropy_exercised !== "function" ||
@@ -147,6 +148,7 @@ const done = arguments[arguments.length - 1];
           bcMask: wasm.runengpu_browser_bc_exercised_mask(),
           compressionFeatureMask: wasm.runengpu_browser_compression_feature_mask(),
           blendStateMask: wasm.runengpu_browser_blend_state_exercised_mask(),
+          optionalFormatRolesMask: wasm.runengpu_browser_optional_format_roles_mask(),
           dualSourceBlendMask: wasm.runengpu_browser_dual_source_blend_mask(),
           depthBiasMask: wasm.runengpu_browser_depth_bias_exercised_mask(),
           samplerAnisotropyExercised: wasm.runengpu_browser_sampler_anisotropy_exercised(),
@@ -220,6 +222,29 @@ def report_browser_compression_features(
         f"ETC2={report['features']['texture_compression_etc2']}, "
         f"ASTC={report['features']['texture_compression_astc']}"
     )
+
+
+def retain_browser_optional_format_roles(
+    value: dict[str, object], *, artifact_dir: pathlib.Path, revision: str
+) -> None:
+    mask = value.get("optionalFormatRolesMask")
+    if type(mask) is not int or mask < 0 or mask & ~0b111:
+        raise RuntimeError(f"invalid optional format role mask: {mask!r}")
+    names = ("rgba32float_filtering", "rgba32float_blending", "bgra8unorm_storage_write")
+    report = {
+        "schema_version": 1,
+        "repository_revision": revision,
+        "authority": "runengpu_public_api_execution",
+        "backend": "BrowserWebGpu",
+        "adapter_correlation": "runengpu_context_adapter_facts_equal",
+        "roles": {
+            name: "EXERCISED" if mask & (1 << index) else "UNSUPPORTED"
+            for index, name in enumerate(names)
+        },
+    }
+    report_root = artifact_dir / "optional-format-roles"
+    report_root.mkdir(parents=True, exist_ok=True)
+    (report_root / "report.json").write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
 
 
 SURFACE_FORMATS = {
@@ -1062,6 +1087,13 @@ def main() -> int:
                 f"(mask={blend_state_mask:#x}, expected={blend_state_full_mask:#x})"
             )
 
+        optional_roles_mask = value.get("optionalFormatRolesMask")
+        if type(optional_roles_mask) is not int or not 0 <= optional_roles_mask <= 0b111:
+            raise RuntimeError(f"invalid optional format role mask: {optional_roles_mask!r}")
+        for index, role_name in enumerate(("Rgba32Float filtering", "Rgba32Float blending", "Bgra8Unorm storage write")):
+            disposition = "EXERCISED" if optional_roles_mask & (1 << index) else "UNSUPPORTED"
+            print(f"RunenGPU actual-browser {role_name}: {disposition}")
+
         dual_source_mask = value.get("dualSourceBlendMask")
         if type(dual_source_mask) is not int or dual_source_mask < 0 or dual_source_mask > 0b11:
             raise RuntimeError(
@@ -1263,6 +1295,9 @@ def main() -> int:
             chrome_version=chrome_version,
         )
         report_browser_compression_features(
+            value, artifact_dir=args.artifact_dir, revision=args.revision
+        )
+        retain_browser_optional_format_roles(
             value, artifact_dir=args.artifact_dir, revision=args.revision
         )
         print("RunenGPU actual-browser WebGPU conformance: PASS")

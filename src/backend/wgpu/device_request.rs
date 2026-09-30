@@ -410,6 +410,28 @@ fn requested_features(candidate: &crate::GpuCandidateAdmissionReport) -> Feature
             features |= Features::TEXTURE_COMPRESSION_BC;
         }
         match (format, role) {
+            (
+                GpuTextureFormat::R32Float
+                | GpuTextureFormat::Rg32Float
+                | GpuTextureFormat::Rgba32Float,
+                crate::GpuFormatRole::Filterable,
+            ) => {
+                features |= Features::FLOAT32_FILTERABLE;
+            }
+            (
+                GpuTextureFormat::R32Float
+                | GpuTextureFormat::Rg32Float
+                | GpuTextureFormat::Rgba32Float,
+                crate::GpuFormatRole::Blendable,
+            ) => {
+                features |= Features::FLOAT32_BLENDABLE;
+            }
+            (
+                GpuTextureFormat::Bgra8Unorm,
+                crate::GpuFormatRole::StorageRead | crate::GpuFormatRole::StorageWrite,
+            ) => {
+                features |= Features::BGRA8UNORM_STORAGE;
+            }
             (GpuTextureFormat::Depth32FloatStencil8, _) => {
                 features |= Features::DEPTH32FLOAT_STENCIL8;
             }
@@ -1139,7 +1161,7 @@ mod tests {
         );
     }
 
-    fn candidate_with_bc_role(
+    fn candidate_with_format_role(
         format: GpuTextureFormat,
         role: GpuFormatRole,
     ) -> crate::GpuCandidateAdmissionReport {
@@ -1147,9 +1169,17 @@ mod tests {
         let mut facts_for_format = GpuTextureFormatCapabilities::none();
         match role {
             GpuFormatRole::Sampled => facts_for_format.sampled = true,
+            GpuFormatRole::Filterable => facts_for_format.filterable = true,
+            GpuFormatRole::StorageRead => facts_for_format.storage_read = true,
+            GpuFormatRole::StorageWrite => facts_for_format.storage_write = true,
+            GpuFormatRole::ColorAttachment => facts_for_format.color_attachment = true,
+            GpuFormatRole::Blendable => {
+                facts_for_format.color_attachment = true;
+                facts_for_format.blendable = true;
+            }
             GpuFormatRole::CopySource => facts_for_format.copy_source = true,
             GpuFormatRole::CopyDestination => facts_for_format.copy_destination = true,
-            other => panic!("unsupported focused BC role: {other:?}"),
+            other => panic!("unsupported focused format role: {other:?}"),
         }
         let facts = GpuAdapterFacts::new(
             GpuBackendFamily::Vulkan,
@@ -1201,12 +1231,57 @@ mod tests {
                 GpuFormatRole::CopyDestination,
             ] {
                 assert!(
-                    requested_features(&candidate_with_bc_role(format, role))
+                    requested_features(&candidate_with_format_role(format, role))
                         .contains(Features::TEXTURE_COMPRESSION_BC),
                     "{format:?} {role:?}"
                 );
             }
         }
+    }
+
+    #[test]
+    fn optional_format_roles_request_only_their_private_device_features() {
+        let optional = Features::FLOAT32_FILTERABLE
+            | Features::FLOAT32_BLENDABLE
+            | Features::BGRA8UNORM_STORAGE;
+        assert!(!requested_features(&candidate()).intersects(optional));
+        for format in [
+            GpuTextureFormat::R32Float,
+            GpuTextureFormat::Rg32Float,
+            GpuTextureFormat::Rgba32Float,
+        ] {
+            for (role, expected) in [
+                (GpuFormatRole::Filterable, Features::FLOAT32_FILTERABLE),
+                (GpuFormatRole::Blendable, Features::FLOAT32_BLENDABLE),
+                (GpuFormatRole::ColorAttachment, Features::empty()),
+                (GpuFormatRole::Sampled, Features::empty()),
+            ] {
+                assert_eq!(
+                    requested_features(&candidate_with_format_role(format, role)) & optional,
+                    expected,
+                    "{format:?} {role:?}"
+                );
+            }
+        }
+        for role in [GpuFormatRole::StorageRead, GpuFormatRole::StorageWrite] {
+            assert_eq!(
+                requested_features(&candidate_with_format_role(
+                    GpuTextureFormat::Bgra8Unorm,
+                    role
+                )) & optional,
+                Features::BGRA8UNORM_STORAGE,
+                "{role:?}"
+            );
+        }
+        assert_eq!(
+            requested_features(&candidate_with_format_role(
+                GpuTextureFormat::Rgba8Unorm,
+                GpuFormatRole::Blendable
+            )) & optional,
+            Features::empty()
+        );
+        assert!(verify_requested_features(optional, Features::empty()).is_err());
+        assert!(verify_requested_features(optional, optional).is_ok());
     }
 
     #[cfg(not(target_arch = "wasm32"))]

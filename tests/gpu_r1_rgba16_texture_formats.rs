@@ -140,6 +140,7 @@ fn assert_structural_normalization_preserves_observed_roles(
         storage_read: false,
         storage_write: true,
         color_attachment: false,
+        blendable: false,
         depth_stencil: false,
         copy_source: true,
         copy_destination: false,

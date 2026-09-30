@@ -251,11 +251,13 @@ fn apply_format_prerequisites(
         && !features.contains(Features::RG11B10UFLOAT_RENDERABLE)
     {
         capabilities.color_attachment = false;
+        capabilities.blendable = false;
     }
     if texture_format::compression_family(format).is_some() {
         capabilities.storage_read = false;
         capabilities.storage_write = false;
         capabilities.color_attachment = false;
+        capabilities.blendable = false;
         capabilities.depth_stencil = false;
     }
     capabilities
@@ -289,6 +291,11 @@ pub(super) fn format_capabilities(
                 .contains(TextureFormatFeatureFlags::STORAGE_READ_WRITE),
         color_attachment: render_attachment
             && texture_format::supports_aspect(format, GpuTextureAspect::Color),
+        blendable: render_attachment
+            && texture_format::supports_aspect(format, GpuTextureAspect::Color)
+            && features
+                .flags
+                .contains(TextureFormatFeatureFlags::BLENDABLE),
         depth_stencil: render_attachment
             && (texture_format::supports_aspect(format, GpuTextureAspect::DepthOnly)
                 || texture_format::supports_aspect(format, GpuTextureAspect::StencilOnly)),
@@ -997,6 +1004,38 @@ mod tests {
         assert!(!depth.color_attachment);
         assert_eq!(depth.block_dimensions, None);
         assert_eq!(depth.block_copy_size, None);
+    }
+
+    #[test]
+    fn blendability_is_distinct_from_color_renderability() {
+        let format = GpuTextureFormat::Rgba32Float;
+        let renderable = wgpu::TextureFormatFeatures {
+            allowed_usages: TextureUsages::RENDER_ATTACHMENT,
+            flags: TextureFormatFeatureFlags::empty(),
+        };
+        let facts = format_capabilities(format, renderable);
+        assert!(facts.color_attachment);
+        assert!(!facts.blendable);
+
+        let blendable = format_capabilities(
+            format,
+            wgpu::TextureFormatFeatures {
+                flags: TextureFormatFeatureFlags::BLENDABLE,
+                ..renderable
+            },
+        );
+        assert!(blendable.color_attachment);
+        assert!(blendable.blendable);
+
+        let no_attachment = format_capabilities(
+            format,
+            wgpu::TextureFormatFeatures {
+                allowed_usages: TextureUsages::COPY_SRC,
+                flags: TextureFormatFeatureFlags::BLENDABLE,
+            },
+        );
+        assert!(!no_attachment.color_attachment);
+        assert!(!no_attachment.blendable);
     }
     #[test]
     fn stencil8_maps_exactly_and_preserves_observed_roles() {

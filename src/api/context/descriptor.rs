@@ -88,6 +88,8 @@ pub enum GpuFormatRole {
     StorageRead,
     StorageWrite,
     ColorAttachment,
+    /// Color-target blending, independent of plain color-attachment admission.
+    Blendable,
     DepthStencil,
     CopySource,
     CopyDestination,

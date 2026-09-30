@@ -234,6 +234,7 @@ jobs:
           cargo +stable test --test gpu_r1_vertex16_formats --locked -- --ignored --nocapture
           cargo +stable test --test gpu_r1_vertex_packed_formats --locked -- --ignored --nocapture
           cargo +stable test --test gpu_r2_blend_state --locked -- --ignored --nocapture
+          cargo +stable test --test gpu_r1_optional_format_roles --locked -- --ignored --nocapture
           cargo +stable test --test gpu_r2_dual_source_blending --locked -- --ignored --nocapture
           cargo +stable test --test gpu_r2_depth_bias --locked -- --ignored --nocapture
           cargo +stable test --test gpu_r2_depth_clip_control --locked -- --ignored --nocapture
@@ -513,6 +514,37 @@ jobs:
         with:
           name: runengpu-browser-compression-${{ steps.revision.outputs.expected_revision }}
           path: ${{ runner.temp }}/runengpu-browser-proof/browser-compression/report.json
+          if-no-files-found: error
+
+      - name: Validate browser optional format role execution
+        env:
+          EXPECTED_REVISION: ${{ steps.revision.outputs.expected_revision }}
+        run: |
+          set -euo pipefail
+          report="${RUNNER_TEMP}/runengpu-browser-proof/optional-format-roles/report.json"
+          test -s "${report}"
+          python3 - "${report}" "${EXPECTED_REVISION}" <<'PY'
+          import json
+          import sys
+
+          with open(sys.argv[1], encoding="utf-8") as handle:
+              report = json.load(handle)
+          assert report["schema_version"] == 1
+          assert report["repository_revision"] == sys.argv[2]
+          assert report["authority"] == "runengpu_public_api_execution"
+          assert report["backend"] == "BrowserWebGpu"
+          assert report["adapter_correlation"] == "runengpu_context_adapter_facts_equal"
+          assert set(report["roles"]) == {
+              "rgba32float_filtering", "rgba32float_blending", "bgra8unorm_storage_write"
+          }
+          assert set(report["roles"].values()) <= {"EXERCISED", "UNSUPPORTED"}
+          PY
+
+      - name: Retain browser optional format role execution
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: runengpu-browser-optional-format-roles-${{ steps.revision.outputs.expected_revision }}
+          path: ${{ runner.temp }}/runengpu-browser-proof/optional-format-roles/report.json
           if-no-files-found: error
 
       - name: Validate retained browser surface evidence report
