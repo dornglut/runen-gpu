@@ -260,6 +260,8 @@ jobs:
           assert report["proofs"]["vertex_packed_mask"] == 0x3
           assert report["proofs"]["blend_state_mask"] == 0x3
           assert 0 <= report["proofs"]["optional_format_roles_mask"] <= 0x7
+          expected_etc2_mask = 0x3ff if wgpu_characterization["features"]["texture_compression_etc2"] else 0
+          assert report["proofs"]["etc2_eac_mask"] == expected_etc2_mask
           assert report["proofs"]["dual_source_blending"] in {"EXERCISED", "UNSUPPORTED"}
           if report["capabilities"]["DualSourceBlending"]["supported"]:
               assert report["proofs"]["dual_source_blending"] == "EXERCISED"

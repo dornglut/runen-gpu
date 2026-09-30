@@ -9,6 +9,8 @@ use std::process::Command;
 mod readback_wait;
 #[path = "gpu_r2_blend_state.rs"]
 mod retained_blend;
+#[path = "gpu_r1_compressed_texture_formats.rs"]
+mod retained_compressed_formats;
 #[path = "gpu_r2_depth_bias.rs"]
 mod retained_depth_bias;
 #[path = "gpu_r2_depth_clip_control.rs"]
@@ -488,6 +490,16 @@ fn metal_qualification_records_exact_public_api_evidence() {
         .diagnostic_name()
         .expect("Metal qualification requires a recorded adapter name")
         .to_owned();
+    let compression_characterization =
+        wgpu_characterization(&adapter_name, adapter.vendor(), adapter.device());
+    let direct_etc2 = compression_characterization["features"]["texture_compression_etc2"]
+        .as_bool()
+        .expect("direct ETC2 feature fact must be boolean");
+    let etc2_mask = pollster::block_on(retained_compressed_formats::run_etc2_on_adapter(
+        GpuBackendFamily::Metal,
+        adapter,
+        direct_etc2,
+    ));
 
     assert!(
         !adapter
@@ -665,11 +677,7 @@ fn metal_qualification_records_exact_public_api_evidence() {
             "device": adapter.device(),
         },
         "capabilities": capability_report(&context),
-        "wgpu_characterization": wgpu_characterization(
-            &adapter_name,
-            adapter.vendor(),
-            adapter.device(),
-        ),
+        "wgpu_characterization": compression_characterization,
         "limits": {
             "adapter": limits_report(adapter.adapter_limits().values()),
             "device": limits_report(context.device_facts().device_limits().values()),
@@ -685,6 +693,7 @@ fn metal_qualification_records_exact_public_api_evidence() {
             "vertex_packed_mask": vertex_packed_mask,
             "blend_state_mask": blend_mask,
             "optional_format_roles_mask": optional_format_roles_mask,
+            "etc2_eac_mask": etc2_mask,
             "dual_source_blending":
                 proof_disposition(dual_source_blending.exercised),
             "depth_bias_baseline_mask": depth_bias_mask,
