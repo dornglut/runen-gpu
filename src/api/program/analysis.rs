@@ -533,50 +533,76 @@ fn parse_wgsl_with_normalized_profiles(
     GpuProgramContractError,
 > {
     let profiles = [
-        (baseline_capabilities, Vec::new(), "baseline"),
         (
-            baseline_capabilities | naga::valid::Capabilities::SHADER_FLOAT16,
+            baseline_capabilities,
+            Vec::new(),
+            "baseline",
+        ),
+        (
+            baseline_capabilities
+                | naga::valid::Capabilities::SHADER_FLOAT16,
             vec![GpuCapabilityFeature::ShaderF16],
             "ShaderF16",
         ),
         (
-            baseline_capabilities | naga::valid::Capabilities::DUAL_SOURCE_BLENDING,
+            baseline_capabilities
+                | naga::valid::Capabilities::DUAL_SOURCE_BLENDING,
             vec![GpuCapabilityFeature::DualSourceBlending],
             "DualSourceBlending",
         ),
         (
-            baseline_capabilities | naga::valid::Capabilities::PRIMITIVE_INDEX,
+            baseline_capabilities
+                | naga::valid::Capabilities::SHADER_FLOAT16
+                | naga::valid::Capabilities::DUAL_SOURCE_BLENDING,
+            vec![GpuCapabilityFeature::ShaderF16, GpuCapabilityFeature::DualSourceBlending],
+            "ShaderF16+DualSourceBlending",
+        ),
+        (
+            baseline_capabilities
+                | naga::valid::Capabilities::CLIP_DISTANCES,
+            vec![GpuCapabilityFeature::ClipDistances],
+            "ClipDistances",
+        ),
+        (
+            baseline_capabilities
+                | naga::valid::Capabilities::SHADER_FLOAT16
+                | naga::valid::Capabilities::CLIP_DISTANCES,
+            vec![GpuCapabilityFeature::ShaderF16, GpuCapabilityFeature::ClipDistances],
+            "ShaderF16+ClipDistances",
+        ),
+        (
+            baseline_capabilities
+                | naga::valid::Capabilities::DUAL_SOURCE_BLENDING
+                | naga::valid::Capabilities::CLIP_DISTANCES,
+            vec![GpuCapabilityFeature::DualSourceBlending, GpuCapabilityFeature::ClipDistances],
+            "DualSourceBlending+ClipDistances",
+        ),
+        (
+            baseline_capabilities
+                | naga::valid::Capabilities::SHADER_FLOAT16
+                | naga::valid::Capabilities::DUAL_SOURCE_BLENDING
+                | naga::valid::Capabilities::CLIP_DISTANCES,
+            vec![GpuCapabilityFeature::ShaderF16, GpuCapabilityFeature::DualSourceBlending, GpuCapabilityFeature::ClipDistances],
+            "ShaderF16+DualSourceBlending+ClipDistances",
+        ),
+        (
+            baseline_capabilities
+                | naga::valid::Capabilities::PRIMITIVE_INDEX,
             vec![GpuCapabilityFeature::PrimitiveIndex],
             "PrimitiveIndex",
         ),
         (
             baseline_capabilities
                 | naga::valid::Capabilities::SHADER_FLOAT16
-                | naga::valid::Capabilities::DUAL_SOURCE_BLENDING,
-            vec![
-                GpuCapabilityFeature::ShaderF16,
-                GpuCapabilityFeature::DualSourceBlending,
-            ],
-            "ShaderF16+DualSourceBlending",
-        ),
-        (
-            baseline_capabilities
-                | naga::valid::Capabilities::SHADER_FLOAT16
                 | naga::valid::Capabilities::PRIMITIVE_INDEX,
-            vec![
-                GpuCapabilityFeature::ShaderF16,
-                GpuCapabilityFeature::PrimitiveIndex,
-            ],
+            vec![GpuCapabilityFeature::ShaderF16, GpuCapabilityFeature::PrimitiveIndex],
             "ShaderF16+PrimitiveIndex",
         ),
         (
             baseline_capabilities
                 | naga::valid::Capabilities::DUAL_SOURCE_BLENDING
                 | naga::valid::Capabilities::PRIMITIVE_INDEX,
-            vec![
-                GpuCapabilityFeature::DualSourceBlending,
-                GpuCapabilityFeature::PrimitiveIndex,
-            ],
+            vec![GpuCapabilityFeature::DualSourceBlending, GpuCapabilityFeature::PrimitiveIndex],
             "DualSourceBlending+PrimitiveIndex",
         ),
         (
@@ -584,12 +610,40 @@ fn parse_wgsl_with_normalized_profiles(
                 | naga::valid::Capabilities::SHADER_FLOAT16
                 | naga::valid::Capabilities::DUAL_SOURCE_BLENDING
                 | naga::valid::Capabilities::PRIMITIVE_INDEX,
-            vec![
-                GpuCapabilityFeature::ShaderF16,
-                GpuCapabilityFeature::DualSourceBlending,
-                GpuCapabilityFeature::PrimitiveIndex,
-            ],
+            vec![GpuCapabilityFeature::ShaderF16, GpuCapabilityFeature::DualSourceBlending, GpuCapabilityFeature::PrimitiveIndex],
             "ShaderF16+DualSourceBlending+PrimitiveIndex",
+        ),
+        (
+            baseline_capabilities
+                | naga::valid::Capabilities::CLIP_DISTANCES
+                | naga::valid::Capabilities::PRIMITIVE_INDEX,
+            vec![GpuCapabilityFeature::ClipDistances, GpuCapabilityFeature::PrimitiveIndex],
+            "ClipDistances+PrimitiveIndex",
+        ),
+        (
+            baseline_capabilities
+                | naga::valid::Capabilities::SHADER_FLOAT16
+                | naga::valid::Capabilities::CLIP_DISTANCES
+                | naga::valid::Capabilities::PRIMITIVE_INDEX,
+            vec![GpuCapabilityFeature::ShaderF16, GpuCapabilityFeature::ClipDistances, GpuCapabilityFeature::PrimitiveIndex],
+            "ShaderF16+ClipDistances+PrimitiveIndex",
+        ),
+        (
+            baseline_capabilities
+                | naga::valid::Capabilities::DUAL_SOURCE_BLENDING
+                | naga::valid::Capabilities::CLIP_DISTANCES
+                | naga::valid::Capabilities::PRIMITIVE_INDEX,
+            vec![GpuCapabilityFeature::DualSourceBlending, GpuCapabilityFeature::ClipDistances, GpuCapabilityFeature::PrimitiveIndex],
+            "DualSourceBlending+ClipDistances+PrimitiveIndex",
+        ),
+        (
+            baseline_capabilities
+                | naga::valid::Capabilities::SHADER_FLOAT16
+                | naga::valid::Capabilities::DUAL_SOURCE_BLENDING
+                | naga::valid::Capabilities::CLIP_DISTANCES
+                | naga::valid::Capabilities::PRIMITIVE_INDEX,
+            vec![GpuCapabilityFeature::ShaderF16, GpuCapabilityFeature::DualSourceBlending, GpuCapabilityFeature::ClipDistances, GpuCapabilityFeature::PrimitiveIndex],
+            "ShaderF16+DualSourceBlending+ClipDistances+PrimitiveIndex",
         ),
     ];
 

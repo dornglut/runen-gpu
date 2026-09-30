@@ -825,6 +825,125 @@ fn dual_source_blending_rejects_multiple_color_targets_before_realization() {
     assert_eq!(error.label(), "dual_source_color_target_count=2");
 }
 
+
+const CLIP_DISTANCES_WGSL: &str = r#"
+enable clip_distances;
+
+struct ClipVertexOutput {
+    @builtin(position) position: vec4<f32>,
+    @builtin(clip_distances) distances: array<f32, 1>,
+}
+
+@vertex
+fn clip_vs(@builtin(vertex_index) vertex_index: u32) -> ClipVertexOutput {
+    let positions = array<vec2<f32>, 3>(
+        vec2<f32>(-0.5, -0.5),
+        vec2<f32>(0.5, -0.5),
+        vec2<f32>(0.0, 0.5),
+    );
+    return ClipVertexOutput(
+        vec4<f32>(positions[vertex_index], 0.0, 1.0),
+        array<f32, 1>(1.0),
+    );
+}
+"#;
+
+const CLIP_DISTANCES_ENABLE_ONLY_WGSL: &str = r#"
+enable clip_distances;
+
+@compute @workgroup_size(1)
+fn compute_main() {}
+"#;
+
+const CLIP_DISTANCES_WITHOUT_ENABLE_WGSL: &str = r#"
+struct ClipVertexOutput {
+    @builtin(position) position: vec4<f32>,
+    @builtin(clip_distances) distances: array<f32, 1>,
+}
+
+@vertex
+fn clip_vs() -> ClipVertexOutput {
+    return ClipVertexOutput(
+        vec4<f32>(0.0, 0.0, 0.0, 1.0),
+        array<f32, 1>(1.0),
+    );
+}
+"#;
+
+const CLIP_DISTANCES_TOO_WIDE_WGSL: &str = r#"
+enable clip_distances;
+
+struct ClipVertexOutput {
+    @builtin(position) position: vec4<f32>,
+    @builtin(clip_distances) distances: array<f32, 9>,
+}
+
+@vertex
+fn clip_vs() -> ClipVertexOutput {
+    return ClipVertexOutput(
+        vec4<f32>(0.0, 0.0, 0.0, 1.0),
+        array<f32, 9>(1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0),
+    );
+}
+"#;
+
+#[test]
+fn clip_distances_enable_derives_the_whole_module_requirement() {
+    let (_registry, source) =
+        admitted_source_from("clip-distances.enable-only", CLIP_DISTANCES_ENABLE_ONLY_WGSL);
+    let program = GpuProgramDescriptor::new(
+        source,
+        [entry_point("compute_main")],
+        std::iter::empty::<GpuBindingLayoutRefinement>(),
+    )
+    .expect("the normalized clip-distances profile should admit the enable directive");
+
+    assert_required(program.requirements(), GpuCapabilityFeature::ClipDistances);
+}
+
+#[test]
+fn clip_distances_vertex_output_is_compiler_derived() {
+    let (_registry, source) = admitted_source_from("clip-distances.render", CLIP_DISTANCES_WGSL);
+    let program = GpuProgramDescriptor::new(
+        source,
+        [entry_point("clip_vs")],
+        std::iter::empty::<GpuBindingLayoutRefinement>(),
+    )
+    .expect("standardized clip-distances WGSL should admit");
+
+    assert_required(program.requirements(), GpuCapabilityFeature::ClipDistances);
+}
+
+#[test]
+fn clip_distances_builtin_requires_the_standardized_enable_extension() {
+    let (_registry, source) = admitted_source_from(
+        "clip-distances.missing-enable",
+        CLIP_DISTANCES_WITHOUT_ENABLE_WGSL,
+    );
+    let error = GpuProgramDescriptor::new(
+        source,
+        [entry_point("clip_vs")],
+        std::iter::empty::<GpuBindingLayoutRefinement>(),
+    )
+    .expect_err("clip_distances must require enable clip_distances");
+
+    assert_eq!(error.cause(), GpuProgramContractCause::CanonicalWgslInvalid);
+}
+
+#[test]
+fn clip_distances_array_larger_than_eight_fails_canonical_validation() {
+    let (_registry, source) =
+        admitted_source_from("clip-distances.too-wide", CLIP_DISTANCES_TOO_WIDE_WGSL);
+    let error = GpuProgramDescriptor::new(
+        source,
+        [entry_point("clip_vs")],
+        std::iter::empty::<GpuBindingLayoutRefinement>(),
+    )
+    .expect_err("clip_distances arrays larger than the standardized bound must fail");
+
+    assert_eq!(error.cause(), GpuProgramContractCause::CanonicalWgslInvalid);
+}
+
 const PRIMITIVE_INDEX_WGSL: &str = r#"
 enable primitive_index;
 
