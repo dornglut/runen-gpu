@@ -537,6 +537,7 @@ pub(crate) const fn preferred_degradation_is_valid(
         | GpuCapabilityFeature::DualSourceBlending
         | GpuCapabilityFeature::MultisampleArray
         | GpuCapabilityFeature::Multiview
+        | GpuCapabilityFeature::PrimitiveIndex
         | GpuCapabilityFeature::ShaderF16 => {
             matches!(fallback, GpuPreferredFallback::SelectAlternativeWork)
         }
@@ -563,7 +564,7 @@ pub(crate) fn alignment_value(facts: GpuAlignmentFacts, kind: GpuAlignmentKind) 
 mod tests {
     use super::*;
 
-    const FEATURES: [GpuCapabilityFeature; 22] = [
+    const FEATURES: [GpuCapabilityFeature; 23] = [
         GpuCapabilityFeature::Compute,
         GpuCapabilityFeature::RenderPipeline,
         GpuCapabilityFeature::Copy,
@@ -583,6 +584,7 @@ mod tests {
         GpuCapabilityFeature::DualSourceBlending,
         GpuCapabilityFeature::MultisampleArray,
         GpuCapabilityFeature::Multiview,
+        GpuCapabilityFeature::PrimitiveIndex,
         GpuCapabilityFeature::ShaderF16,
         GpuCapabilityFeature::TimestampQuery,
         GpuCapabilityFeature::Presentation,

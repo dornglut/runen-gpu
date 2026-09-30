@@ -545,6 +545,11 @@ fn parse_wgsl_with_normalized_profiles(
             "DualSourceBlending",
         ),
         (
+            baseline_capabilities | naga::valid::Capabilities::PRIMITIVE_INDEX,
+            vec![GpuCapabilityFeature::PrimitiveIndex],
+            "PrimitiveIndex",
+        ),
+        (
             baseline_capabilities
                 | naga::valid::Capabilities::SHADER_FLOAT16
                 | naga::valid::Capabilities::DUAL_SOURCE_BLENDING,
@@ -553,6 +558,38 @@ fn parse_wgsl_with_normalized_profiles(
                 GpuCapabilityFeature::DualSourceBlending,
             ],
             "ShaderF16+DualSourceBlending",
+        ),
+        (
+            baseline_capabilities
+                | naga::valid::Capabilities::SHADER_FLOAT16
+                | naga::valid::Capabilities::PRIMITIVE_INDEX,
+            vec![
+                GpuCapabilityFeature::ShaderF16,
+                GpuCapabilityFeature::PrimitiveIndex,
+            ],
+            "ShaderF16+PrimitiveIndex",
+        ),
+        (
+            baseline_capabilities
+                | naga::valid::Capabilities::DUAL_SOURCE_BLENDING
+                | naga::valid::Capabilities::PRIMITIVE_INDEX,
+            vec![
+                GpuCapabilityFeature::DualSourceBlending,
+                GpuCapabilityFeature::PrimitiveIndex,
+            ],
+            "DualSourceBlending+PrimitiveIndex",
+        ),
+        (
+            baseline_capabilities
+                | naga::valid::Capabilities::SHADER_FLOAT16
+                | naga::valid::Capabilities::DUAL_SOURCE_BLENDING
+                | naga::valid::Capabilities::PRIMITIVE_INDEX,
+            vec![
+                GpuCapabilityFeature::ShaderF16,
+                GpuCapabilityFeature::DualSourceBlending,
+                GpuCapabilityFeature::PrimitiveIndex,
+            ],
+            "ShaderF16+DualSourceBlending+PrimitiveIndex",
         ),
     ];
 

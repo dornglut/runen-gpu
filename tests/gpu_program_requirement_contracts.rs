@@ -824,3 +824,84 @@ fn dual_source_blending_rejects_multiple_color_targets_before_realization() {
     );
     assert_eq!(error.label(), "dual_source_color_target_count=2");
 }
+
+const PRIMITIVE_INDEX_WGSL: &str = r#"
+enable primitive_index;
+
+@vertex
+fn primitive_index_vs(@builtin(vertex_index) vertex_index: u32) -> @builtin(position) vec4<f32> {
+    let positions = array<vec2<f32>, 3>(
+        vec2<f32>(-0.5, -0.5),
+        vec2<f32>(0.5, -0.5),
+        vec2<f32>(0.0, 0.5),
+    );
+    return vec4<f32>(positions[vertex_index], 0.0, 1.0);
+}
+
+@fragment
+fn primitive_index_fs(@builtin(primitive_index) primitive_index: u32) -> @location(0) vec4<f32> {
+    return vec4<f32>(f32(primitive_index), 0.0, 0.0, 1.0);
+}
+"#;
+
+const PRIMITIVE_INDEX_ENABLE_ONLY_WGSL: &str = r#"
+enable primitive_index;
+
+@compute @workgroup_size(1)
+fn compute_main() {}
+"#;
+
+const PRIMITIVE_INDEX_WITHOUT_ENABLE_WGSL: &str = r#"
+@fragment
+fn primitive_index_fs(@builtin(primitive_index) primitive_index: u32) -> @location(0) vec4<f32> {
+    return vec4<f32>(f32(primitive_index), 0.0, 0.0, 1.0);
+}
+"#;
+
+#[test]
+fn primitive_index_enable_derives_the_whole_module_requirement() {
+    let (_registry, source) = admitted_source_from(
+        "primitive-index.enable-only",
+        PRIMITIVE_INDEX_ENABLE_ONLY_WGSL,
+    );
+    let program = GpuProgramDescriptor::new(
+        source,
+        [entry_point("compute_main")],
+        std::iter::empty::<GpuBindingLayoutRefinement>(),
+    )
+    .expect("the normalized primitive-index profile should admit the enable directive");
+
+    assert_required(program.requirements(), GpuCapabilityFeature::PrimitiveIndex);
+}
+
+#[test]
+fn primitive_index_fragment_input_is_compiler_derived() {
+    let (_registry, source) = admitted_source_from("primitive-index.render", PRIMITIVE_INDEX_WGSL);
+    let program = GpuProgramDescriptor::new(
+        source,
+        [
+            entry_point("primitive_index_vs"),
+            entry_point("primitive_index_fs"),
+        ],
+        std::iter::empty::<GpuBindingLayoutRefinement>(),
+    )
+    .expect("standardized primitive-index WGSL should admit");
+
+    assert_required(program.requirements(), GpuCapabilityFeature::PrimitiveIndex);
+}
+
+#[test]
+fn primitive_index_builtin_requires_the_standardized_enable_extension() {
+    let (_registry, source) = admitted_source_from(
+        "primitive-index.missing-enable",
+        PRIMITIVE_INDEX_WITHOUT_ENABLE_WGSL,
+    );
+    let error = GpuProgramDescriptor::new(
+        source,
+        [entry_point("primitive_index_fs")],
+        std::iter::empty::<GpuBindingLayoutRefinement>(),
+    )
+    .expect_err("primitive_index must require enable primitive_index");
+
+    assert_eq!(error.cause(), GpuProgramContractCause::CanonicalWgslInvalid);
+}

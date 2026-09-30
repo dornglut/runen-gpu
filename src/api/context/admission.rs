@@ -686,6 +686,7 @@ fn is_declared_extension(feature: GpuCapabilityFeature) -> bool {
             | GpuCapabilityFeature::DualSourceBlending
             | GpuCapabilityFeature::MultisampleArray
             | GpuCapabilityFeature::Multiview
+            | GpuCapabilityFeature::PrimitiveIndex
     )
 }
 
