@@ -1201,16 +1201,15 @@ fn validate_texture_view_dimension(
         GpuTextureViewDimension::CubeArray => layer_count.is_multiple_of(6) && square,
     };
     let multisample_compatible = parent.sample_count() == 1
-        || matches!(
-            dimension,
-            GpuTextureViewDimension::D2 | GpuTextureViewDimension::D2Array
-        );
+        || dimension == GpuTextureViewDimension::D2
+        || (dimension == GpuTextureViewDimension::D2Array
+            && parent.extent().depth_or_layers() > 1);
     if !shape_compatible || !multisample_compatible {
         return Err(GpuResourceDescriptorError::invalid(
             "construct GPU texture-view descriptor",
             label,
             GpuResourceDescriptorCause::IncompatibleViewDimension,
-            "match normalized view shape: scalar views select one layer, Cube selects six square D2 layers, CubeArray selects a positive multiple of six square D2 layers, and multisampled views use D2 or D2Array",
+            "match normalized view shape: scalar views select one layer, Cube selects six square D2 layers, CubeArray selects a positive multiple of six square D2 layers, and multisampled D2Array views require a multi-layer parent",
         ));
     }
     Ok(())
