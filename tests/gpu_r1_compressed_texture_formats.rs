@@ -315,7 +315,7 @@ const ASTC_CASES: [AstcCase; 28] = [
     },
 ];
 
-fn label(value: impl AsRef<str>)fn label(value: impl AsRef<str>) -> GpuResourceLabel {
+fn label(value: impl AsRef<str>) -> GpuResourceLabel {
     GpuResourceLabel::new(value.as_ref()).unwrap()
 }
 
@@ -1980,9 +1980,6 @@ fn astc_native_support_or_typed_absence_is_backend_proven() {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-#[test]
-#[ignore = "requires the retained Vulkan software adapter"]
-fn bc_native_family_and_terminal_mips_are_backend_proven()#[cfg(not(target_arch = "wasm32"))]
 #[test]
 #[ignore = "requires the retained Vulkan software adapter"]
 fn bc_native_family_and_terminal_mips_are_backend_proven() {
