@@ -151,6 +151,7 @@ jobs:
               "indirect_first_instance",
               "depth_clip_control",
               "dual_source_blending",
+              "clip_distances",
               "primitive_index",
               "multiview",
               "multisample_array",
@@ -272,6 +273,15 @@ jobs:
               assert report["proofs"]["dual_source_blending"] == "EXERCISED"
           else:
               assert report["proofs"]["dual_source_blending"] == "UNSUPPORTED"
+          assert (
+              report["capabilities"]["ClipDistances"]["supported"]
+              == wgpu_characterization["features"]["clip_distances"]
+          )
+          assert report["proofs"]["clip_distances"] == (
+              "EXERCISED"
+              if report["capabilities"]["ClipDistances"]["supported"]
+              else "UNSUPPORTED"
+          )
           assert (
               report["capabilities"]["PrimitiveIndex"]["supported"]
               == wgpu_characterization["features"]["primitive_index"]

@@ -206,6 +206,9 @@ pub(super) fn normalized_features(
     {
         supported.push(GpuCapabilityFeature::StorageTextureBindingArrayNonUniformIndexing);
     }
+    if features.contains(Features::CLIP_DISTANCES) {
+        supported.push(GpuCapabilityFeature::ClipDistances);
+    }
     if features.contains(Features::PRIMITIVE_INDEX) {
         supported.push(GpuCapabilityFeature::PrimitiveIndex);
     }

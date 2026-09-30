@@ -239,6 +239,7 @@ jobs:
           cargo +stable test --test gpu_r2_depth_bias --locked -- --ignored --nocapture
           cargo +stable test --test gpu_r2_depth_clip_control --locked -- --ignored --nocapture
           cargo +stable test --test gpu_r2_sampler_anisotropy --locked -- --ignored --nocapture
+          cargo +stable test --test gpu_r3_clip_distances --locked -- --ignored --nocapture
           cargo +stable test --test gpu_r3_primitive_index --locked -- --ignored --nocapture
           cargo +stable test --test gpu_r3_shader_f16 --locked -- --ignored --nocapture
           cargo +stable test --test gpu_fixed_binding_array_native --locked -- --ignored --nocapture
