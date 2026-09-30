@@ -136,6 +136,46 @@ const ETC_CASES: [CompressedCase; 10] = [
     },
 ];
 
+
+#[derive(Clone, Copy)]
+struct AstcCase {
+    format: GpuTextureFormat,
+    block_width: u32,
+    block_height: u32,
+    srgb: bool,
+}
+
+const ASTC_CASES: [AstcCase; 28] = [
+    AstcCase { format: GpuTextureFormat::Astc4x4Unorm, block_width: 4, block_height: 4, srgb: false },
+    AstcCase { format: GpuTextureFormat::Astc4x4UnormSrgb, block_width: 4, block_height: 4, srgb: true },
+    AstcCase { format: GpuTextureFormat::Astc5x4Unorm, block_width: 5, block_height: 4, srgb: false },
+    AstcCase { format: GpuTextureFormat::Astc5x4UnormSrgb, block_width: 5, block_height: 4, srgb: true },
+    AstcCase { format: GpuTextureFormat::Astc5x5Unorm, block_width: 5, block_height: 5, srgb: false },
+    AstcCase { format: GpuTextureFormat::Astc5x5UnormSrgb, block_width: 5, block_height: 5, srgb: true },
+    AstcCase { format: GpuTextureFormat::Astc6x5Unorm, block_width: 6, block_height: 5, srgb: false },
+    AstcCase { format: GpuTextureFormat::Astc6x5UnormSrgb, block_width: 6, block_height: 5, srgb: true },
+    AstcCase { format: GpuTextureFormat::Astc6x6Unorm, block_width: 6, block_height: 6, srgb: false },
+    AstcCase { format: GpuTextureFormat::Astc6x6UnormSrgb, block_width: 6, block_height: 6, srgb: true },
+    AstcCase { format: GpuTextureFormat::Astc8x5Unorm, block_width: 8, block_height: 5, srgb: false },
+    AstcCase { format: GpuTextureFormat::Astc8x5UnormSrgb, block_width: 8, block_height: 5, srgb: true },
+    AstcCase { format: GpuTextureFormat::Astc8x6Unorm, block_width: 8, block_height: 6, srgb: false },
+    AstcCase { format: GpuTextureFormat::Astc8x6UnormSrgb, block_width: 8, block_height: 6, srgb: true },
+    AstcCase { format: GpuTextureFormat::Astc8x8Unorm, block_width: 8, block_height: 8, srgb: false },
+    AstcCase { format: GpuTextureFormat::Astc8x8UnormSrgb, block_width: 8, block_height: 8, srgb: true },
+    AstcCase { format: GpuTextureFormat::Astc10x5Unorm, block_width: 10, block_height: 5, srgb: false },
+    AstcCase { format: GpuTextureFormat::Astc10x5UnormSrgb, block_width: 10, block_height: 5, srgb: true },
+    AstcCase { format: GpuTextureFormat::Astc10x6Unorm, block_width: 10, block_height: 6, srgb: false },
+    AstcCase { format: GpuTextureFormat::Astc10x6UnormSrgb, block_width: 10, block_height: 6, srgb: true },
+    AstcCase { format: GpuTextureFormat::Astc10x8Unorm, block_width: 10, block_height: 8, srgb: false },
+    AstcCase { format: GpuTextureFormat::Astc10x8UnormSrgb, block_width: 10, block_height: 8, srgb: true },
+    AstcCase { format: GpuTextureFormat::Astc10x10Unorm, block_width: 10, block_height: 10, srgb: false },
+    AstcCase { format: GpuTextureFormat::Astc10x10UnormSrgb, block_width: 10, block_height: 10, srgb: true },
+    AstcCase { format: GpuTextureFormat::Astc12x10Unorm, block_width: 12, block_height: 10, srgb: false },
+    AstcCase { format: GpuTextureFormat::Astc12x10UnormSrgb, block_width: 12, block_height: 10, srgb: true },
+    AstcCase { format: GpuTextureFormat::Astc12x12Unorm, block_width: 12, block_height: 12, srgb: false },
+    AstcCase { format: GpuTextureFormat::Astc12x12UnormSrgb, block_width: 12, block_height: 12, srgb: true },
+];
+
 fn label(value: impl AsRef<str>) -> GpuResourceLabel {
     GpuResourceLabel::new(value.as_ref()).unwrap()
 }
@@ -205,6 +245,18 @@ fn require_etc_roles(mut descriptor: GpuContextDescriptor) -> GpuContextDescript
     descriptor =
         descriptor.require_format_role(GpuTextureFormat::Rgba8Unorm, GpuFormatRole::CopySource);
     descriptor
+}
+
+
+fn require_astc_roles(mut descriptor: GpuContextDescriptor) -> GpuContextDescriptor {
+    for case in ASTC_CASES {
+        for role in [GpuFormatRole::Sampled, GpuFormatRole::CopySource, GpuFormatRole::CopyDestination] {
+            descriptor = descriptor.require_format_role(case.format, role);
+        }
+    }
+    descriptor
+        .require_format_role(GpuTextureFormat::Rgba8Unorm, GpuFormatRole::ColorAttachment)
+        .require_format_role(GpuTextureFormat::Rgba8Unorm, GpuFormatRole::CopySource)
 }
 
 fn descriptor(
@@ -840,6 +892,8 @@ struct VertexOutput { @builtin(position) position: vec4<f32> };
 async fn sampled_render_oracle(
     context: &GpuContext,
     format: GpuTextureFormat,
+    width: u32,
+    height: u32,
     block: &[u8],
 ) -> [u8; 4] {
     let mut scope = GpuResourceScope::new();
@@ -849,7 +903,7 @@ async fn sampled_render_oracle(
             GpuTextureDescriptor::new(
                 common(&source_name),
                 GpuTextureDimension::D2,
-                GpuTextureExtent::new(&label(&source_name), GpuTextureDimension::D2, 4, 4, 1)
+                GpuTextureExtent::new(&label(&source_name), GpuTextureDimension::D2, width, height, 1)
                     .unwrap(),
                 1,
                 1,
@@ -922,7 +976,7 @@ async fn sampled_render_oracle(
         0,
         GpuTextureOrigin::new(0, 0, 0),
         GpuTextureAspect::Color,
-        GpuCopyExtent::new(4, 4, 1).unwrap(),
+        GpuCopyExtent::new(width, height, 1).unwrap(),
     )
     .unwrap();
     let upload = GpuUploadOperation::new(
@@ -1112,7 +1166,7 @@ async fn run_etc_decoded_oracles(context: &GpuContext) -> Option<EtcDecodedMisma
         ),
     ];
     for (index, (format, block, expected)) in cases.into_iter().enumerate() {
-        let actual = sampled_render_oracle(context, format, block).await;
+        let actual = sampled_render_oracle(context, format, 4, 4, block).await;
         if actual != expected {
             return Some(EtcDecodedMismatch {
                 case: u32::try_from(index + 1).unwrap(),
@@ -1397,6 +1451,176 @@ fn etc2_native_unsupported_roles_are_typed() {
             .is_err()
         );
     }
+}
+
+
+#[test]
+fn astc_ldr_public_contract_has_exact_variable_block_semantics() {
+    assert_eq!(ASTC_CASES.len(), 28);
+    for case in ASTC_CASES {
+        assert_eq!(case.format.block_dimensions(), (case.block_width, case.block_height));
+        assert_eq!(case.format.copy_block_size(GpuTextureAspect::Color), Some(16));
+        assert_eq!(case.format.is_srgb(), case.srgb);
+        assert!(!case.format.is_depth());
+        assert!(!case.format.is_stencil());
+        assert!(descriptor(
+            GpuTextureDimension::D2, case.block_width * 2, case.block_height * 2, 2, 1, case.format,
+            [GpuTextureUsage::Sampled, GpuTextureUsage::CopySource, GpuTextureUsage::CopyDestination],
+        ).is_ok());
+        assert!(descriptor(GpuTextureDimension::D1, case.block_width, 1, 1, 1, case.format, [GpuTextureUsage::Sampled]).is_err());
+        assert!(descriptor(GpuTextureDimension::D3, case.block_width, case.block_height, 2, 1, case.format, [GpuTextureUsage::Sampled]).is_err());
+        assert!(descriptor(GpuTextureDimension::D2, case.block_width, case.block_height, 1, 4, case.format, [GpuTextureUsage::Sampled]).is_err());
+        for usage in [GpuTextureUsage::StorageRead, GpuTextureUsage::StorageWrite, GpuTextureUsage::ColorAttachment, GpuTextureUsage::DepthStencilAttachment] {
+            assert!(descriptor(GpuTextureDimension::D2, case.block_width, case.block_height, 1, 1, case.format, [usage]).is_err());
+        }
+    }
+}
+
+fn astc_runtime_texture(scope: &mut GpuResourceScope, case: AstcCase, name: &str) -> GpuTextureHandle {
+    let resource_label = label(name);
+    scope.texture(GpuTextureDescriptor::new(
+        common(name), GpuTextureDimension::D2,
+        GpuTextureExtent::new(&resource_label, GpuTextureDimension::D2, case.block_width * 2, case.block_height * 2, 2).unwrap(),
+        3, 1, case.format,
+        GpuTextureUsages::new(&resource_label, [GpuTextureUsage::Sampled, GpuTextureUsage::CopySource, GpuTextureUsage::CopyDestination]).unwrap(),
+        GpuTextureInitialization::Uninitialized,
+    ).unwrap()).unwrap()
+}
+
+fn astc_runtime_graph(case_index: usize, case: AstcCase) -> (GpuPreparedWorkGraph, [(GpuReadbackId, Vec<u8>); 2]) {
+    let mut scope = GpuResourceScope::new();
+    let source = astc_runtime_texture(&mut scope, case, &format!("{:?} ASTC source", case.format));
+    let destination = astc_runtime_texture(&mut scope, case, &format!("{:?} ASTC destination", case.format));
+    let base_extent = GpuCopyExtent::new(case.block_width * 2, case.block_height * 2, 2).unwrap();
+    let terminal_extent = GpuCopyExtent::new((case.block_width / 2).max(1), (case.block_height / 2).max(1), 2).unwrap();
+    let region = |texture: &GpuTextureHandle, mip_level, extent| {
+        GpuTextureCopyRegion::new(texture, mip_level, GpuTextureOrigin::new(0, 0, 0), GpuTextureAspect::Color, extent).unwrap()
+    };
+    let source_base = region(&source, 0, base_extent);
+    let destination_base = region(&destination, 0, base_extent);
+    let source_terminal = region(&source, 2, terminal_extent);
+    let destination_terminal = region(&destination, 2, terminal_extent);
+    let base_bytes = expected_bytes(case_index, 16, 8, 31);
+    let terminal_bytes = expected_bytes(case_index, 16, 2, 149);
+    let base_upload = GpuUploadOperation::new(
+        source_base.clone().into(),
+        PreparedGpuData::<TransferData>::from_pod_transfer("ASTC base upload", base_bytes.as_slice(), provenance("ASTC base upload")).unwrap(),
+    ).unwrap();
+    let terminal_upload = GpuUploadOperation::new(
+        source_terminal.clone().into(),
+        PreparedGpuData::<TransferData>::from_pod_transfer("ASTC terminal upload", terminal_bytes.as_slice(), provenance("ASTC terminal upload")).unwrap(),
+    ).unwrap();
+    let base_copy = GpuCopyOperation::texture_to_texture(source_base, destination_base.clone()).unwrap();
+    let terminal_copy = GpuCopyOperation::texture_to_texture(source_terminal, destination_terminal.clone()).unwrap();
+    let base_id = GpuReadbackId::allocate().unwrap();
+    let terminal_id = GpuReadbackId::allocate().unwrap();
+    let base_readback = GpuReadbackOperation::new(destination_base.into(), base_id).unwrap();
+    let terminal_readback = GpuReadbackOperation::new(destination_terminal.into(), terminal_id).unwrap();
+    let name = format!("{:?} ASTC runtime proof", case.format);
+    let fragment = GpuWorkFragment::build(&name, |builder| {
+        builder.operation("upload ASTC base mip", base_upload)?;
+        builder.operation("copy ASTC base mip", base_copy)?;
+        builder.operation("read ASTC base mip", base_readback)?;
+        builder.operation("upload ASTC terminal mip", terminal_upload)?;
+        builder.operation("copy ASTC terminal mip", terminal_copy)?;
+        builder.operation("read ASTC terminal mip", terminal_readback)?;
+        Ok(())
+    }).unwrap();
+    (GpuPreparedWorkGraph::prepare(label(format!("{name} graph")), [fragment]).unwrap(), [(base_id, base_bytes), (terminal_id, terminal_bytes)])
+}
+
+fn astc_void_extent_red() -> [u8; 16] {
+    [0xfc, 0xfd, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x00, 0x00, 0x00, 0x00, 0xff, 0xff]
+}
+
+async fn run_astc_decoded_oracles(context: &GpuContext) {
+    let block = astc_void_extent_red();
+    for case in [ASTC_CASES[0], ASTC_CASES[13], ASTC_CASES[26]] {
+        let actual = sampled_render_oracle(context, case.format, case.block_width, case.block_height, &block).await;
+        assert_eq!(actual, [255, 0, 0, 255], "{:?}", case.format);
+    }
+}
+
+async fn run_astc_suite(context: &GpuContext) -> u32 {
+    let full_mask = (1_u32 << ASTC_CASES.len()) - 1;
+    let mut mask = 0_u32;
+    for (case_index, case) in ASTC_CASES.into_iter().enumerate() {
+        let facts = context.adapter_facts().supported().format(case.format).expect("ASTC format must remain in normalized census");
+        assert!(facts.sampled && facts.copy_source && facts.copy_destination && facts.filterable, "{:?}", case.format);
+        assert!(!facts.storage_read && !facts.storage_write && !facts.color_attachment && !facts.blendable && !facts.depth_stencil);
+        let (graph, readbacks) = astc_runtime_graph(case_index, case);
+        let prepared = context.prepare_submission(graph).await.unwrap();
+        let submission = context.submit_prepared(prepared).unwrap();
+        for (id, expected) in readbacks {
+            let bytes = readback_wait::wait_for_readback(context, &submission, id, format!("{:?} ASTC", case.format)).await;
+            assert_eq!(bytes.as_bytes(), expected.as_slice(), "{:?}", case.format);
+            assert_eq!(bytes.texture_format(), Some(case.format));
+        }
+        mask |= 1 << case_index;
+    }
+    assert_eq!(mask, full_mask);
+    run_astc_decoded_oracles(context).await;
+    mask
+}
+
+#[cfg(target_arch = "wasm32")]
+pub(crate) async fn run_browser_astc(correlated: &GpuAdapterFacts) -> u32 {
+    let census = GpuContext::request(
+        GpuContextDescriptor::new(copy_requirements()).with_allowed_backends([GpuBackendFamily::BrowserWebGpu]).with_label("R1 browser ASTC census")
+    ).await.expect("actual-browser Conformance must provide WebGPU");
+    assert_eq!(census.adapter_facts(), correlated);
+    for case in ASTC_CASES {
+        let facts = census.adapter_facts().supported().format(case.format).unwrap();
+        assert!(facts.sampled && facts.copy_source && facts.copy_destination && facts.filterable);
+    }
+    let context = GpuContext::request(require_astc_roles(
+        GpuContextDescriptor::new(etc_execution_requirements()).with_allowed_backends([GpuBackendFamily::BrowserWebGpu]).with_label("R1 browser ASTC execution")
+    )).await.expect("advertised browser ASTC roles must admit a feature-enabled device");
+    assert_eq!(context.adapter_facts(), correlated);
+    run_astc_suite(&context).await
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[allow(dead_code)]
+pub(crate) async fn run_astc_on_adapter(backend: GpuBackendFamily, correlated: &GpuAdapterFacts, direct_feature: bool) -> u32 {
+    let census = GpuContext::request(
+        GpuContextDescriptor::new(copy_requirements()).with_allowed_backends([backend]).with_label("R1 ASTC correlated census")
+    ).await.expect("qualified adapter must remain available");
+    assert_eq!(census.adapter_facts(), correlated);
+    for case in ASTC_CASES {
+        let facts = census.adapter_facts().supported().format(case.format).unwrap();
+        let portable = facts.sampled && facts.copy_source && facts.copy_destination && facts.filterable;
+        assert_eq!(portable, direct_feature, "{:?}", case.format);
+    }
+    let descriptor = require_astc_roles(
+        GpuContextDescriptor::new(etc_execution_requirements()).with_allowed_backends([backend]).with_label("R1 ASTC correlated execution")
+    );
+    if !direct_feature {
+        let error = GpuContext::request(descriptor).await.expect_err("absent ASTC feature must reject required public roles");
+        assert_eq!(error.category(), GpuContextRequestErrorCategory::NoAdmissibleCandidate);
+        return 0;
+    }
+    let context = GpuContext::request(descriptor).await.expect("advertised ASTC feature must admit public format roles");
+    assert_eq!(context.adapter_facts(), correlated);
+    run_astc_suite(&context).await
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+#[ignore = "requires the retained Vulkan software adapter"]
+fn astc_native_support_or_typed_absence_is_backend_proven() {
+    let census = pollster::block_on(GpuContext::request(
+        GpuContextDescriptor::new(copy_requirements())
+            .with_fallback_policy(GpuSoftwareFallbackPolicy::Require)
+            .with_allowed_backends([GpuBackendFamily::Vulkan])
+            .with_label("R1 native ASTC census"),
+    )).expect("retained Vulkan software adapter must be available");
+    let direct_feature = ASTC_CASES.iter().all(|case| {
+        let facts = census.adapter_facts().supported().format(case.format).unwrap();
+        facts.sampled && facts.copy_source && facts.copy_destination && facts.filterable
+    });
+    let mask = pollster::block_on(run_astc_on_adapter(GpuBackendFamily::Vulkan, census.adapter_facts(), direct_feature));
+    assert_eq!(mask, if direct_feature { (1_u32 << 28) - 1 } else { 0 });
 }
 
 #[cfg(not(target_arch = "wasm32"))]
