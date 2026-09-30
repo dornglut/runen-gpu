@@ -33,6 +33,8 @@ mod retained_offscreen;
 mod retained_optional_format_roles;
 #[path = "gpu_prefix_scan_native.rs"]
 mod retained_prefix_scan;
+#[path = "gpu_r3_clip_distances.rs"]
+mod retained_clip_distances;
 #[path = "gpu_r3_primitive_index.rs"]
 mod retained_primitive_index;
 #[path = "gpu_r2_sampler_anisotropy.rs"]
@@ -46,7 +48,7 @@ mod retained_vertex8;
 #[path = "gpu_r1_vertex_packed_formats.rs"]
 mod retained_vertex_packed;
 
-const FEATURES: [GpuCapabilityFeature; 23] = [
+const FEATURES: [GpuCapabilityFeature; 24] = [
     GpuCapabilityFeature::Compute,
     GpuCapabilityFeature::RenderPipeline,
     GpuCapabilityFeature::Copy,
@@ -66,6 +68,7 @@ const FEATURES: [GpuCapabilityFeature; 23] = [
     GpuCapabilityFeature::DepthBiasClamp,
     GpuCapabilityFeature::DepthClipControl,
     GpuCapabilityFeature::DualSourceBlending,
+    GpuCapabilityFeature::ClipDistances,
     GpuCapabilityFeature::PrimitiveIndex,
     GpuCapabilityFeature::ShaderF16,
     GpuCapabilityFeature::TimestampQuery,
@@ -341,6 +344,7 @@ fn wgpu_characterization(
                 features.contains(wgpu::Features::INDIRECT_FIRST_INSTANCE),
             "depth_clip_control": features.contains(wgpu::Features::DEPTH_CLIP_CONTROL),
             "dual_source_blending": features.contains(wgpu::Features::DUAL_SOURCE_BLENDING),
+            "clip_distances": features.contains(wgpu::Features::CLIP_DISTANCES),
             "primitive_index": features.contains(wgpu::Features::PRIMITIVE_INDEX),
             "multiview": features.contains(wgpu::Features::MULTIVIEW),
             "multisample_array": features.contains(wgpu::Features::MULTISAMPLE_ARRAY),
@@ -584,6 +588,11 @@ fn metal_qualification_records_exact_public_api_evidence() {
         None,
         &context,
     ));
+    let clip_distances = pollster::block_on(retained_clip_distances::run_on_adapter(
+        GpuBackendFamily::Metal,
+        None,
+        &context,
+    ));
     let primitive_index = pollster::block_on(retained_primitive_index::run_on_adapter(
         GpuBackendFamily::Metal,
         None,
@@ -774,6 +783,7 @@ fn metal_qualification_records_exact_public_api_evidence() {
         },
     });
     report["proofs"]["astc_ldr_mask"] = json!(astc_mask);
+    report["proofs"]["clip_distances"] = json!(proof_disposition(clip_distances.exercised));
     report["proofs"]["primitive_index"] = json!(proof_disposition(primitive_index.exercised));
 
     let report_path = report_path();

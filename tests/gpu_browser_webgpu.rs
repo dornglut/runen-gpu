@@ -35,6 +35,9 @@ mod retained_optional_format_roles;
 #[path = "gpu_prefix_scan_native.rs"]
 mod retained_prefix_scan;
 #[cfg(target_arch = "wasm32")]
+#[path = "gpu_r3_clip_distances.rs"]
+mod retained_clip_distances;
+#[cfg(target_arch = "wasm32")]
 #[path = "gpu_r3_primitive_index.rs"]
 mod retained_primitive_index;
 #[cfg(target_arch = "wasm32")]
@@ -63,7 +66,7 @@ mod browser {
     }
     use super::{
         retained_bc, retained_blend_state, retained_depth_bias, retained_depth_clip_control,
-        retained_dual_source_blending, retained_fixed_binding_array,
+        retained_clip_distances, retained_dual_source_blending, retained_fixed_binding_array,
         retained_indirect_first_instance, retained_multiview, retained_non_uniform_binding_array,
         retained_offscreen_indexed, retained_optional_format_roles, retained_prefix_scan,
         retained_primitive_index, retained_sampler_anisotropy, retained_shader_f16,
@@ -2347,6 +2350,7 @@ fn cs_main() {
         let sampler_anisotropy =
             retained_sampler_anisotropy::run_browser_sampler_anisotropy().await;
         SAMPLER_ANISOTROPY_EXERCISED.with(|slot| *slot.borrow_mut() = sampler_anisotropy);
+        retained_clip_distances::run_browser_clip_distances(&transient_context).await;
         retained_primitive_index::run_browser_primitive_index(&transient_context).await;
         let shader_f16 = retained_shader_f16::run_browser_shader_f16().await;
         SHADER_F16_EXERCISED_MASK.with(|slot| *slot.borrow_mut() = shader_f16);

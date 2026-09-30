@@ -825,7 +825,6 @@ fn dual_source_blending_rejects_multiple_color_targets_before_realization() {
     assert_eq!(error.label(), "dual_source_color_target_count=2");
 }
 
-
 const CLIP_DISTANCES_WGSL: &str = r#"
 enable clip_distances;
 
@@ -889,8 +888,10 @@ fn clip_vs() -> ClipVertexOutput {
 
 #[test]
 fn clip_distances_enable_derives_the_whole_module_requirement() {
-    let (_registry, source) =
-        admitted_source_from("clip-distances.enable-only", CLIP_DISTANCES_ENABLE_ONLY_WGSL);
+    let (_registry, source) = admitted_source_from(
+        "clip-distances.enable-only",
+        CLIP_DISTANCES_ENABLE_ONLY_WGSL,
+    );
     let program = GpuProgramDescriptor::new(
         source,
         [entry_point("compute_main")],

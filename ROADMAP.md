@@ -146,8 +146,8 @@ Goal: normalized program requirements should drive device admission instead of
 forcing callers to know backend feature bits.
 
 - retain canonical WGSL as the public program-source authority;
-- `f16` and fragment `primitive_index` are `CURRENT` through compiler-derived
-  normalized requirement discovery/admission; add further mature standardized
+- `f16`, vertex `clip_distances`, and fragment `primitive_index` are `CURRENT`
+  through compiler-derived normalized requirement discovery/admission; add further mature standardized
   optional WGSL capabilities through the same authority when decision-complete;
 - integrate optional float/filter/blend and shader built-in requirements with
   existing format/capability authority rather than creating redundant policy;
@@ -248,7 +248,7 @@ This is intentionally family-level rather than a mirror of WGPU's feature list.
 | BC/ETC2/ASTC compression | `ADVANCED` | `CURRENT` — BC, ETC2/EAC, and ASTC LDR R1 capability-gated; ASTC HDR and sliced-3D compression remain separate deferred work |
 | Anisotropy and complete portable raster/blend/depth/stencil state | `CORE` | `PLAN` — R2 |
 | Transient attachment content semantics | `ADVANCED` | `CURRENT` — first owned D2 single-layer R1/R2 slice; broader layered/external/aliasing forms require separate authority |
-| WGSL `f16` and mature standardized optional shader features | `ADVANCED` | `CURRENT` — `f16` and compiler-derived fragment `primitive_index`; further mature optional shader capabilities remain R3 `PLAN` |
+| WGSL `f16` and mature standardized optional shader features | `ADVANCED` | `CURRENT` — `f16`, compiler-derived vertex `clip_distances`, and fragment `primitive_index`; further mature optional shader capabilities remain R3 `PLAN` |
 | Fixed binding arrays | `ADVANCED` | `CURRENT` |
 | Non-uniform sampled-texture/storage-resource indexing | `ADVANCED` | `CURRENT` — fixed fully populated texture/sampler, storage-buffer, and storage-texture families; uniform-buffer and sparse/partial forms remain separately deferred |
 | Partially-bound/sparse binding arrays | `ADVANCED` | `DEFER` until target support and occupancy semantics justify stable authority |
