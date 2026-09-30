@@ -1602,7 +1602,6 @@ fn etc2_native_unsupported_roles_are_typed() {
     }
 }
 
-
 #[test]
 fn astc_ldr_public_contract_has_exact_variable_block_semantics() {
     assert_eq!(ASTC_CASES.len(), 28);
@@ -1735,12 +1734,13 @@ fn astc_runtime_graph(
     case: AstcCase,
 ) -> (GpuPreparedWorkGraph, [(GpuReadbackId, Vec<u8>); 2]) {
     let mut scope = GpuResourceScope::new();
-    let source =
-        astc_runtime_texture(&mut scope, case, &format!("{:?} ASTC source", case.format));
-    let destination =
-        astc_runtime_texture(&mut scope, case, &format!("{:?} ASTC destination", case.format));
-    let base_extent =
-        GpuCopyExtent::new(case.block_width * 2, case.block_height * 2, 2).unwrap();
+    let source = astc_runtime_texture(&mut scope, case, &format!("{:?} ASTC source", case.format));
+    let destination = astc_runtime_texture(
+        &mut scope,
+        case,
+        &format!("{:?} ASTC destination", case.format),
+    );
+    let base_extent = GpuCopyExtent::new(case.block_width * 2, case.block_height * 2, 2).unwrap();
     let terminal_extent = GpuCopyExtent::new(case.block_width, case.block_height, 2).unwrap();
     let region = |texture: &GpuTextureHandle, mip_level, extent| {
         GpuTextureCopyRegion::new(
@@ -1969,14 +1969,7 @@ fn astc_native_support_or_typed_absence_is_backend_proven() {
         census.adapter_facts(),
         direct_feature,
     ));
-    assert_eq!(
-        mask,
-        if direct_feature {
-            (1_u32 << 28) - 1
-        } else {
-            0
-        }
-    );
+    assert_eq!(mask, if direct_feature { (1_u32 << 28) - 1 } else { 0 });
 }
 
 #[cfg(not(target_arch = "wasm32"))]
