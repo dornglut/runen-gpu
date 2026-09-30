@@ -958,7 +958,7 @@ fn layered_multisample_descriptor(
     if include_depth {
         descriptor = descriptor.require_format_role(
             GpuTextureFormat::Depth32Float,
-            GpuFormatRole::DepthStencilAttachment,
+            GpuFormatRole::DepthStencil,
         );
     }
     if let Some(fallback) = fallback {
