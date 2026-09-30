@@ -85,6 +85,7 @@ mod browser {
         static PACKED32_COLOR_ATTACHMENT_MASK: RefCell<u32> = RefCell::new(0);
         static BC_EXERCISED_MASK: RefCell<u32> = RefCell::new(0);
         static ETC2_EXERCISED_MASK: RefCell<u32> = RefCell::new(0);
+        static ASTC_EXERCISED_MASK: RefCell<u32> = RefCell::new(0);
         static ETC2_DECODE_CASE: RefCell<u32> = RefCell::new(0);
         static ETC2_DECODE_ACTUAL: RefCell<u32> = RefCell::new(0);
         static ETC2_DECODE_EXPECTED: RefCell<u32> = RefCell::new(0);
@@ -2300,6 +2301,12 @@ fn cs_main() {
             (0, None)
         };
         ETC2_EXERCISED_MASK.with(|slot| *slot.borrow_mut() = etc2_mask);
+        let astc_mask = if compression_features & 2 != 0 {
+            retained_bc::run_browser_astc(transient_context.adapter_facts()).await
+        } else {
+            0
+        };
+        ASTC_EXERCISED_MASK.with(|slot| *slot.borrow_mut() = astc_mask);
         if let Some(mismatch) = decoded_mismatch {
             ETC2_DECODE_CASE.with(|slot| *slot.borrow_mut() = mismatch.case);
             ETC2_DECODE_ACTUAL
@@ -2484,6 +2491,11 @@ fn cs_main() {
     #[unsafe(no_mangle)]
     pub extern "C" fn runengpu_browser_etc2_exercised_mask() -> u32 {
         ETC2_EXERCISED_MASK.with(|mask| *mask.borrow())
+    }
+
+    #[unsafe(no_mangle)]
+    pub extern "C" fn runengpu_browser_astc_exercised_mask() -> u32 {
+        ASTC_EXERCISED_MASK.with(|mask| *mask.borrow())
     }
 
     #[unsafe(no_mangle)]

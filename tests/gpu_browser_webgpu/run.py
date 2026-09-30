@@ -103,6 +103,7 @@ const done = arguments[arguments.length - 1];
         typeof wasm.runengpu_browser_packed32_color_attachment_mask !== "function" ||
         typeof wasm.runengpu_browser_bc_exercised_mask !== "function" ||
         typeof wasm.runengpu_browser_etc2_exercised_mask !== "function" ||
+        typeof wasm.runengpu_browser_astc_exercised_mask !== "function" ||
         typeof wasm.runengpu_browser_etc2_decode_case !== "function" ||
         typeof wasm.runengpu_browser_etc2_decode_actual !== "function" ||
         typeof wasm.runengpu_browser_etc2_decode_expected !== "function" ||
@@ -151,6 +152,7 @@ const done = arguments[arguments.length - 1];
           packed32ColorAttachmentMask: wasm.runengpu_browser_packed32_color_attachment_mask(),
           bcMask: wasm.runengpu_browser_bc_exercised_mask(),
           etc2Mask: wasm.runengpu_browser_etc2_exercised_mask(),
+          astcMask: wasm.runengpu_browser_astc_exercised_mask(),
           etc2DecodeCase: wasm.runengpu_browser_etc2_decode_case(),
           etc2DecodeActual: wasm.runengpu_browser_etc2_decode_actual() >>> 0,
           etc2DecodeExpected: wasm.runengpu_browser_etc2_decode_expected() >>> 0,
@@ -1115,6 +1117,51 @@ def main() -> int:
         for format_name in etc2_names:
             print(f"RunenGPU actual-browser {format_name}: " +
                   ("EXERCISED (compressed upload + copy + exact readback)" if etc2_mask else "UNSUPPORTED"))
+
+
+        astc_names = (
+            "Astc4x4Unorm",
+            "Astc4x4UnormSrgb",
+            "Astc5x4Unorm",
+            "Astc5x4UnormSrgb",
+            "Astc5x5Unorm",
+            "Astc5x5UnormSrgb",
+            "Astc6x5Unorm",
+            "Astc6x5UnormSrgb",
+            "Astc6x6Unorm",
+            "Astc6x6UnormSrgb",
+            "Astc8x5Unorm",
+            "Astc8x5UnormSrgb",
+            "Astc8x6Unorm",
+            "Astc8x6UnormSrgb",
+            "Astc8x8Unorm",
+            "Astc8x8UnormSrgb",
+            "Astc10x5Unorm",
+            "Astc10x5UnormSrgb",
+            "Astc10x6Unorm",
+            "Astc10x6UnormSrgb",
+            "Astc10x8Unorm",
+            "Astc10x8UnormSrgb",
+            "Astc10x10Unorm",
+            "Astc10x10UnormSrgb",
+            "Astc12x10Unorm",
+            "Astc12x10UnormSrgb",
+            "Astc12x12Unorm",
+            "Astc12x12UnormSrgb",
+        )
+        astc_mask = read_exercised_mask(value, "astcMask", "ASTC LDR", len(astc_names))
+        astc_full_mask = (1 << len(astc_names)) - 1
+        if not compression_mask & 2:
+            raise RuntimeError(
+                "RunenGPU browser ASTC acceptance requires positive correlated direct-WGPU ASTC support"
+            )
+        if astc_mask != astc_full_mask:
+            raise RuntimeError(
+                "RunenGPU browser ASTC execution must cover all 28 advertised LDR formats "
+                f"(mask={astc_mask:#x}, expected={astc_full_mask:#x})"
+            )
+        for format_name in astc_names:
+            print(f"RunenGPU actual-browser {format_name}: EXERCISED (variable-block upload + copy + exact readback)")
 
         blend_state_names = ("independent_subtract", "min_max")
         blend_state_mask = read_exercised_mask(

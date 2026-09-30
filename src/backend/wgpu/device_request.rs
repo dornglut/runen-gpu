@@ -415,6 +415,12 @@ fn requested_features(candidate: &crate::GpuCandidateAdmissionReport) -> Feature
         ) {
             features |= Features::TEXTURE_COMPRESSION_ETC2;
         }
+        if matches!(
+            texture_format::compression_family(format),
+            Some(texture_format::GpuTextureCompressionFamily::Astc)
+        ) {
+            features |= Features::TEXTURE_COMPRESSION_ASTC;
+        }
         match (format, role) {
             (
                 GpuTextureFormat::R32Float

@@ -245,6 +245,13 @@ fn format_prerequisites_available(format: GpuTextureFormat, features: Features) 
     {
         return false;
     }
+    if matches!(
+        texture_format::compression_family(format),
+        Some(texture_format::GpuTextureCompressionFamily::Astc)
+    ) && !features.contains(Features::TEXTURE_COMPRESSION_ASTC)
+    {
+        return false;
+    }
     match format {
         GpuTextureFormat::Depth32FloatStencil8 => {
             features.contains(Features::DEPTH32FLOAT_STENCIL8)
@@ -939,7 +946,7 @@ mod tests {
 
     #[test]
     fn rgba8_core_format_census_and_optional_roles_follow_backend_facts() {
-        assert_eq!(TEXTURE_FORMATS.len(), 67);
+        assert_eq!(TEXTURE_FORMATS.len(), 95);
         for (format, native) in [
             (GpuTextureFormat::Rgba8Snorm, TextureFormat::Rgba8Snorm),
             (GpuTextureFormat::Rgba8Uint, TextureFormat::Rgba8Uint),
@@ -984,7 +991,7 @@ mod tests {
 
     #[test]
     fn rgba16_format_census_and_optional_roles_follow_backend_facts() {
-        assert_eq!(TEXTURE_FORMATS.len(), 67);
+        assert_eq!(TEXTURE_FORMATS.len(), 95);
         for (format, native) in [
             (GpuTextureFormat::Rgba16Uint, TextureFormat::Rgba16Uint),
             (GpuTextureFormat::Rgba16Sint, TextureFormat::Rgba16Sint),
@@ -1318,7 +1325,7 @@ mod r1_r_rg8_mapping_tests {
     #[test]
     fn shared_texture_mapping_is_unique() {
         let mappings = TEXTURE_FORMATS;
-        assert_eq!(mappings.len(), 67);
+        assert_eq!(mappings.len(), 95);
         let mut normalized = Vec::new();
         let mut native = Vec::new();
         for &(format, wgpu_format) in mappings {

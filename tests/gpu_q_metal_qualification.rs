@@ -502,6 +502,20 @@ fn metal_qualification_records_exact_public_api_evidence() {
         adapter,
         direct_etc2,
     ));
+    let direct_astc = compression_characterization["features"]["texture_compression_astc"]
+        .as_bool()
+        .expect("direct ASTC feature fact must be boolean");
+    let astc_mask = pollster::block_on(retained_compressed_formats::run_astc_on_adapter(
+        GpuBackendFamily::Metal,
+        None,
+        adapter,
+        direct_astc,
+    ));
+    assert_eq!(
+        astc_mask,
+        if direct_astc { (1_u32 << 28) - 1 } else { 0 },
+        "Metal ASTC public execution must match the correlated direct feature fact"
+    );
 
     assert!(
         !adapter
@@ -675,7 +689,7 @@ fn metal_qualification_records_exact_public_api_evidence() {
     assert_eq!(stats.readback_bytes_in_flight(), 0);
     assert_eq!(stats.pending_readbacks(), 0);
 
-    let report = json!({
+    let mut report = json!({
         "schema_version": 11,
         "qualification_level": mode.report_name(),
         "revision": revision,
@@ -750,6 +764,7 @@ fn metal_qualification_records_exact_public_api_evidence() {
             "timestamp_query": "UNSUPPORTED_SUPPRESSED",
         },
     });
+    report["proofs"]["astc_ldr_mask"] = json!(astc_mask);
 
     let report_path = report_path();
     write_report(&report_path, &report);
