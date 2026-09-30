@@ -122,16 +122,6 @@ impl GpuRenderPipelineStateDescriptor {
         mut self,
         multiview: GpuMultiviewState,
     ) -> Result<Self, GpuProgramContractError> {
-        if self.multisample.sample_count() != 1 {
-            return Err(invalid_render_pipeline_state(
-                format!(
-                    "samples={}, multiview={:?}",
-                    self.multisample.sample_count(),
-                    multiview
-                ),
-                "use single-sampled render-pipeline state for the first normalized multiview contract",
-            ));
-        }
         self.multiview = Some(multiview);
         Ok(self)
     }

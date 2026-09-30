@@ -470,6 +470,7 @@ fn wgpu_features_for(feature: GpuCapabilityFeature) -> Features {
         GpuCapabilityFeature::ShaderF16 => Features::SHADER_F16,
         GpuCapabilityFeature::DualSourceBlending => Features::DUAL_SOURCE_BLENDING,
         GpuCapabilityFeature::Multiview => Features::MULTIVIEW,
+        GpuCapabilityFeature::MultisampleArray => Features::MULTISAMPLE_ARRAY,
         GpuCapabilityFeature::DepthClipControl => Features::DEPTH_CLIP_CONTROL,
         GpuCapabilityFeature::DepthBiasClamp => Features::empty(),
         _ => Features::empty(),
@@ -1013,6 +1014,24 @@ mod tests {
                 .max_multiview_view_count,
             2,
             "feature-scoped baseline must request two views, not the adapter maximum"
+        );
+    }
+
+    #[test]
+    fn multisample_array_requests_only_the_independent_native_wgpu_feature() {
+        let candidate = candidate_with_enabled_features([GpuCapabilityFeature::MultisampleArray]);
+        assert_eq!(
+            wgpu_features_for(GpuCapabilityFeature::MultisampleArray),
+            Features::MULTISAMPLE_ARRAY
+        );
+        assert_eq!(requested_features(&candidate), Features::MULTISAMPLE_ARRAY);
+        assert_eq!(
+            candidate
+                .contract()
+                .workload_budget()
+                .limits()
+                .max_multiview_view_count(),
+            0
         );
     }
 

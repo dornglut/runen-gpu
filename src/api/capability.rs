@@ -23,6 +23,7 @@ pub enum GpuCapabilityFeature {
     DepthBiasClamp,
     DepthClipControl,
     DualSourceBlending,
+    MultisampleArray,
     Multiview,
     ShaderF16,
     TimestampQuery,

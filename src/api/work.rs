@@ -52,6 +52,14 @@ pub(crate) fn add_access_requirements(
     requirements: &mut GpuCapabilityRequirements,
     access: &GpuResourceAccess,
 ) -> Result<(), GpuCapabilityRequirementError> {
+    if let GpuResourceAccess::Texture(texture_access) = access {
+        let descriptor = texture_access.normalized_texture().descriptor();
+        if descriptor.sample_count() > 1 && descriptor.extent().depth_or_layers() > 1 {
+            requirements.insert(GpuCapabilityRequirement::Required(
+                GpuCapabilityFeature::MultisampleArray,
+            ))?;
+        }
+    }
     match access {
         GpuResourceAccess::Texture(access)
             if matches!(

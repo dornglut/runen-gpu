@@ -936,7 +936,6 @@ impl GpuTextureDescriptor {
             || (sample_count > 1
                 && (dimension != GpuTextureDimension::D2
                     || mip_level_count != 1
-                    || extent.depth_or_layers() != 1
                     || !has_attachment_usage
                     || usages.contains(GpuTextureUsage::StorageRead)
                     || usages.contains(GpuTextureUsage::StorageWrite)))
@@ -945,7 +944,7 @@ impl GpuTextureDescriptor {
                 "construct GPU texture descriptor",
                 label,
                 GpuResourceDescriptorCause::InvalidSampleCount,
-                "use a normalized representable sample count; multisampled textures require one D2 layer, one mip, attachment usage, and no storage usage",
+                "use a normalized representable sample count; multisampled textures require D2, one mip, attachment usage, and no storage usage",
             ));
         }
         if matches!(initialization, GpuTextureInitialization::Prepared(_)) && sample_count != 1 {
@@ -1201,14 +1200,15 @@ fn validate_texture_view_dimension(
         GpuTextureViewDimension::Cube => layer_count == 6 && square,
         GpuTextureViewDimension::CubeArray => layer_count.is_multiple_of(6) && square,
     };
-    let multisample_compatible =
-        parent.sample_count() == 1 || dimension == GpuTextureViewDimension::D2;
+    let multisample_compatible = parent.sample_count() == 1
+        || dimension == GpuTextureViewDimension::D2
+        || (dimension == GpuTextureViewDimension::D2Array && parent.extent().depth_or_layers() > 1);
     if !shape_compatible || !multisample_compatible {
         return Err(GpuResourceDescriptorError::invalid(
             "construct GPU texture-view descriptor",
             label,
             GpuResourceDescriptorCause::IncompatibleViewDimension,
-            "match normalized view shape: scalar views select one layer, Cube selects six square D2 layers, CubeArray selects a positive multiple of six square D2 layers, and multisampled views use D2",
+            "match normalized view shape: scalar views select one layer, Cube selects six square D2 layers, CubeArray selects a positive multiple of six square D2 layers, and multisampled D2Array views require a multi-layer parent",
         ));
     }
     Ok(())
@@ -2023,12 +2023,6 @@ mod tests {
                 d2_extent,
                 sampled(),
             ),
-            (
-                "multisampled d2 array",
-                GpuTextureDimension::D2,
-                d2_array_extent,
-                color_attachment(),
-            ),
         ] {
             let error = GpuTextureDescriptor::new(
                 common(name),
@@ -2046,6 +2040,20 @@ mod tests {
                 GpuResourceDescriptorCause::InvalidSampleCount
             );
         }
+
+        assert!(
+            GpuTextureDescriptor::new(
+                common("multisampled d2 array"),
+                GpuTextureDimension::D2,
+                d2_array_extent,
+                1,
+                4,
+                GpuTextureFormat::Rgba8Unorm,
+                color_attachment(),
+                GpuTextureInitialization::Uninitialized,
+            )
+            .is_ok()
+        );
 
         assert!(
             GpuTextureDescriptor::new(

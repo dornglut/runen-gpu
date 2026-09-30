@@ -535,6 +535,7 @@ pub(crate) const fn preferred_degradation_is_valid(
         | GpuCapabilityFeature::DepthBiasClamp
         | GpuCapabilityFeature::DepthClipControl
         | GpuCapabilityFeature::DualSourceBlending
+        | GpuCapabilityFeature::MultisampleArray
         | GpuCapabilityFeature::Multiview
         | GpuCapabilityFeature::ShaderF16 => {
             matches!(fallback, GpuPreferredFallback::SelectAlternativeWork)
@@ -562,7 +563,7 @@ pub(crate) fn alignment_value(facts: GpuAlignmentFacts, kind: GpuAlignmentKind) 
 mod tests {
     use super::*;
 
-    const FEATURES: [GpuCapabilityFeature; 21] = [
+    const FEATURES: [GpuCapabilityFeature; 22] = [
         GpuCapabilityFeature::Compute,
         GpuCapabilityFeature::RenderPipeline,
         GpuCapabilityFeature::Copy,
@@ -580,6 +581,7 @@ mod tests {
         GpuCapabilityFeature::DepthBiasClamp,
         GpuCapabilityFeature::DepthClipControl,
         GpuCapabilityFeature::DualSourceBlending,
+        GpuCapabilityFeature::MultisampleArray,
         GpuCapabilityFeature::Multiview,
         GpuCapabilityFeature::ShaderF16,
         GpuCapabilityFeature::TimestampQuery,
