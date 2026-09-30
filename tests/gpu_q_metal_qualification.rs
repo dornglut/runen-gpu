@@ -33,6 +33,8 @@ mod retained_offscreen;
 mod retained_optional_format_roles;
 #[path = "gpu_prefix_scan_native.rs"]
 mod retained_prefix_scan;
+#[path = "gpu_r3_primitive_index.rs"]
+mod retained_primitive_index;
 #[path = "gpu_r2_sampler_anisotropy.rs"]
 mod retained_sampler_anisotropy;
 #[path = "gpu_transient_attachment/mod.rs"]
@@ -44,7 +46,7 @@ mod retained_vertex8;
 #[path = "gpu_r1_vertex_packed_formats.rs"]
 mod retained_vertex_packed;
 
-const FEATURES: [GpuCapabilityFeature; 22] = [
+const FEATURES: [GpuCapabilityFeature; 23] = [
     GpuCapabilityFeature::Compute,
     GpuCapabilityFeature::RenderPipeline,
     GpuCapabilityFeature::Copy,
@@ -64,6 +66,7 @@ const FEATURES: [GpuCapabilityFeature; 22] = [
     GpuCapabilityFeature::DepthBiasClamp,
     GpuCapabilityFeature::DepthClipControl,
     GpuCapabilityFeature::DualSourceBlending,
+    GpuCapabilityFeature::PrimitiveIndex,
     GpuCapabilityFeature::ShaderF16,
     GpuCapabilityFeature::TimestampQuery,
     GpuCapabilityFeature::Presentation,
@@ -338,6 +341,7 @@ fn wgpu_characterization(
                 features.contains(wgpu::Features::INDIRECT_FIRST_INSTANCE),
             "depth_clip_control": features.contains(wgpu::Features::DEPTH_CLIP_CONTROL),
             "dual_source_blending": features.contains(wgpu::Features::DUAL_SOURCE_BLENDING),
+            "primitive_index": features.contains(wgpu::Features::PRIMITIVE_INDEX),
             "multiview": features.contains(wgpu::Features::MULTIVIEW),
             "multisample_array": features.contains(wgpu::Features::MULTISAMPLE_ARRAY),
             "texture_compression_etc2":
@@ -580,6 +584,11 @@ fn metal_qualification_records_exact_public_api_evidence() {
         None,
         &context,
     ));
+    let primitive_index = pollster::block_on(retained_primitive_index::run_on_adapter(
+        GpuBackendFamily::Metal,
+        None,
+        &context,
+    ));
     let depth_bias_mask = pollster::block_on(retained_depth_bias::run_baseline(&context));
     pollster::block_on(retained_depth_clip_control::run_case(
         &context,
@@ -730,6 +739,7 @@ fn metal_qualification_records_exact_public_api_evidence() {
             "etc2_eac_mask": etc2_mask,
             "dual_source_blending":
                 proof_disposition(dual_source_blending.exercised),
+            "primitive_index": proof_disposition(primitive_index.exercised),
             "depth_bias_baseline_mask": depth_bias_mask,
             "depth_clip_control": "EXERCISED",
             "indirect_first_instance":
