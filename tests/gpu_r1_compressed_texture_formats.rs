@@ -1812,19 +1812,35 @@ fn astc_void_extent_red() -> [u8; 16] {
     ]
 }
 
+fn astc_void_extent_mid_gray() -> [u8; 16] {
+    [
+        0xfc, 0xfd, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0xff,
+        0xff,
+    ]
+}
+
 async fn run_astc_decoded_oracles(context: &GpuContext) {
-    let block = astc_void_extent_red();
-    for case in [ASTC_CASES[0], ASTC_CASES[13], ASTC_CASES[26]] {
+    let red = astc_void_extent_red();
+    for case in [ASTC_CASES[0], ASTC_CASES[12], ASTC_CASES[26]] {
         let actual = sampled_render_oracle(
             context,
             case.format,
             case.block_width,
             case.block_height,
-            &block,
+            &red,
         )
         .await;
         assert_eq!(actual, [255, 0, 0, 255], "{:?}", case.format);
     }
+
+    // ASTC LDR void-extent constants store UNORM16 channel values. Using the same
+    // mid-gray payload proves that the linear and sRGB public formats do not collapse
+    // to one sampled interpretation.
+    let gray = astc_void_extent_mid_gray();
+    let linear = sampled_render_oracle(context, ASTC_CASES[0].format, 4, 4, &gray).await;
+    let srgb = sampled_render_oracle(context, ASTC_CASES[1].format, 4, 4, &gray).await;
+    assert_eq!(linear, [128, 128, 128, 255]);
+    assert_eq!(srgb, [55, 55, 55, 255]);
 }
 
 async fn run_astc_suite(context: &GpuContext) -> u32 {
