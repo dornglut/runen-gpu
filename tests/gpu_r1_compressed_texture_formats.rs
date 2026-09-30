@@ -1918,16 +1918,19 @@ pub(crate) async fn run_browser_astc(correlated: &GpuAdapterFacts) -> u32 {
 #[allow(dead_code)]
 pub(crate) async fn run_astc_on_adapter(
     backend: GpuBackendFamily,
+    fallback: Option<GpuSoftwareFallbackPolicy>,
     correlated: &GpuAdapterFacts,
     direct_feature: bool,
 ) -> u32 {
-    let census = GpuContext::request(
-        GpuContextDescriptor::new(copy_requirements())
-            .with_allowed_backends([backend])
-            .with_label("R1 ASTC correlated census"),
-    )
-    .await
-    .expect("qualified adapter must remain available");
+    let mut census_descriptor = GpuContextDescriptor::new(copy_requirements())
+        .with_allowed_backends([backend])
+        .with_label("R1 ASTC correlated census");
+    if let Some(fallback) = fallback {
+        census_descriptor = census_descriptor.with_fallback_policy(fallback);
+    }
+    let census = GpuContext::request(census_descriptor)
+        .await
+        .expect("qualified adapter must remain available");
     assert_eq!(census.adapter_facts(), correlated);
     for case in ASTC_CASES {
         let facts = census
@@ -1939,11 +1942,13 @@ pub(crate) async fn run_astc_on_adapter(
             facts.sampled && facts.copy_source && facts.copy_destination && facts.filterable;
         assert_eq!(portable, direct_feature, "{:?}", case.format);
     }
-    let descriptor = require_astc_roles(
-        GpuContextDescriptor::new(etc_execution_requirements())
-            .with_allowed_backends([backend])
-            .with_label("R1 ASTC correlated execution"),
-    );
+    let mut execution_descriptor = GpuContextDescriptor::new(etc_execution_requirements())
+        .with_allowed_backends([backend])
+        .with_label("R1 ASTC correlated execution");
+    if let Some(fallback) = fallback {
+        execution_descriptor = execution_descriptor.with_fallback_policy(fallback);
+    }
+    let descriptor = require_astc_roles(execution_descriptor);
     if !direct_feature {
         let error = GpuContext::request(descriptor)
             .await
@@ -1982,6 +1987,7 @@ fn astc_native_support_or_typed_absence_is_backend_proven() {
     });
     let mask = pollster::block_on(run_astc_on_adapter(
         GpuBackendFamily::Vulkan,
+        Some(GpuSoftwareFallbackPolicy::Require),
         census.adapter_facts(),
         direct_feature,
     ));

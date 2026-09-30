@@ -507,6 +507,7 @@ fn metal_qualification_records_exact_public_api_evidence() {
         .expect("direct ASTC feature fact must be boolean");
     let astc_mask = pollster::block_on(retained_compressed_formats::run_astc_on_adapter(
         GpuBackendFamily::Metal,
+        None,
         adapter,
         direct_astc,
     ));
