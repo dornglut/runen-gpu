@@ -825,7 +825,6 @@ fn dual_source_blending_rejects_multiple_color_targets_before_realization() {
     assert_eq!(error.label(), "dual_source_color_target_count=2");
 }
 
-
 const PRIMITIVE_INDEX_WGSL: &str = r#"
 enable primitive_index;
 
@@ -861,8 +860,10 @@ fn primitive_index_fs(@builtin(primitive_index) primitive_index: u32) -> @locati
 
 #[test]
 fn primitive_index_enable_derives_the_whole_module_requirement() {
-    let (_registry, source) =
-        admitted_source_from("primitive-index.enable-only", PRIMITIVE_INDEX_ENABLE_ONLY_WGSL);
+    let (_registry, source) = admitted_source_from(
+        "primitive-index.enable-only",
+        PRIMITIVE_INDEX_ENABLE_ONLY_WGSL,
+    );
     let program = GpuProgramDescriptor::new(
         source,
         [entry_point("compute_main")],
@@ -870,19 +871,18 @@ fn primitive_index_enable_derives_the_whole_module_requirement() {
     )
     .expect("the normalized primitive-index profile should admit the enable directive");
 
-    assert_required(
-        program.requirements(),
-        GpuCapabilityFeature::PrimitiveIndex,
-    );
+    assert_required(program.requirements(), GpuCapabilityFeature::PrimitiveIndex);
 }
 
 #[test]
 fn primitive_index_fragment_input_is_compiler_derived() {
-    let (_registry, source) =
-        admitted_source_from("primitive-index.render", PRIMITIVE_INDEX_WGSL);
+    let (_registry, source) = admitted_source_from("primitive-index.render", PRIMITIVE_INDEX_WGSL);
     let program = GpuProgramDescriptor::new(
         source,
-        [entry_point("primitive_index_vs"), entry_point("primitive_index_fs")],
+        [
+            entry_point("primitive_index_vs"),
+            entry_point("primitive_index_fs"),
+        ],
         std::iter::empty::<GpuBindingLayoutRefinement>(),
     )
     .expect("standardized primitive-index WGSL should admit");
@@ -895,8 +895,10 @@ fn primitive_index_fragment_input_is_compiler_derived() {
 
 #[test]
 fn primitive_index_builtin_requires_the_standardized_enable_extension() {
-    let (_registry, source) =
-        admitted_source_from("primitive-index.missing-enable", PRIMITIVE_INDEX_WITHOUT_ENABLE_WGSL);
+    let (_registry, source) = admitted_source_from(
+        "primitive-index.missing-enable",
+        PRIMITIVE_INDEX_WITHOUT_ENABLE_WGSL,
+    );
     let error = GpuProgramDescriptor::new(
         source,
         [entry_point("primitive_index_fs")],
