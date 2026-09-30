@@ -2,8 +2,12 @@ use crate::GpuTextureFormat;
 use wgpu::{AstcBlock, AstcChannel, TextureFormat};
 
 macro_rules! native_texture_format {
-    ($variant:ident) => { TextureFormat::$variant };
-    ($variant:ident => $native:expr) => { $native };
+    ($variant:ident) => {
+        TextureFormat::$variant
+    };
+    ($variant:ident => $native:expr) => {
+        $native
+    };
 }
 
 macro_rules! define_texture_format_mapping {

@@ -688,7 +688,7 @@ fn metal_qualification_records_exact_public_api_evidence() {
     assert_eq!(stats.readback_bytes_in_flight(), 0);
     assert_eq!(stats.pending_readbacks(), 0);
 
-    let report = json!({
+    let mut report = json!({
         "schema_version": 11,
         "qualification_level": mode.report_name(),
         "revision": revision,
@@ -727,7 +727,6 @@ fn metal_qualification_records_exact_public_api_evidence() {
             "blend_state_mask": blend_mask,
             "optional_format_roles_mask": optional_format_roles_mask,
             "etc2_eac_mask": etc2_mask,
-            "astc_ldr_mask": astc_mask,
             "dual_source_blending":
                 proof_disposition(dual_source_blending.exercised),
             "depth_bias_baseline_mask": depth_bias_mask,
@@ -764,6 +763,7 @@ fn metal_qualification_records_exact_public_api_evidence() {
             "timestamp_query": "UNSUPPORTED_SUPPRESSED",
         },
     });
+    report["proofs"]["astc_ldr_mask"] = json!(astc_mask);
 
     let report_path = report_path();
     write_report(&report_path, &report);
