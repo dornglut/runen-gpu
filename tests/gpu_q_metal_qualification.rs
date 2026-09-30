@@ -44,13 +44,14 @@ mod retained_vertex8;
 #[path = "gpu_r1_vertex_packed_formats.rs"]
 mod retained_vertex_packed;
 
-const FEATURES: [GpuCapabilityFeature; 21] = [
+const FEATURES: [GpuCapabilityFeature; 22] = [
     GpuCapabilityFeature::Compute,
     GpuCapabilityFeature::RenderPipeline,
     GpuCapabilityFeature::Copy,
     GpuCapabilityFeature::IndirectExecution,
     GpuCapabilityFeature::IndirectFirstInstance,
     GpuCapabilityFeature::Multiview,
+    GpuCapabilityFeature::MultisampleArray,
     GpuCapabilityFeature::StorageTexture,
     GpuCapabilityFeature::TextureBindingArray,
     GpuCapabilityFeature::BufferBindingArray,
@@ -338,6 +339,7 @@ fn wgpu_characterization(
             "depth_clip_control": features.contains(wgpu::Features::DEPTH_CLIP_CONTROL),
             "dual_source_blending": features.contains(wgpu::Features::DUAL_SOURCE_BLENDING),
             "multiview": features.contains(wgpu::Features::MULTIVIEW),
+            "multisample_array": features.contains(wgpu::Features::MULTISAMPLE_ARRAY),
             "texture_compression_etc2":
                 features.contains(wgpu::Features::TEXTURE_COMPRESSION_ETC2),
             "texture_compression_astc":
@@ -596,6 +598,18 @@ fn metal_qualification_records_exact_public_api_evidence() {
             "advertised Metal Multiview must execute all retained public semantic oracles"
         );
     }
+    let layered_multisample =
+        pollster::block_on(retained_multiview::run_layered_multisample_on_adapter(
+            GpuBackendFamily::Metal,
+            None,
+            &context,
+        ));
+    if layered_multisample.multisample_array_supported && layered_multisample.multiview_supported {
+        assert!(
+            layered_multisample.exercised,
+            "advertised Metal layered MSAA must execute the public resolve oracle"
+        );
+    }
     retained_sampler_anisotropy::realize_anisotropic_sampler(&context);
     let (transient_graph, transient_readback_id) = retained_transient_attachment::graph();
     let transient_prepared =
@@ -702,6 +716,7 @@ fn metal_qualification_records_exact_public_api_evidence() {
                 proof_disposition(indirect_first_instance.exercised),
             "multiview": proof_disposition(multiview.fully_exercised()),
             "multiview_normalized_max": multiview.normalized_max,
+            "layered_multisample": proof_disposition(layered_multisample.exercised),
             "sampler_anisotropy": "EXERCISED",
             "transient_attachment": "EXERCISED",
             "transient_depth": "EXERCISED",

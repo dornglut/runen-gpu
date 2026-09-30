@@ -684,6 +684,7 @@ fn is_declared_extension(feature: GpuCapabilityFeature) -> bool {
             | GpuCapabilityFeature::StorageBufferBindingArrayNonUniformIndexing
             | GpuCapabilityFeature::StorageTextureBindingArrayNonUniformIndexing
             | GpuCapabilityFeature::DualSourceBlending
+            | GpuCapabilityFeature::MultisampleArray
             | GpuCapabilityFeature::Multiview
     )
 }

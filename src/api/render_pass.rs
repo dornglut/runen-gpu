@@ -118,6 +118,13 @@ impl GpuRenderPassSignature {
 
     pub fn requirements(&self) -> GpuCapabilityRequirements {
         let mut requirements = GpuCapabilityRequirements::new();
+        if self.sample_count > 1 && self.multiview.is_some() {
+            requirements
+                .insert(GpuCapabilityRequirement::Required(
+                    GpuCapabilityFeature::MultisampleArray,
+                ))
+                .expect("one layered multisample requirement cannot conflict");
+        }
         if self.multiview.is_some() {
             requirements
                 .insert(GpuCapabilityRequirement::Required(

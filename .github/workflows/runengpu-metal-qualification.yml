@@ -152,6 +152,7 @@ jobs:
               "depth_clip_control",
               "dual_source_blending",
               "multiview",
+              "multisample_array",
               "texture_compression_etc2",
               "texture_compression_astc",
               "texture_binding_array",
@@ -250,6 +251,9 @@ jobs:
           assert normalized_multiview == expected_normalized_multiview
           expected_normalized_max = min(raw_multiview_max, 31) if expected_normalized_multiview else 0
           assert adapter_limits["max_multiview_view_count"] == expected_normalized_max
+          raw_multisample_array = wgpu_characterization["features"]["multisample_array"]
+          normalized_multisample_array = capabilities["MultisampleArray"]["supported"]
+          assert normalized_multisample_array == raw_multisample_array
 
           assert report["proofs"]["prefix_scan_exclusive"] == "EXERCISED"
           assert report["proofs"]["prefix_scan_inclusive"] == "EXERCISED"
@@ -282,6 +286,8 @@ jobs:
               assert report["proofs"]["multiview"] == "EXERCISED"
           else:
               assert report["proofs"]["multiview"] == "UNSUPPORTED"
+          expected_layered_msaa = "EXERCISED" if normalized_multisample_array and normalized_multiview else "UNSUPPORTED"
+          assert report["proofs"]["layered_multisample"] == expected_layered_msaa
 
           assert report["proofs"]["sampler_anisotropy"] == "EXERCISED"
           assert report["proofs"]["transient_attachment"] == "EXERCISED"

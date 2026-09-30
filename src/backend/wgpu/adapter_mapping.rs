@@ -60,6 +60,9 @@ pub(super) fn adapter_facts(
     if multiview_view_count >= 2 {
         supported.push(GpuCapabilityFeature::Multiview);
     }
+    if normalized_multisample_array_supported(info.backend, adapter_features) {
+        supported.push(GpuCapabilityFeature::MultisampleArray);
+    }
     let adapter_limits =
         normalized_limits(&native_limits).with_multiview_limit(multiview_view_count);
     GpuAdapterFacts::new(
@@ -100,6 +103,10 @@ fn normalized_multiview_view_count(features: Features, raw_max: u32) -> u32 {
     }
     let effective = raw_max.min(31);
     if effective >= 2 { effective } else { 0 }
+}
+
+fn normalized_multisample_array_supported(backend: Backend, features: Features) -> bool {
+    backend != Backend::BrowserWebGpu && features.contains(Features::MULTISAMPLE_ARRAY)
 }
 
 fn normalized_limits(native: &wgpu::Limits) -> GpuLimits {
@@ -529,6 +536,24 @@ mod tests {
             31,
             "pinned WGPU's unsafe 32-view validation edge must be clamped"
         );
+    }
+
+    #[test]
+    fn multisample_array_is_independent_native_only_advertised_feature() {
+        for backend in [Backend::Vulkan, Backend::Metal] {
+            assert!(normalized_multisample_array_supported(
+                backend,
+                Features::MULTISAMPLE_ARRAY
+            ));
+            assert!(!normalized_multisample_array_supported(
+                backend,
+                Features::MULTIVIEW
+            ));
+        }
+        assert!(!normalized_multisample_array_supported(
+            Backend::BrowserWebGpu,
+            Features::MULTISAMPLE_ARRAY
+        ));
     }
 
     #[test]

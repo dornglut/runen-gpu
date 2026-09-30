@@ -123,6 +123,9 @@ pub(super) fn lower_texture(
     descriptor: &GpuTextureDescriptor,
 ) -> Result<LoweredTexture, GpuResourceRealizationError> {
     validate_resource_ownership(identity, descriptor.common())?;
+    if descriptor.sample_count() > 1 && descriptor.extent().depth_or_layers() > 1 {
+        require_feature(context, identity, GpuCapabilityFeature::MultisampleArray)?;
+    }
 
     let native_format = map_texture_format(descriptor.format());
     let native_usage = descriptor

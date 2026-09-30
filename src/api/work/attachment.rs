@@ -335,7 +335,7 @@ impl GpuMultisampleResolveTarget {
             &destination,
             "construct GPU multisample resolve target",
             GpuWorkOperationCause::InvalidMultisampleResolve,
-            "use one explicit 2D texture view selecting exactly one mip and one array layer",
+            "use one explicit D2 view selecting one layer or a D2Array view selecting 2 through 31 contiguous layers",
         )?;
         let label = destination
             .descriptor()
@@ -397,7 +397,7 @@ impl GpuRenderColorAttachment {
         validate_render_attachment_view(
             &source,
             "construct GPU render color attachment",
-            "use either one explicit D2 view selecting one layer or one single-sampled D2Array view selecting 2 through 31 contiguous layers",
+            "use either one explicit D2 view selecting one layer or one D2Array view selecting 2 through 31 contiguous layers",
         )?;
         if is_multiview_attachment(&source) && store == GpuAttachmentStore::Discard {
             return Err(GpuWorkOperationError::invalid(
@@ -488,13 +488,22 @@ fn validate_multisample_resolve(
         && source_range.array_layer_count() == destination_range.array_layer_count()
         && source_range.aspect() == GpuTextureAspect::Color
         && destination_range.aspect() == GpuTextureAspect::Color
-        && mip_extent(source_texture, source_range.base_mip_level())
-            == mip_extent(destination_texture, destination_range.base_mip_level());
+        && {
+            let source_extent = mip_extent(source_texture, source_range.base_mip_level());
+            let destination_extent =
+                mip_extent(destination_texture, destination_range.base_mip_level());
+            (source_extent.0, source_extent.1) == (destination_extent.0, destination_extent.1)
+        };
     let valid = source_texture.descriptor().sample_count() > 1
         && destination_texture.descriptor().sample_count() == 1
         && effective_texture_format(source.resource())
             == effective_view_format(destination.destination())
         && source_texture.descriptor().dimension() == destination_texture.descriptor().dimension()
+        && matches!(
+            source.resource(),
+            GpuTextureAccessResource::TextureView(view)
+                if view.descriptor().dimension() == destination.destination().descriptor().dimension()
+        )
         && same_shape
         && source_texture != destination_texture;
     if !valid {
@@ -567,7 +576,7 @@ impl GpuRenderDepthStencilAttachment {
         validate_render_attachment_view(
             &source,
             "construct GPU render depth/stencil attachment",
-            "use either one explicit D2 view selecting one layer or one single-sampled D2Array view selecting 2 through 31 contiguous layers",
+            "use either one explicit D2 view selecting one layer or one D2Array view selecting 2 through 31 contiguous layers",
         )?;
         let texture = source.descriptor().texture();
         let format = effective_view_format(&source);
@@ -723,7 +732,6 @@ fn validate_render_attachment_view(
     let multiview = descriptor.dimension() == GpuTextureViewDimension::D2Array
         && subresources.mip_level_count() == 1
         && (2..=31).contains(&subresources.array_layer_count())
-        && texture.descriptor().sample_count() == 1
         && !texture
             .descriptor()
             .usages()
@@ -748,10 +756,18 @@ fn validate_attachment_view(
 ) -> Result<(), GpuWorkOperationError> {
     let descriptor = view.descriptor();
     let subresources = descriptor.subresources();
-    if descriptor.dimension() != GpuTextureViewDimension::D2
-        || subresources.mip_level_count() != 1
-        || subresources.array_layer_count() != 1
-    {
+    let ordinary = descriptor.dimension() == GpuTextureViewDimension::D2
+        && subresources.mip_level_count() == 1
+        && subresources.array_layer_count() == 1;
+    let layered = descriptor.dimension() == GpuTextureViewDimension::D2Array
+        && subresources.mip_level_count() == 1
+        && (2..=31).contains(&subresources.array_layer_count())
+        && !descriptor
+            .texture()
+            .descriptor()
+            .usages()
+            .contains(GpuTextureUsage::TransientAttachment);
+    if !ordinary && !layered {
         return Err(GpuWorkOperationError::invalid(
             operation,
             descriptor.common().label().as_str(),
