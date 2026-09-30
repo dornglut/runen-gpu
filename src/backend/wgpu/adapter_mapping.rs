@@ -206,6 +206,9 @@ pub(super) fn normalized_features(
     {
         supported.push(GpuCapabilityFeature::StorageTextureBindingArrayNonUniformIndexing);
     }
+    if features.contains(Features::PRIMITIVE_INDEX) {
+        supported.push(GpuCapabilityFeature::PrimitiveIndex);
+    }
     if features.contains(Features::SHADER_F16) {
         supported.push(GpuCapabilityFeature::ShaderF16);
     }

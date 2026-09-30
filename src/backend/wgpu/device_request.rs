@@ -474,6 +474,7 @@ fn wgpu_features_for(feature: GpuCapabilityFeature) -> Features {
             Features::STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING
         }
         GpuCapabilityFeature::ShaderF16 => Features::SHADER_F16,
+        GpuCapabilityFeature::PrimitiveIndex => Features::PRIMITIVE_INDEX,
         GpuCapabilityFeature::DualSourceBlending => Features::DUAL_SOURCE_BLENDING,
         GpuCapabilityFeature::Multiview => Features::MULTIVIEW,
         GpuCapabilityFeature::MultisampleArray => Features::MULTISAMPLE_ARRAY,

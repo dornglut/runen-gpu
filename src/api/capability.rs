@@ -25,6 +25,7 @@ pub enum GpuCapabilityFeature {
     DualSourceBlending,
     MultisampleArray,
     Multiview,
+    PrimitiveIndex,
     ShaderF16,
     TimestampQuery,
     Presentation,
