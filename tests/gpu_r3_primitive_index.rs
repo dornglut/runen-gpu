@@ -293,10 +293,9 @@ pub(crate) async fn run_on_adapter(
         "census context must not enable PrimitiveIndex implicitly"
     );
     let (candidate, _) = graph();
-    let missing_enablement = census
-        .prepare_submission(candidate)
-        .await
-        .expect_err("supported but non-enabled primitive-index work must reject before realization");
+    let missing_enablement = census.prepare_submission(candidate).await.expect_err(
+        "supported but non-enabled primitive-index work must reject before realization",
+    );
     assert_eq!(
         missing_enablement.kind(),
         GpuSubmissionPreparationErrorKind::CapabilityNotAdmitted

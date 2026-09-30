@@ -887,10 +887,7 @@ fn primitive_index_fragment_input_is_compiler_derived() {
     )
     .expect("standardized primitive-index WGSL should admit");
 
-    assert_required(
-        program.requirements(),
-        GpuCapabilityFeature::PrimitiveIndex,
-    );
+    assert_required(program.requirements(), GpuCapabilityFeature::PrimitiveIndex);
 }
 
 #[test]

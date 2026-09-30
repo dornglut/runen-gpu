@@ -739,7 +739,6 @@ fn metal_qualification_records_exact_public_api_evidence() {
             "etc2_eac_mask": etc2_mask,
             "dual_source_blending":
                 proof_disposition(dual_source_blending.exercised),
-            "primitive_index": proof_disposition(primitive_index.exercised),
             "depth_bias_baseline_mask": depth_bias_mask,
             "depth_clip_control": "EXERCISED",
             "indirect_first_instance":
@@ -775,6 +774,7 @@ fn metal_qualification_records_exact_public_api_evidence() {
         },
     });
     report["proofs"]["astc_ldr_mask"] = json!(astc_mask);
+    report["proofs"]["primitive_index"] = json!(proof_disposition(primitive_index.exercised));
 
     let report_path = report_path();
     write_report(&report_path, &report);

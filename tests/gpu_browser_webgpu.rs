@@ -35,11 +35,11 @@ mod retained_optional_format_roles;
 #[path = "gpu_prefix_scan_native.rs"]
 mod retained_prefix_scan;
 #[cfg(target_arch = "wasm32")]
-#[path = "gpu_r2_sampler_anisotropy.rs"]
-mod retained_sampler_anisotropy;
-#[cfg(target_arch = "wasm32")]
 #[path = "gpu_r3_primitive_index.rs"]
 mod retained_primitive_index;
+#[cfg(target_arch = "wasm32")]
+#[path = "gpu_r2_sampler_anisotropy.rs"]
+mod retained_sampler_anisotropy;
 #[cfg(target_arch = "wasm32")]
 #[path = "gpu_r3_shader_f16.rs"]
 mod retained_shader_f16;
@@ -67,8 +67,7 @@ mod browser {
         retained_indirect_first_instance, retained_multiview, retained_non_uniform_binding_array,
         retained_offscreen_indexed, retained_optional_format_roles, retained_prefix_scan,
         retained_primitive_index, retained_sampler_anisotropy, retained_shader_f16,
-        retained_transient_attachment, retained_vertex_packed, retained_vertex8,
-        retained_vertex16,
+        retained_transient_attachment, retained_vertex_packed, retained_vertex8, retained_vertex16,
     };
     use runen_gpu::*;
     use std::cell::RefCell;
