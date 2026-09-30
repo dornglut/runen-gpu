@@ -9,6 +9,8 @@ use std::process::Command;
 mod readback_wait;
 #[path = "gpu_r2_blend_state.rs"]
 mod retained_blend;
+#[path = "gpu_r3_clip_distances.rs"]
+mod retained_clip_distances;
 #[path = "gpu_r1_compressed_texture_formats.rs"]
 mod retained_compressed_formats;
 #[path = "gpu_r2_depth_bias.rs"]
@@ -33,8 +35,6 @@ mod retained_offscreen;
 mod retained_optional_format_roles;
 #[path = "gpu_prefix_scan_native.rs"]
 mod retained_prefix_scan;
-#[path = "gpu_r3_clip_distances.rs"]
-mod retained_clip_distances;
 #[path = "gpu_r3_primitive_index.rs"]
 mod retained_primitive_index;
 #[path = "gpu_r2_sampler_anisotropy.rs"]

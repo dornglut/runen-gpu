@@ -533,11 +533,7 @@ fn parse_wgsl_with_normalized_profiles(
     GpuProgramContractError,
 > {
     let profiles = [
-        (
-            baseline_capabilities,
-            Vec::new(),
-            "baseline",
-        ),
+        (baseline_capabilities, Vec::new(), "baseline"),
         (
             baseline_capabilities | naga::valid::Capabilities::SHADER_FLOAT16,
             vec![GpuCapabilityFeature::ShaderF16],
