@@ -28,6 +28,7 @@ impl GpuCandidateId {
         self.0.get() != 0
     }
 
+    #[allow(deprecated)]
     pub(crate) fn allocate() -> Result<Self, GpuContextRequestError> {
         let value = NEXT_CANDIDATE_RETRY_TOKEN
             .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |current| {

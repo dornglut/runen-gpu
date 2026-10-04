@@ -32,6 +32,7 @@ impl GpuProgramSourceOwnerId {
     }
 }
 
+#[allow(deprecated)]
 fn allocate_source_owner_id(
     allocator: &AtomicU64,
 ) -> Result<GpuProgramSourceOwnerId, GpuProgramSourceError> {

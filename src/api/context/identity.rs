@@ -103,6 +103,7 @@ impl GpuContextIdAllocator {
         }
     }
 
+    #[allow(deprecated)]
     pub(crate) fn allocate(&self) -> Result<GpuContextId, GpuContextRequestError> {
         let value = self
             .next

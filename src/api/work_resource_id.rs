@@ -76,6 +76,7 @@ impl GpuWorkResourceOwnerScopeAllocator {
         }
     }
 
+    #[allow(deprecated)]
     fn allocate(&self) -> Result<GpuWorkResourceOwnerScope, GpuWorkResourceIdAllocationError> {
         let value = self
             .next
