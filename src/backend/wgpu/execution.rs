@@ -3064,6 +3064,7 @@ fn rejection_not_running(state: GpuExecutionLifecycleState) -> GpuSubmissionReje
     )
 }
 
+#[allow(deprecated)]
 fn allocate_nonzero(counter: &AtomicU64) -> Option<NonZeroU64> {
     let value = counter
         .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |current| {

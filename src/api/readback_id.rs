@@ -9,6 +9,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 pub struct GpuReadbackId(NonZeroU64);
 
 impl GpuReadbackId {
+    #[allow(deprecated)]
     pub fn allocate() -> Result<Self, GpuReadbackIdAllocationError> {
         static NEXT: AtomicU64 = AtomicU64::new(1);
         let value = NEXT

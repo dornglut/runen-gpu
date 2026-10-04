@@ -468,6 +468,7 @@ impl GpuSurfaceIdAllocator {
         }
     }
 
+    #[allow(deprecated)]
     fn allocate(&self) -> Result<GpuSurfaceId, GpuSurfaceError> {
         let value = self
             .next

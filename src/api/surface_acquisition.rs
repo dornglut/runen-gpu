@@ -27,6 +27,7 @@ impl GpuSurfaceLeaseIdAllocator {
         }
     }
 
+    #[allow(deprecated)]
     fn allocate(&self, surface: GpuSurfaceId) -> Result<GpuSurfaceLeaseId, GpuSurfaceAcquireError> {
         let value = self
             .next
