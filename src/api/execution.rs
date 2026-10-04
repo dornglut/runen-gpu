@@ -1,6 +1,7 @@
 use super::{
     GpuContextAffinity, GpuInitialCoverage, GpuProgramContractError, GpuReadbackBytes,
-    GpuReadbackId, GpuResourceRef, GpuSurfaceLeaseError, GpuTransferRegion, GpuWorkOperationError,
+    GpuReadbackId, GpuResourceRef, GpuSurfaceLeaseError, GpuTransferRegion, GpuWorkNodeId,
+    GpuWorkOperationError,
 };
 use core::fmt;
 use core::num::{NonZeroU64, NonZeroUsize};
@@ -334,6 +335,7 @@ pub struct GpuSubmission {
     id: GpuSubmissionId,
     affinity: GpuContextAffinity,
     status: Arc<Mutex<GpuSubmissionStatus>>,
+    work_nodes: Arc<[GpuWorkNodeId]>,
     readbacks: Arc<[GpuReadback]>,
 }
 
@@ -342,12 +344,14 @@ impl GpuSubmission {
         id: GpuSubmissionId,
         affinity: GpuContextAffinity,
         status: Arc<Mutex<GpuSubmissionStatus>>,
+        work_nodes: Arc<[GpuWorkNodeId]>,
         readbacks: Vec<GpuReadback>,
     ) -> Self {
         Self {
             id,
             affinity,
             status,
+            work_nodes,
             readbacks: readbacks.into(),
         }
     }
@@ -367,6 +371,25 @@ impl GpuSubmission {
             .clone()
     }
 
+    /// Returns whether the exact authored work-node identity participated in this submission.
+    ///
+    /// Work-node identity is process-local and opaque. This query uses existing
+    /// GpuWorkNodeId equality authority; it does not correlate by labels, provenance,
+    /// operation shape, resource identity, prepared-node ordinal, or backend command identity.
+    ///
+    /// Cloned fragments preserve authored node identity. This boolean therefore reports
+    /// at-least-once identity participation and deliberately does not expose prepared-occurrence
+    /// multiplicity.
+    ///
+    /// Membership alone is not successful-execution evidence. A caller requiring terminal
+    /// success must additionally observe GpuSubmissionStatus::Completed from this same
+    /// submission. Accepted is in-flight state, and Failed never establishes successful
+    /// work-node evidence.
+    #[must_use]
+    pub fn contains_work_node(&self, node: &GpuWorkNodeId) -> bool {
+        self.work_nodes.iter().any(|candidate| candidate == node)
+    }
+
     pub fn readbacks(&self) -> &[GpuReadback] {
         &self.readbacks
     }
@@ -383,6 +406,7 @@ impl fmt::Debug for GpuSubmission {
             .field("id", &self.id)
             .field("affinity", &self.affinity)
             .field("status", &self.status())
+            .field("work_node_count", &self.work_nodes.len())
             .field("readbacks", &self.readbacks)
             .finish()
     }
@@ -606,6 +630,7 @@ pub struct GpuPreparedSubmission {
     pub(crate) affinity: GpuContextAffinity,
     pub(crate) execution: Weak<crate::backend::WgpuExecutionState>,
     pub(crate) armed: bool,
+    pub(crate) work_nodes: Arc<[GpuWorkNodeId]>,
     planned_readbacks: Arc<[GpuReadbackId]>,
 }
 
@@ -614,6 +639,7 @@ impl GpuPreparedSubmission {
         ticket: NonZeroU64,
         affinity: GpuContextAffinity,
         execution: Weak<crate::backend::WgpuExecutionState>,
+        work_nodes: Vec<GpuWorkNodeId>,
         planned_readbacks: Vec<GpuReadbackId>,
     ) -> Self {
         Self {
@@ -621,6 +647,7 @@ impl GpuPreparedSubmission {
             affinity,
             execution,
             armed: true,
+            work_nodes: work_nodes.into(),
             planned_readbacks: planned_readbacks.into(),
         }
     }
@@ -643,6 +670,7 @@ impl fmt::Debug for GpuPreparedSubmission {
         formatter
             .debug_struct("GpuPreparedSubmission")
             .field("affinity", &self.affinity)
+            .field("work_node_count", &self.work_nodes.len())
             .field("planned_readbacks", &self.planned_readbacks)
             .finish_non_exhaustive()
     }

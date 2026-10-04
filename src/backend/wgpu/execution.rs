@@ -1294,6 +1294,11 @@ impl GpuContext {
         })?;
 
         self.validate_prepared_work_device_facts(&graph)?;
+        let work_nodes = graph
+            .nodes()
+            .iter()
+            .map(|prepared| prepared.node().id().clone())
+            .collect::<Vec<_>>();
         let reservation = self.backend.execution.reserve_prepared()?;
         let plan = prepare_execution_plan(self, &graph).await?;
         validate_plan_policy(
@@ -1308,6 +1313,7 @@ impl GpuContext {
             ticket,
             self.affinity(),
             Arc::downgrade(&self.backend.execution),
+            work_nodes,
             planned_readbacks,
         ))
     }
@@ -1413,11 +1419,13 @@ impl GpuContext {
             Ok(accepted) => accepted,
             Err(reason) => return Err(GpuPreparedSubmissionRejected::new(prepared, reason)),
         };
+        let work_nodes = Arc::clone(&prepared.work_nodes);
         prepared.disarm();
         let submission = GpuSubmission::new(
             accepted.id,
             self.affinity(),
             Arc::clone(&accepted.status),
+            work_nodes,
             accepted.readbacks,
         );
 
