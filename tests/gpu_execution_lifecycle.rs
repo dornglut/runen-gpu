@@ -85,10 +85,7 @@ fn upload_fragment(name: &str, values: &[u32]) -> (GpuWorkFragment, GpuWorkNodeI
     (builder.finish().unwrap(), node)
 }
 
-fn upload_graph_with_node(
-    name: &str,
-    values: &[u32],
-) -> (GpuPreparedWorkGraph, GpuWorkNodeId) {
+fn upload_graph_with_node(name: &str, values: &[u32]) -> (GpuPreparedWorkGraph, GpuWorkNodeId) {
     let (fragment, node) = upload_fragment(name, values);
     (
         GpuPreparedWorkGraph::prepare(label(&format!("{name} graph")), [fragment]).unwrap(),
@@ -203,7 +200,6 @@ fn drive_submission_to_completion(context: &GpuContext, submission: &GpuSubmissi
     }
 }
 
-
 #[test]
 fn completed_submission_correlates_exact_authored_work_occurrences() {
     let Some(context) = request_context(
@@ -229,8 +225,18 @@ fn completed_submission_correlates_exact_authored_work_occurrences() {
     )
     .unwrap();
     assert_eq!(graph.nodes().len(), 2);
-    assert!(graph.nodes().iter().any(|node| node.node().id() == &first_node));
-    assert!(graph.nodes().iter().any(|node| node.node().id() == &second_node));
+    assert!(
+        graph
+            .nodes()
+            .iter()
+            .any(|node| node.node().id() == &first_node)
+    );
+    assert!(
+        graph
+            .nodes()
+            .iter()
+            .any(|node| node.node().id() == &second_node)
+    );
 
     let prepared = pollster::block_on(context.prepare_submission(graph)).unwrap();
     let submission = context.submit_prepared(prepared).unwrap();
