@@ -36,6 +36,7 @@ The retained proof mapping is intentionally successor-local:
 | Evidence | Successor proof |
 | --- | --- |
 | Public contract | API contract, capability, resource, program, submission, readback, surface, and lifecycle tests under `tests/` |
+| Submission work-node correlation | `gpu_execution_lifecycle` proves exact opaque `GpuWorkNodeId` identity membership survives multi-fragment graph composition into the returned `GpuSubmission`, distinguishes foreign same-local-number nodes, survives submission cloning, and combines with terminal `Completed` status for successful occurrence evidence while failed submissions retain membership without becoming success evidence. |
 | Compute | `gpu_prefix_scan_native` proves exact 4097-element inclusive/exclusive results; `gpu_game_of_life_native` proves the fixed 160x90 final-grid oracle and exact 17-frame compute-to-render visual sequence |
 | Render/runtime | G5 transfer and G5R initial-content tests, indexed offscreen known-pattern output, generated indirect drawing, normalized indirect first-instance with zero-only regression plus capability-gated nonzero exact-readback execution, depth-clip control with a color-only clipped-vs-unclipped exact-readback oracle, transient-attachment color/MSAA-resolve/depth execution with conditional Stencil8 coverage, and G7A2 native surface presentation |
 | Characterization | The direct-WGPU cost portfolio and graph-preparation scale report remain explicitly direct-WGPU/CPU measurements, separate from the public API contract |
