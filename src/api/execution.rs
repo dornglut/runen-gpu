@@ -377,10 +377,14 @@ impl GpuSubmission {
     /// GpuWorkNodeId equality authority; it does not correlate by labels, provenance,
     /// operation shape, resource identity, prepared-node ordinal, or backend command identity.
     ///
+    /// Cloned fragments preserve authored node identity, so this boolean reports whether that
+    /// identity participated at least once; it deliberately does not report multiplicity when
+    /// the same authored fragment identity is composed more than once.
+    ///
     /// Membership alone is not successful-execution evidence. A caller requiring terminal
     /// success must additionally observe GpuSubmissionStatus::Completed from this same
     /// submission. Accepted is in-flight state, and Failed never establishes successful
-    /// occurrence execution.
+    /// work-node evidence.
     #[must_use]
     pub fn contains_work_node(&self, node: &GpuWorkNodeId) -> bool {
         self.work_nodes.iter().any(|candidate| candidate == node)
