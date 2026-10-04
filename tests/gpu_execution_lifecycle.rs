@@ -44,7 +44,11 @@ fn buffer(
         .unwrap()
 }
 
-fn add_operation(builder: &mut GpuWorkFragmentBuilder, name: &str, operation: GpuWorkOperation) {
+fn add_operation(
+    builder: &mut GpuWorkFragmentBuilder,
+    name: &str,
+    operation: GpuWorkOperation,
+) -> GpuWorkNodeId {
     builder
         .add_node(
             label(name),
@@ -54,10 +58,10 @@ fn add_operation(builder: &mut GpuWorkFragmentBuilder, name: &str, operation: Gp
             GpuExecutionPreference::Automatic,
             provenance(name),
         )
-        .unwrap();
+        .unwrap()
 }
 
-fn upload_graph(name: &str, values: &[u32]) -> GpuPreparedWorkGraph {
+fn upload_fragment(name: &str, values: &[u32]) -> (GpuWorkFragment, GpuWorkNodeId) {
     let byte_len = u64::try_from(std::mem::size_of_val(values)).unwrap();
     let mut allocator = GpuWorkResourceIdAllocator::new();
     let target = buffer(&mut allocator, &format!("{name} target"), byte_len);
@@ -73,13 +77,27 @@ fn upload_graph(name: &str, values: &[u32]) -> GpuPreparedWorkGraph {
 
     let mut builder = GpuWorkFragmentBuilder::new(label(name), provenance(name));
     builder.declare_resource(target.into()).unwrap();
-    add_operation(
+    let node = add_operation(
         &mut builder,
         &format!("{name} upload"),
         GpuWorkOperation::Upload(upload),
     );
-    GpuPreparedWorkGraph::prepare(label(&format!("{name} graph")), [builder.finish().unwrap()])
-        .unwrap()
+    (builder.finish().unwrap(), node)
+}
+
+fn upload_graph_with_node(
+    name: &str,
+    values: &[u32],
+) -> (GpuPreparedWorkGraph, GpuWorkNodeId) {
+    let (fragment, node) = upload_fragment(name, values);
+    (
+        GpuPreparedWorkGraph::prepare(label(&format!("{name} graph")), [fragment]).unwrap(),
+        node,
+    )
+}
+
+fn upload_graph(name: &str, values: &[u32]) -> GpuPreparedWorkGraph {
+    upload_graph_with_node(name, values).0
 }
 
 fn round_trip_graph(name: &str, values: &[u32]) -> (GpuPreparedWorkGraph, GpuReadbackId) {
@@ -183,6 +201,58 @@ fn drive_submission_to_completion(context: &GpuContext, submission: &GpuSubmissi
         );
         std::thread::yield_now();
     }
+}
+
+
+#[test]
+fn completed_submission_correlates_exact_authored_work_occurrences() {
+    let Some(context) = request_context(
+        policy(4, 2, 1024, 0, 0),
+        "R0 exact submitted work occurrence correlation",
+    ) else {
+        return;
+    };
+
+    let (first_fragment, first_node) = upload_fragment("occurrence first", &[1_u32]);
+    let (second_fragment, second_node) = upload_fragment("occurrence second", &[2_u32]);
+    let (_, foreign_node) = upload_fragment("occurrence foreign", &[3_u32]);
+
+    assert_eq!(first_node.diagnostic_local(), 1);
+    assert_eq!(second_node.diagnostic_local(), 1);
+    assert_eq!(foreign_node.diagnostic_local(), 1);
+    assert_ne!(first_node, second_node);
+    assert_ne!(first_node, foreign_node);
+
+    let graph = GpuPreparedWorkGraph::prepare(
+        label("R0 composed occurrence graph"),
+        [second_fragment, first_fragment],
+    )
+    .unwrap();
+    assert_eq!(graph.nodes().len(), 2);
+    assert!(graph.nodes().iter().any(|node| node.node().id() == &first_node));
+    assert!(graph.nodes().iter().any(|node| node.node().id() == &second_node));
+
+    let prepared = pollster::block_on(context.prepare_submission(graph)).unwrap();
+    let submission = context.submit_prepared(prepared).unwrap();
+
+    assert!(matches!(submission.status(), GpuSubmissionStatus::Accepted));
+    assert!(submission.contains_work_node(&first_node));
+    assert!(submission.contains_work_node(&second_node));
+    assert!(!submission.contains_work_node(&foreign_node));
+
+    let cloned = submission.clone();
+    assert!(cloned.contains_work_node(&first_node));
+    assert!(cloned.contains_work_node(&second_node));
+    assert!(!cloned.contains_work_node(&foreign_node));
+
+    drive_submission_to_completion(&context, &submission);
+    assert!(matches!(
+        submission.status(),
+        GpuSubmissionStatus::Completed
+    ));
+    assert!(submission.contains_work_node(&first_node));
+    assert!(submission.contains_work_node(&second_node));
+    assert!(!submission.contains_work_node(&foreign_node));
 }
 
 #[test]
@@ -437,10 +507,11 @@ fn last_context_drop_terminalizes_detached_accepted_observation_without_waiting(
     ) else {
         return;
     };
-    let prepared =
-        pollster::block_on(context.prepare_submission(upload_graph("drop", &[7_u32]))).unwrap();
+    let (graph, node) = upload_graph_with_node("drop", &[7_u32]);
+    let prepared = pollster::block_on(context.prepare_submission(graph)).unwrap();
     let submission = context.submit_prepared(prepared).unwrap();
     assert!(matches!(submission.status(), GpuSubmissionStatus::Accepted));
+    assert!(submission.contains_work_node(&node));
 
     drop(context);
     assert!(matches!(
@@ -448,4 +519,8 @@ fn last_context_drop_terminalizes_detached_accepted_observation_without_waiting(
         GpuSubmissionStatus::Failed(failure)
             if failure.kind() == GpuSubmissionFailureKind::ContextDropped
     ));
+    assert!(
+        submission.contains_work_node(&node),
+        "failed submission retains membership but never becomes successful execution evidence"
+    );
 }
