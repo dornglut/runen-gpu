@@ -70,6 +70,7 @@ fn headless_context_admission_reports_a_real_context_or_a_strict_environment_out
             assert!(matches!(
                 context.admission_report().selection_kind(),
                 runen_gpu::GpuCandidateSelectionKind::DeterministicallyRanked
+                    | runen_gpu::GpuCandidateSelectionKind::CanonicallyTieBroken
                     | runen_gpu::GpuCandidateSelectionKind::EquivalentCandidateSelected
             ));
             assert!(
@@ -85,8 +86,6 @@ fn headless_context_admission_reports_a_real_context_or_a_strict_environment_out
             );
             let selected = context.admission_report().candidate().adapter();
             let rank = context.admission_report().selection_evidence().rank();
-            assert_eq!(rank.vendor(), selected.vendor());
-            assert_eq!(rank.device(), selected.device());
             assert_eq!(
                 rank.fallback_priority(),
                 match selected.fallback() {

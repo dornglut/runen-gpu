@@ -132,7 +132,9 @@ impl GpuCandidateDisposition {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// Normalized policy preference rank. Adapter vendor and device IDs are separately observable
+/// facts and MUST NOT participate in this ordinal rank.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct GpuCandidateRankEvidence {
     fallback: u8,
     power: u8,
@@ -140,9 +142,6 @@ pub struct GpuCandidateRankEvidence {
     portability: u8,
     adapter_class: u8,
     backend_preference: u8,
-    // Observed identity details: diagnostic only, never ordinal preferences.
-    vendor: Option<u32>,
-    device: Option<u32>,
 }
 
 impl GpuCandidateRankEvidence {
@@ -170,24 +169,6 @@ impl GpuCandidateRankEvidence {
         self.backend_preference
     }
 
-    pub const fn vendor(&self) -> Option<u32> {
-        self.vendor
-    }
-
-    pub const fn device(&self) -> Option<u32> {
-        self.device
-    }
-
-    fn preference_order(&self) -> (u8, u8, usize, u8, u8, u8) {
-        (
-            self.fallback,
-            self.power,
-            self.preferred_degradations,
-            self.portability,
-            self.adapter_class,
-            self.backend_preference,
-        )
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -210,11 +191,15 @@ impl GpuCandidateSelectionEvidence {
 pub enum GpuCandidateSelectionKind {
     /// One candidate was selected directly by the platform/backend.
     BackendSelectedCandidate,
-    /// Native ranking found a unique preference winner or a stable observed-facts tie-break.
+    /// Native ranking found a unique normalized preference winner.
     DeterministicallyRanked,
+    /// An equal preference rank was resolved using a stable canonical observed-facts order.
+    CanonicallyTieBroken,
     /// Several best-ranked candidates were indistinguishable using normalized observed facts.
     /// The native enumeration chose an available handle; physical identity is not persistent.
     EquivalentCandidateSelected,
+    /// The caller resolved an explicitly strict ambiguous set using a process-local retry token.
+    ExactCandidateRetry,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -387,7 +372,7 @@ pub(crate) fn select_candidate_inputs(
                 candidate.id = exact;
                 retoken_disposition(&mut dispositions, backend_candidate_id, exact);
                 Ok(GpuCandidateSelection {
-                    kind: GpuCandidateSelectionKind::DeterministicallyRanked,
+                    kind: GpuCandidateSelectionKind::ExactCandidateRetry,
                     evidence: GpuCandidateSelectionEvidence {
                         rank: candidate_rank(descriptor, matching[0]),
                         reason: "exact process-local candidate retry",
@@ -419,8 +404,7 @@ pub(crate) fn select_candidate_inputs(
     }
     admitted.sort_by(|left, right| {
         candidate_rank(descriptor, left)
-            .preference_order()
-            .cmp(&candidate_rank(descriptor, right).preference_order())
+            .cmp(&candidate_rank(descriptor, right))
             // This order is NOT a capability/performance preference. It only makes a
             // policy-equivalent choice independent of native enumeration order when observable
             // adapter facts differ. Equivalent facts cannot establish physical identity.
@@ -431,8 +415,7 @@ pub(crate) fn select_candidate_inputs(
         .cloned()
         .expect("nonempty admitted candidates checked above");
     let equal_best = admitted.get(1).filter(|second| {
-        candidate_rank(descriptor, second).preference_order()
-            == candidate_rank(descriptor, &best).preference_order()
+        candidate_rank(descriptor, second) == candidate_rank(descriptor, &best)
     });
     if equal_best.is_some()
         && descriptor.adapter_selection_policy() == GpuAdapterSelectionPolicy::RequireUnambiguous
@@ -459,7 +442,7 @@ pub(crate) fn select_candidate_inputs(
             "observationally indistinguishable best-ranked candidates; native enumeration chose",
         ),
         Some(_) => (
-            GpuCandidateSelectionKind::DeterministicallyRanked,
+            GpuCandidateSelectionKind::CanonicallyTieBroken,
             "stable observed-facts tie-break among equally preferred candidates",
         ),
         None => (
@@ -709,8 +692,6 @@ fn candidate_rank(
         portability,
         adapter_class: class,
         backend_preference: backend,
-        vendor: adapter.vendor(),
-        device: adapter.device(),
     }
 }
 
@@ -910,18 +891,15 @@ mod tests {
             forward.candidate.adapter().backend(),
             reverse.candidate.adapter().backend()
         );
-        assert_eq!(
-            forward.kind,
-            GpuCandidateSelectionKind::DeterministicallyRanked
-        );
+        assert_eq!(forward.kind, GpuCandidateSelectionKind::CanonicallyTieBroken);
         assert_eq!(
             forward.evidence.reason(),
             "stable observed-facts tie-break among equally preferred candidates"
         );
         assert_eq!(forward.dispositions.len(), 2);
         assert_eq!(
-            candidate_rank(&default, &forward.candidate).preference_order(),
-            candidate_rank(&default, &reverse.candidate).preference_order()
+            candidate_rank(&default, &forward.candidate),
+            candidate_rank(&default, &reverse.candidate)
         );
 
         let preferred = default
@@ -961,15 +939,13 @@ mod tests {
     #[test]
     fn hardware_ids_are_diagnostics_not_selection_preferences() {
         let _retry_registry = isolated_retry_registry();
-        let lower_id = adapter().with_diagnostics("lower id", 1, 1, "one", "one");
-        let higher_id = adapter().with_diagnostics("higher id", 4096, 9999, "two", "two");
+        let lower_id = adapter().with_diagnostics("lo".into(), 1, 1, "".into(), "".into());
+        let higher_id =
+            adapter().with_diagnostics("hi".into(), 4096, 9999, "".into(), "".into());
         let descriptor = GpuContextDescriptor::new(GpuCapabilityRequirements::new());
         let lower = select_candidate(&descriptor, [lower_id.clone()], true).unwrap();
         let higher = select_candidate(&descriptor, [higher_id.clone()], true).unwrap();
-        assert_eq!(
-            lower.evidence.rank().preference_order(),
-            higher.evidence.rank().preference_order()
-        );
+        assert_eq!(lower.evidence.rank(), higher.evidence.rank());
         let strict =
             descriptor.with_adapter_selection_policy(GpuAdapterSelectionPolicy::RequireUnambiguous);
         assert_eq!(
