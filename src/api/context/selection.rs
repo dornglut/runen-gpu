@@ -168,7 +168,6 @@ impl GpuCandidateRankEvidence {
     pub const fn backend_preference_priority(&self) -> u8 {
         self.backend_preference
     }
-
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1071,6 +1070,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(retry.candidate.id(), retry_token);
+        assert_eq!(retry.kind, GpuCandidateSelectionKind::ExactCandidateRetry);
         assert!(
             retry
                 .candidate

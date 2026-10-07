@@ -1,6 +1,7 @@
 use runen_gpu::{
-    GpuCapabilityFeature, GpuCapabilityProfile, GpuCapabilityRequirements, GpuContext,
-    GpuContextDescriptor, GpuContextRequestErrorCategory, GpuLimitKind,
+    GpuAdapterSelectionPolicy, GpuCapabilityFeature, GpuCapabilityProfile,
+    GpuCapabilityRequirements, GpuContext, GpuContextDescriptor,
+    GpuContextRequestErrorCategory, GpuLimitKind,
 };
 use std::collections::BTreeSet;
 
@@ -98,6 +99,23 @@ fn headless_context_admission_reports_a_real_context_or_a_strict_environment_out
         Err(error) if accepts_environment_absence(error.category()) => {}
         Err(error) => panic!("unexpected native GPU context admission failure: {error}"),
     }
+}
+
+#[test]
+fn public_adapter_selection_policy_defaults_to_automatic_and_strict_is_explicit() {
+    let normal = GpuContextDescriptor::new(GpuCapabilityRequirements::new());
+    assert_eq!(
+        normal.adapter_selection_policy(),
+        GpuAdapterSelectionPolicy::Automatic
+    );
+    let strict = normal
+        .clone()
+        .with_adapter_selection_policy(GpuAdapterSelectionPolicy::RequireUnambiguous);
+    assert_ne!(normal.adapter_selection_policy(), strict.adapter_selection_policy());
+    assert_eq!(
+        normal.merge(&strict).unwrap().adapter_selection_policy(),
+        GpuAdapterSelectionPolicy::RequireUnambiguous
+    );
 }
 
 #[test]
