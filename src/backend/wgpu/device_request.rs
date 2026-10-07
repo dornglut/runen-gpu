@@ -325,9 +325,7 @@ async fn request_with_instance_generation_for_backends(
     let (adapter, mut selection, selection_kind) =
         select_backend_adapter(&instance, &descriptor, compatible_surface, backends)
             .await
-            .map_err(|error| {
-                error.with_prior_candidate_dispositions(prior_dispositions.clone())
-            })?;
+            .map_err(|error| error.with_prior_candidate_dispositions(prior_dispositions.clone()))?;
     if !prior_dispositions.is_empty() {
         prior_dispositions.append(&mut selection.dispositions);
         selection.dispositions = prior_dispositions;
