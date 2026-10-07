@@ -49,6 +49,20 @@ struct ContextGenerationSeed {
     generation: GpuDeviceGeneration,
 }
 
+struct BackendSelectionScope {
+    backends: Backends,
+    prior_dispositions: Vec<GpuCandidateDisposition>,
+}
+
+impl BackendSelectionScope {
+    fn new(backends: Backends, prior_dispositions: Vec<GpuCandidateDisposition>) -> Self {
+        Self {
+            backends,
+            prior_dispositions,
+        }
+    }
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) async fn request_headless(
     descriptor: GpuContextDescriptor,
@@ -66,8 +80,7 @@ pub(crate) async fn request_headless(
             realization_policies,
             execution_policy,
             None,
-            backends,
-            prior_dispositions.clone(),
+            BackendSelectionScope::new(backends, prior_dispositions.clone()),
         )
         .await;
         match result {
@@ -102,8 +115,7 @@ pub(crate) async fn request_headless(
         realization_policies,
         execution_policy,
         None,
-        Backends::all(),
-        Vec::new(),
+        BackendSelectionScope::new(Backends::all(), Vec::new()),
     )
     .await
 }
@@ -129,8 +141,7 @@ pub(crate) async fn request_generation_with_instance(
         realization_policies,
         execution_policy,
         Some(ContextGenerationSeed { id, generation }),
-        Backends::all(),
-        Vec::new(),
+        BackendSelectionScope::new(Backends::all(), Vec::new()),
     )
     .await
 }
@@ -255,6 +266,7 @@ pub(super) fn enforce_runengpu_instance_flags(
     descriptor
 }
 
+#[cfg(any(test, target_arch = "wasm32"))]
 pub(super) async fn request_with_instance(
     instance: Instance,
     descriptor: GpuContextDescriptor,
@@ -269,8 +281,7 @@ pub(super) async fn request_with_instance(
         realization_policies,
         execution_policy,
         None,
-        Backends::all(),
-        Vec::new(),
+        BackendSelectionScope::new(Backends::all(), Vec::new()),
     )
     .await
 }
@@ -292,8 +303,7 @@ pub(super) async fn request_with_instance_for_backends(
         realization_policies,
         execution_policy,
         None,
-        enumeration_backends,
-        prior_dispositions,
+        BackendSelectionScope::new(enumeration_backends, prior_dispositions),
     )
     .await
 }
@@ -305,18 +315,19 @@ async fn request_with_instance_generation_for_backends(
     realization_policies: GpuRealizationPolicies,
     execution_policy: GpuExecutionPolicy,
     generation_seed: Option<ContextGenerationSeed>,
-    enumeration_backends: Backends,
-    mut prior_dispositions: Vec<GpuCandidateDisposition>,
+    selection_scope: BackendSelectionScope,
 ) -> Result<GpuContext, GpuContextRequestError> {
     crate::validate_descriptor(&descriptor)?;
-    let (adapter, mut selection, selection_kind) = select_backend_adapter(
-        &instance,
-        &descriptor,
-        compatible_surface,
-        enumeration_backends,
-    )
-    .await
-    .map_err(|error| error.with_prior_candidate_dispositions(prior_dispositions.clone()))?;
+    let BackendSelectionScope {
+        backends,
+        mut prior_dispositions,
+    } = selection_scope;
+    let (adapter, mut selection, selection_kind) =
+        select_backend_adapter(&instance, &descriptor, compatible_surface, backends)
+            .await
+            .map_err(|error| {
+                error.with_prior_candidate_dispositions(prior_dispositions.clone())
+            })?;
     if !prior_dispositions.is_empty() {
         prior_dispositions.append(&mut selection.dispositions);
         selection.dispositions = prior_dispositions;

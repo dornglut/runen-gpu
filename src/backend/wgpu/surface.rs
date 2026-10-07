@@ -931,10 +931,10 @@ where
                 Err(error) => return Err(error),
             }
         }
-        return Err(GpuContextRequestError::new(
+        Err(GpuContextRequestError::new(
             GpuContextRequestErrorCategory::NoAdapterAvailable,
             "native surface backend initialization plan contained no usable tier",
-        ));
+        ))
     }
 
     #[cfg(target_arch = "wasm32")]
