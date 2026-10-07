@@ -9,6 +9,8 @@ use super::device_request::{
 };
 use super::texture_format_mapping::{TEXTURE_FORMATS, texture_format};
 use super::{WgpuDeviceHealth, WgpuErrorAttributionGate};
+#[cfg(not(target_arch = "wasm32"))]
+use crate::GpuCandidateDisposition;
 use crate::{
     GpuAcquiredSurfaceImage, GpuCapabilityFeature, GpuCapabilityRequirement,
     GpuCapabilityRequirements, GpuContext, GpuContextAffinity, GpuContextDescriptor,
@@ -876,6 +878,18 @@ fn descriptor_with_required_presentation(
     Ok(merged)
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+fn surface_creation_failure_with_prior(
+    detail: String,
+    prior_dispositions: &[GpuCandidateDisposition],
+) -> GpuContextRequestError {
+    GpuContextRequestError::new(
+        GpuContextRequestErrorCategory::SurfaceCreationFailure,
+        detail,
+    )
+    .with_prior_candidate_dispositions(prior_dispositions.to_vec())
+}
+
 pub(crate) async fn request_for_surface<T>(
     descriptor: GpuContextDescriptor,
     realization_policies: GpuRealizationPolicies,
@@ -898,9 +912,9 @@ where
             let surface = instance
                 .create_surface(Arc::clone(&target))
                 .map_err(|error| {
-                    GpuContextRequestError::new(
-                        GpuContextRequestErrorCategory::SurfaceCreationFailure,
+                    surface_creation_failure_with_prior(
                         error.to_string(),
+                        &prior_dispositions,
                     )
                 })?;
             let result = request_with_instance_for_backends(
@@ -915,11 +929,16 @@ where
             .await;
             match result {
                 Ok(context) => {
+                    let candidate_dispositions =
+                        context.admission_report().candidate_dispositions().to_vec();
                     let handle = context
                         .backend
                         .surfaces
                         .register_surface(&context.backend.adapter, surface)
-                        .map_err(map_surface_registration_error)?;
+                        .map_err(|error| {
+                            map_surface_registration_error(error)
+                                .with_candidate_dispositions(candidate_dispositions)
+                        })?;
                     return Ok((context, handle));
                 }
                 Err(error)
@@ -1095,6 +1114,12 @@ mod tests {
         GpuContextId, GpuDeviceGeneration, GpuPreferredFallback, GpuResourceOwnership,
         GpuSurfaceLeaseDisposition,
     };
+    #[cfg(not(target_arch = "wasm32"))]
+    use crate::{
+        GpuAdapterClass, GpuAdapterFacts, GpuAdapterLimits, GpuAlignmentFacts, GpuBackendFamily,
+        GpuCandidateId, GpuCapabilities, GpuFallbackStatus, GpuLimits, GpuRejectedCandidateReport,
+        GpuSoftwareStatus,
+    };
     use std::num::NonZeroU64;
 
     #[derive(Debug)]
@@ -1102,6 +1127,55 @@ mod tests {
 
     impl GpuSurfaceLeaseReleaser for TestLeaseReleaser {
         fn release(&self, _lease: &GpuSurfaceResourceLease) {}
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn test_candidate_disposition() -> GpuCandidateDisposition {
+        let limits = GpuLimits::new(
+            64 * 1024,
+            128 * 1024 * 1024,
+            4,
+            8,
+            16,
+            8192,
+            4,
+            24,
+            8,
+            4,
+            65_535,
+            256 * 1024 * 1024,
+            8192,
+            2048,
+            256,
+            16,
+            2048,
+        )
+        .unwrap();
+        let adapter = GpuAdapterFacts::new(
+            GpuBackendFamily::Vulkan,
+            GpuAdapterClass::Discrete,
+            GpuSoftwareStatus::Hardware,
+            GpuFallbackStatus::Unknown,
+            GpuCapabilities::from_normalized_facts([], limits, []),
+            GpuAdapterLimits::new(limits),
+            GpuAlignmentFacts {
+                uniform_dynamic_offset: Some(256),
+                storage_dynamic_offset: Some(256),
+                copy_buffer_offset: Some(4),
+                bytes_per_row: Some(256),
+                query_resolve_destination: Some(256),
+            },
+        );
+        GpuCandidateDisposition::Rejected(Box::new(
+            GpuRejectedCandidateReport::from_context_error(
+                GpuCandidateId::allocate().unwrap(),
+                adapter,
+                GpuContextRequestError::new(
+                    GpuContextRequestErrorCategory::NoAdmissibleCandidate,
+                    "primary tier rejected",
+                ),
+            ),
+        ))
     }
 
     fn capabilities() -> GpuSurfaceCapabilities {
@@ -1171,6 +1245,21 @@ mod tests {
             resources.default_view,
             owner,
         )
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn secondary_surface_creation_failure_keeps_prior_candidate_evidence() {
+        let prior = vec![test_candidate_disposition()];
+        let error = surface_creation_failure_with_prior(
+            "secondary surface creation failed".to_owned(),
+            &prior,
+        );
+        assert_eq!(
+            error.category(),
+            GpuContextRequestErrorCategory::SurfaceCreationFailure
+        );
+        assert_eq!(error.candidate_dispositions(), prior.as_slice());
     }
 
     #[test]

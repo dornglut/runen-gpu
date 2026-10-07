@@ -6,7 +6,7 @@ use super::{
 };
 use crate::api::texture_format;
 #[cfg(not(target_arch = "wasm32"))]
-use crate::{GpuAdapterFacts, GpuBackendFamily};
+use crate::{GpuAdapterFacts, GpuAdapterSelectionPolicy, GpuBackendFamily};
 use crate::{
     GpuAlignmentFacts, GpuCandidateDisposition, GpuCandidateEnvironmentEvidence, GpuCandidateId,
     GpuCandidateInput, GpuCandidateSelection, GpuCandidateSelectionKind, GpuCapabilityFeature,
@@ -218,11 +218,14 @@ fn native_backend_plan_for(
         ));
     }
 
-    // WGPU itself classifies GL as SECONDARY. Ordinary RunenGPU discovery keeps that backend
-    // dormant until no PRIMARY backend can satisfy admission. Explicit WGPU_BACKEND remains an
-    // exact operator override, and an explicit preference naming GL retains historical joint
-    // discovery rather than silently changing public preference semantics.
-    if explicit_operator_override || explicitly_prefers_secondary_backend(descriptor) {
+    // WGPU itself classifies GL as SECONDARY. Ordinary automatic RunenGPU discovery keeps that
+    // backend dormant until no PRIMARY backend can satisfy admission. Explicit WGPU_BACKEND
+    // remains an exact operator override. Explicit GL preference and strict ambiguity selection
+    // retain one effective candidate set so existing rank and exact-retry semantics stay global.
+    if explicit_operator_override
+        || explicitly_prefers_secondary_backend(descriptor)
+        || descriptor.adapter_selection_policy() == GpuAdapterSelectionPolicy::RequireUnambiguous
+    {
         return Ok(NativeBackendPlan {
             tiers: vec![effective],
         });
@@ -308,6 +311,13 @@ pub(super) async fn request_with_instance_for_backends(
     .await
 }
 
+fn with_selection_candidate_dispositions(
+    error: GpuContextRequestError,
+    dispositions: &[GpuCandidateDisposition],
+) -> GpuContextRequestError {
+    error.with_candidate_dispositions(dispositions.to_vec())
+}
+
 async fn request_with_instance_generation_for_backends(
     instance: Instance,
     descriptor: GpuContextDescriptor,
@@ -330,12 +340,18 @@ async fn request_with_instance_generation_for_backends(
         prior_dispositions.append(&mut selection.dispositions);
         selection.dispositions = prior_dispositions;
     }
+    let candidate_dispositions = selection.dispositions.clone();
     let candidate = selection.candidate;
-    let requested_limits = requested_limits(&candidate)?;
+    let requested_limits = requested_limits(&candidate).map_err(|error| {
+        with_selection_candidate_dispositions(error, &candidate_dispositions)
+    })?;
     if !requested_limits.check_limits(&adapter.limits()) {
-        return Err(GpuContextRequestError::new(
-            GpuContextRequestErrorCategory::DeviceRequestProfileUnsupported,
-            "selected adapter cannot satisfy the complete requested device profile",
+        return Err(with_selection_candidate_dispositions(
+            GpuContextRequestError::new(
+                GpuContextRequestErrorCategory::DeviceRequestProfileUnsupported,
+                "selected adapter cannot satisfy the complete requested device profile",
+            ),
+            &candidate_dispositions,
         ));
     }
     let requested_features = requested_features(&candidate);
@@ -350,28 +366,39 @@ async fn request_with_instance_generation_for_backends(
         })
         .await
         .map_err(|error| {
-            GpuContextRequestError::new(
-                GpuContextRequestErrorCategory::BackendDeviceRequestFailure,
-                error.to_string(),
+            with_selection_candidate_dispositions(
+                GpuContextRequestError::new(
+                    GpuContextRequestErrorCategory::BackendDeviceRequestFailure,
+                    error.to_string(),
+                ),
+                &candidate_dispositions,
             )
         })?;
-    verify_requested_features(requested_features, device.features())?;
+    verify_requested_features(requested_features, device.features()).map_err(|error| {
+        with_selection_candidate_dispositions(error, &candidate_dispositions)
+    })?;
     let actual_native_limits = device.limits();
     if !requested_limits.check_limits(&actual_native_limits) {
-        return Err(GpuContextRequestError::new(
-            GpuContextRequestErrorCategory::BackendDeviceRequestFailure,
-            "created device did not expose the complete admitted request profile",
+        return Err(with_selection_candidate_dispositions(
+            GpuContextRequestError::new(
+                GpuContextRequestErrorCategory::BackendDeviceRequestFailure,
+                "created device did not expose the complete admitted request profile",
+            ),
+            &candidate_dispositions,
         ));
     }
     let device_facts = admitted_device_facts(
         &candidate,
         map_device_limits(&actual_native_limits, requested_features),
-        selection.dispositions.clone(),
-    )?;
+        candidate_dispositions.clone(),
+    )
+    .map_err(|error| with_selection_candidate_dispositions(error, &candidate_dispositions))?;
     let ContextGenerationSeed { id, generation } = match generation_seed {
         Some(seed) => seed,
         None => ContextGenerationSeed {
-            id: allocate_context_id()?,
+            id: allocate_context_id().map_err(|error| {
+                with_selection_candidate_dispositions(error, &candidate_dispositions)
+            })?,
             generation: GpuDeviceGeneration::first(),
         },
     };
@@ -407,7 +434,7 @@ async fn request_with_instance_generation_for_backends(
         report: GpuContextAdmissionReport {
             selected: selection_kind,
             candidate,
-            candidate_dispositions: selection.dispositions,
+            candidate_dispositions,
             selection_evidence: selection.evidence,
         },
         backend: WgpuContextState {
@@ -1624,6 +1651,15 @@ mod tests {
                 .tiers(),
             &[Backends::VULKAN | Backends::GL]
         );
+
+        let strict = descriptor
+            .with_adapter_selection_policy(GpuAdapterSelectionPolicy::RequireUnambiguous);
+        assert_eq!(
+            native_backend_plan_for(&strict, Backends::all(), false)
+                .unwrap()
+                .tiers(),
+            &[Backends::VULKAN | Backends::GL]
+        );
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -1636,6 +1672,22 @@ mod tests {
             error.category(),
             GpuContextRequestErrorCategory::NoAdapterAvailable
         );
+    }
+
+    #[test]
+    fn post_selection_terminal_errors_keep_candidate_evidence() {
+        let disposition = GpuCandidateDisposition::Accepted(Box::new(candidate()));
+        let evidence = vec![disposition.clone()];
+        for category in [
+            GpuContextRequestErrorCategory::DeviceRequestProfileUnsupported,
+            GpuContextRequestErrorCategory::BackendDeviceRequestFailure,
+        ] {
+            let error = with_selection_candidate_dispositions(
+                GpuContextRequestError::new(category, "terminal realization failure"),
+                &evidence,
+            );
+            assert_eq!(error.candidate_dispositions(), evidence.as_slice());
+        }
     }
 
     #[cfg(not(target_arch = "wasm32"))]
