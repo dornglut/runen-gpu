@@ -179,7 +179,10 @@ impl GpuContextDescriptor {
     }
 
     /// Defaults to automatic selection among the best admitted candidates.
-    pub const fn with_adapter_selection_policy(mut self, policy: GpuAdapterSelectionPolicy) -> Self {
+    pub const fn with_adapter_selection_policy(
+        mut self,
+        policy: GpuAdapterSelectionPolicy,
+    ) -> Self {
         self.adapter_selection_policy = policy;
         self
     }
@@ -332,7 +335,8 @@ impl GpuContextDescriptor {
             .with_power_preference(power_preference)
             .with_adapter_selection_policy(
                 if self.adapter_selection_policy == GpuAdapterSelectionPolicy::RequireUnambiguous
-                    || other.adapter_selection_policy == GpuAdapterSelectionPolicy::RequireUnambiguous
+                    || other.adapter_selection_policy
+                        == GpuAdapterSelectionPolicy::RequireUnambiguous
                 {
                     GpuAdapterSelectionPolicy::RequireUnambiguous
                 } else {
@@ -648,7 +652,12 @@ mod tests {
             strict.merge(&automatic).unwrap().adapter_selection_policy(),
             GpuAdapterSelectionPolicy::RequireUnambiguous
         );
-        assert!(automatic.merge(&automatic).unwrap().semantically_eq(&automatic));
+        assert!(
+            automatic
+                .merge(&automatic)
+                .unwrap()
+                .semantically_eq(&automatic)
+        );
     }
 
     #[test]

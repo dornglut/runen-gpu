@@ -24,9 +24,8 @@ pub use admission::{
 };
 pub use descriptor::{
     GpuAdapterClass, GpuAdapterSelectionPolicy, GpuAlignmentKind, GpuBackendFamily,
-    GpuContextDescriptor, GpuFormatRole,
-    GpuLimitConstraint, GpuLimitKind, GpuPortabilityPolicy, GpuPowerPreference,
-    GpuSoftwareFallbackPolicy,
+    GpuContextDescriptor, GpuFormatRole, GpuLimitConstraint, GpuLimitKind, GpuPortabilityPolicy,
+    GpuPowerPreference, GpuSoftwareFallbackPolicy,
 };
 pub use diagnostics::{GpuContextRequestError, GpuContextRequestErrorCategory};
 pub use facts::{

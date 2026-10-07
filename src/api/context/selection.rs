@@ -927,15 +927,27 @@ mod tests {
         let preferred = default
             .clone()
             .with_backend_preference([GpuBackendFamily::Direct3D12, GpuBackendFamily::Vulkan]);
-        let chosen = select_candidate(&preferred, [vulkan.clone(), direct3d.clone()], true).unwrap();
-        assert_eq!(chosen.candidate.adapter().backend(), GpuBackendFamily::Direct3D12);
+        let chosen =
+            select_candidate(&preferred, [vulkan.clone(), direct3d.clone()], true).unwrap();
+        assert_eq!(
+            chosen.candidate.adapter().backend(),
+            GpuBackendFamily::Direct3D12
+        );
         let constrained = default.with_allowed_backends([GpuBackendFamily::Vulkan]);
         let chosen = select_candidate(&constrained, [vulkan, direct3d.clone()], true).unwrap();
-        assert_eq!(chosen.candidate.adapter().backend(), GpuBackendFamily::Vulkan);
+        assert_eq!(
+            chosen.candidate.adapter().backend(),
+            GpuBackendFamily::Vulkan
+        );
         assert!(matches!(
             chosen.dispositions.as_slice(),
-            [GpuCandidateDisposition::Rejected(_), GpuCandidateDisposition::Accepted(_)]
-                | [GpuCandidateDisposition::Accepted(_), GpuCandidateDisposition::Rejected(_)]
+            [
+                GpuCandidateDisposition::Rejected(_),
+                GpuCandidateDisposition::Accepted(_)
+            ] | [
+                GpuCandidateDisposition::Accepted(_),
+                GpuCandidateDisposition::Rejected(_)
+            ]
         ));
         assert!(
             candidate_retry_bindings()
@@ -958,9 +970,8 @@ mod tests {
             lower.evidence.rank().preference_order(),
             higher.evidence.rank().preference_order()
         );
-        let strict = descriptor.with_adapter_selection_policy(
-            GpuAdapterSelectionPolicy::RequireUnambiguous,
-        );
+        let strict =
+            descriptor.with_adapter_selection_policy(GpuAdapterSelectionPolicy::RequireUnambiguous);
         assert_eq!(
             select_candidate(&strict, [lower_id, higher_id], true)
                 .unwrap_err()
