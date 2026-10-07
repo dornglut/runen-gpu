@@ -1,8 +1,16 @@
 pub(crate) mod execution;
 
-use super::device_request::{enforce_runengpu_instance_flags, request_with_instance};
+use super::device_request::enforce_runengpu_instance_flags;
+#[cfg(target_arch = "wasm32")]
+use super::device_request::request_with_instance;
+#[cfg(not(target_arch = "wasm32"))]
+use super::device_request::{
+    native_backend_plan, native_tier_fallback_allowed, request_with_instance_for_backends,
+};
 use super::texture_format_mapping::{TEXTURE_FORMATS, texture_format};
 use super::{WgpuDeviceHealth, WgpuErrorAttributionGate};
+#[cfg(not(target_arch = "wasm32"))]
+use crate::GpuCandidateDisposition;
 use crate::{
     GpuAcquiredSurfaceImage, GpuCapabilityFeature, GpuCapabilityRequirement,
     GpuCapabilityRequirements, GpuContext, GpuContextAffinity, GpuContextDescriptor,
@@ -870,6 +878,18 @@ fn descriptor_with_required_presentation(
     Ok(merged)
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+fn surface_creation_failure_with_prior(
+    detail: String,
+    prior_dispositions: &[GpuCandidateDisposition],
+) -> GpuContextRequestError {
+    GpuContextRequestError::new(
+        GpuContextRequestErrorCategory::SurfaceCreationFailure,
+        detail,
+    )
+    .with_prior_candidate_dispositions(prior_dispositions.to_vec())
+}
+
 pub(crate) async fn request_for_surface<T>(
     descriptor: GpuContextDescriptor,
     realization_policies: GpuRealizationPolicies,
@@ -881,43 +901,102 @@ where
 {
     let descriptor = descriptor_with_required_presentation(descriptor)?;
     let target = Arc::new(target);
-    let instance = Instance::new(surface_instance_descriptor(&target));
-    let surface = instance
-        .create_surface(Arc::clone(&target))
-        .map_err(|error| {
-            GpuContextRequestError::new(
-                GpuContextRequestErrorCategory::SurfaceCreationFailure,
-                error.to_string(),
-            )
-        })?;
-    let context = request_with_instance(
-        instance,
-        descriptor,
-        Some(&surface),
-        realization_policies,
-        execution_policy,
-    )
-    .await?;
-    let handle = context
-        .backend
-        .surfaces
-        .register_surface(&context.backend.adapter, surface)
-        .map_err(map_surface_registration_error)?;
-    Ok((context, handle))
-}
 
-fn surface_instance_descriptor<T: GpuSurfaceTarget>(target: &Arc<T>) -> InstanceDescriptor {
     #[cfg(not(target_arch = "wasm32"))]
     {
-        enforce_runengpu_instance_flags(InstanceDescriptor::new_with_display_handle_from_env(
-            Box::new(WgpuSurfaceDisplay(Arc::clone(target))),
+        crate::validate_descriptor(&descriptor)?;
+        let plan = native_backend_plan(&descriptor)?;
+        let mut prior_dispositions = Vec::new();
+        for (index, backends) in plan.tiers().iter().copied().enumerate() {
+            let instance = Instance::new(surface_instance_descriptor(&target, backends));
+            let surface = instance
+                .create_surface(Arc::clone(&target))
+                .map_err(|error| {
+                    surface_creation_failure_with_prior(error.to_string(), &prior_dispositions)
+                })?;
+            let result = request_with_instance_for_backends(
+                instance,
+                descriptor.clone(),
+                Some(&surface),
+                realization_policies,
+                execution_policy,
+                backends,
+                prior_dispositions.clone(),
+            )
+            .await;
+            match result {
+                Ok(context) => {
+                    let candidate_dispositions =
+                        context.admission_report().candidate_dispositions().to_vec();
+                    let handle = context
+                        .backend
+                        .surfaces
+                        .register_surface(&context.backend.adapter, surface)
+                        .map_err(|error| {
+                            map_surface_registration_error(error)
+                                .with_candidate_dispositions(candidate_dispositions)
+                        })?;
+                    return Ok((context, handle));
+                }
+                Err(error)
+                    if index + 1 < plan.tiers().len()
+                        && native_tier_fallback_allowed(error.category()) =>
+                {
+                    prior_dispositions = error.candidate_dispositions().to_vec();
+                }
+                Err(error) => return Err(error),
+            }
+        }
+        Err(GpuContextRequestError::new(
+            GpuContextRequestErrorCategory::NoAdapterAvailable,
+            "native surface backend initialization plan contained no usable tier",
         ))
     }
+
     #[cfg(target_arch = "wasm32")]
     {
-        let _ = target;
-        enforce_runengpu_instance_flags(InstanceDescriptor::new_without_display_handle_from_env())
+        let instance = Instance::new(surface_instance_descriptor(&target));
+        let surface = instance
+            .create_surface(Arc::clone(&target))
+            .map_err(|error| {
+                GpuContextRequestError::new(
+                    GpuContextRequestErrorCategory::SurfaceCreationFailure,
+                    error.to_string(),
+                )
+            })?;
+        let context = request_with_instance(
+            instance,
+            descriptor,
+            Some(&surface),
+            realization_policies,
+            execution_policy,
+        )
+        .await?;
+        let handle = context
+            .backend
+            .surfaces
+            .register_surface(&context.backend.adapter, surface)
+            .map_err(map_surface_registration_error)?;
+        Ok((context, handle))
     }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn surface_instance_descriptor<T: GpuSurfaceTarget>(
+    target: &Arc<T>,
+    backends: wgpu::Backends,
+) -> InstanceDescriptor {
+    let mut descriptor = InstanceDescriptor::new_with_display_handle_from_env(Box::new(
+        WgpuSurfaceDisplay(Arc::clone(target)),
+    ));
+    descriptor.backends = backends;
+    enforce_runengpu_instance_flags(descriptor)
+}
+
+#[cfg(target_arch = "wasm32")]
+fn surface_instance_descriptor<T: GpuSurfaceTarget>(target: &Arc<T>) -> InstanceDescriptor {
+    let _ = target;
+    enforce_runengpu_instance_flags(InstanceDescriptor::new_without_display_handle_from_env())
 }
 
 fn map_surface_registration_error(error: GpuSurfaceError) -> GpuContextRequestError {
@@ -1028,6 +1107,12 @@ impl GpuContext {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(not(target_arch = "wasm32"))]
+    use crate::{
+        GpuAdapterClass, GpuAdapterFacts, GpuAdapterLimits, GpuAlignmentFacts, GpuBackendFamily,
+        GpuCandidateId, GpuCapabilities, GpuFallbackStatus, GpuLimits, GpuRejectedCandidateReport,
+        GpuSoftwareStatus,
+    };
     use crate::{
         GpuContextId, GpuDeviceGeneration, GpuPreferredFallback, GpuResourceOwnership,
         GpuSurfaceLeaseDisposition,
@@ -1039,6 +1124,53 @@ mod tests {
 
     impl GpuSurfaceLeaseReleaser for TestLeaseReleaser {
         fn release(&self, _lease: &GpuSurfaceResourceLease) {}
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn test_candidate_disposition() -> GpuCandidateDisposition {
+        let limits = GpuLimits::new(
+            64 * 1024,
+            128 * 1024 * 1024,
+            4,
+            8,
+            16,
+            8192,
+            4,
+            24,
+            8,
+            4,
+            65_535,
+            256 * 1024 * 1024,
+            8192,
+            2048,
+            256,
+            16,
+            2048,
+        )
+        .unwrap();
+        let adapter = GpuAdapterFacts::new(
+            GpuBackendFamily::Vulkan,
+            GpuAdapterClass::Discrete,
+            GpuSoftwareStatus::Hardware,
+            GpuFallbackStatus::Unknown,
+            GpuCapabilities::from_normalized_facts([], limits, []),
+            GpuAdapterLimits::new(limits),
+            GpuAlignmentFacts {
+                uniform_dynamic_offset: Some(256),
+                storage_dynamic_offset: Some(256),
+                copy_buffer_offset: Some(4),
+                bytes_per_row: Some(256),
+                query_resolve_destination: Some(256),
+            },
+        );
+        GpuCandidateDisposition::Rejected(Box::new(GpuRejectedCandidateReport::from_context_error(
+            GpuCandidateId::allocate().unwrap(),
+            adapter,
+            GpuContextRequestError::new(
+                GpuContextRequestErrorCategory::NoAdmissibleCandidate,
+                "primary tier rejected",
+            ),
+        )))
     }
 
     fn capabilities() -> GpuSurfaceCapabilities {
@@ -1108,6 +1240,21 @@ mod tests {
             resources.default_view,
             owner,
         )
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn secondary_surface_creation_failure_keeps_prior_candidate_evidence() {
+        let prior = vec![test_candidate_disposition()];
+        let error = surface_creation_failure_with_prior(
+            "secondary surface creation failed".to_owned(),
+            &prior,
+        );
+        assert_eq!(
+            error.category(),
+            GpuContextRequestErrorCategory::SurfaceCreationFailure
+        );
+        assert_eq!(error.candidate_dispositions(), prior.as_slice());
     }
 
     #[test]
