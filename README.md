@@ -36,15 +36,25 @@ publish: false
 
 ## Adapter admission
 
-Context creation automatically evaluates available native adapters against the declared
+Context creation automatically evaluates native adapters against the declared
 capability requirements, limits, host compatibility, and allowed backends/classes.
-It chooses the best admitted preference rank. Equally preferred adapters are
-resolved by stable observed facts where possible; observationally identical native
-handles are interchangeable, so physical selection across runs is not promised.
-Numeric hardware vendor and device IDs are diagnostics, not preference scores.
+Ordinary native discovery initializes WGPU's primary backend tier first and only
+initializes secondary OpenGL if no primary candidate can satisfy admission. This
+avoids activating compatibility drivers that are irrelevant to the selected context.
+A non-empty `with_allowed_backends` restriction is applied before WGPU instance
+creation, so forbidden backend families are not initialized merely to reject them later.
+
+Within the active tier, RunenGPU chooses the best admitted preference rank. Equally
+preferred adapters are resolved by stable observed facts where possible;
+observationally identical native handles are interchangeable, so physical selection
+across runs is not promised. Numeric hardware vendor and device IDs are diagnostics,
+not preference scores.
 
 Applications that need an explicit backend can use
 `GpuContextDescriptor::with_backend_preference` or `with_allowed_backends`.
+An explicit `WGPU_BACKEND` value remains an exact operator-level backend-set
+override. An explicit RunenGPU preference that names OpenGL retains joint discovery
+so the preference is not silently weakened.
 Strict opt-in tie rejection uses
 `with_adapter_selection_policy(GpuAdapterSelectionPolicy::RequireUnambiguous)`
 and the process-local candidate retry contract. An explicit strict request may

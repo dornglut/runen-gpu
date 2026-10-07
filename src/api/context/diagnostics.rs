@@ -226,6 +226,18 @@ impl GpuContextRequestError {
         self.candidate_dispositions = dispositions;
         self
     }
+
+    pub(crate) fn with_prior_candidate_dispositions(
+        mut self,
+        mut prior: Vec<GpuCandidateDisposition>,
+    ) -> Self {
+        if prior.is_empty() {
+            return self;
+        }
+        prior.append(&mut self.candidate_dispositions);
+        self.candidate_dispositions = prior;
+        self
+    }
 }
 
 impl fmt::Display for GpuContextRequestError {
@@ -337,6 +349,87 @@ mod tests {
         assert!(rendered.contains("correction:"));
         assert!(rendered.len() <= MAX_ERROR_DISPLAY_BYTES);
         assert!(rendered.is_char_boundary(rendered.len()));
+    }
+
+    #[test]
+    fn prior_candidate_dispositions_are_preserved_before_later_tier_evidence() {
+        use crate::{
+            GpuAdapterClass, GpuAdapterFacts, GpuAdapterLimits, GpuAlignmentFacts,
+            GpuBackendFamily, GpuCapabilities, GpuFallbackStatus, GpuLimits,
+            GpuRejectedCandidateReport, GpuSoftwareStatus,
+        };
+
+        let limits = GpuLimits::new(
+            64 * 1024,
+            128 * 1024 * 1024,
+            1,
+            8,
+            16,
+            8192,
+            4,
+            24,
+            8,
+            4,
+            65_535,
+            256 * 1024 * 1024,
+            8192,
+            2048,
+            256,
+            16,
+            2048,
+        )
+        .unwrap();
+        let rejected = |backend, detail: &str| {
+            GpuCandidateDisposition::Rejected(Box::new(GpuRejectedCandidateReport {
+                id: super::super::selection::GpuCandidateId::allocate().unwrap(),
+                adapter: GpuAdapterFacts::new(
+                    backend,
+                    GpuAdapterClass::Discrete,
+                    GpuSoftwareStatus::Hardware,
+                    GpuFallbackStatus::Unknown,
+                    GpuCapabilities::from_normalized_facts([], limits, []),
+                    GpuAdapterLimits::new(limits),
+                    GpuAlignmentFacts {
+                        uniform_dynamic_offset: Some(256),
+                        storage_dynamic_offset: Some(256),
+                        copy_buffer_offset: Some(4),
+                        bytes_per_row: Some(256),
+                        query_resolve_destination: Some(256),
+                    },
+                ),
+                category: GpuContextRequestErrorCategory::MandatoryFeatureMissing,
+                detail: sanitized_diagnostic(detail.to_owned()),
+                capability_admission_error: None,
+                limit_rejection: None,
+            }))
+        };
+
+        let error = GpuContextRequestError::new(
+            GpuContextRequestErrorCategory::NoAdmissibleCandidate,
+            "secondary tier also rejected",
+        )
+        .with_candidate_dispositions(vec![rejected(
+            GpuBackendFamily::OpenGl,
+            "secondary",
+        )])
+        .with_prior_candidate_dispositions(vec![rejected(
+            GpuBackendFamily::Vulkan,
+            "primary",
+        )]);
+
+        assert_eq!(error.candidate_dispositions().len(), 2);
+        let backends = error
+            .candidate_dispositions()
+            .iter()
+            .map(|disposition| match disposition {
+                GpuCandidateDisposition::Rejected(report) => report.adapter().backend(),
+                GpuCandidateDisposition::Accepted(report) => report.adapter().backend(),
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            backends,
+            vec![GpuBackendFamily::Vulkan, GpuBackendFamily::OpenGl]
+        );
     }
 
     #[test]

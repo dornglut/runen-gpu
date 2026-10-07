@@ -8,7 +8,8 @@ use super::{
 use crate::GpuAdapterFacts;
 use crate::api::texture_format;
 use crate::{
-    GpuAlignmentFacts, GpuCandidateEnvironmentEvidence, GpuCandidateId, GpuCandidateInput,
+    GpuAlignmentFacts, GpuBackendFamily, GpuCandidateDisposition, GpuCandidateEnvironmentEvidence,
+    GpuCandidateId, GpuCandidateInput,
     GpuCandidateSelection, GpuCandidateSelectionKind, GpuCapabilityFeature, GpuContext,
     GpuContextAdmissionReport, GpuContextAffinity, GpuContextDescriptor, GpuContextId,
     GpuContextRequestError, GpuContextRequestErrorCategory, GpuDeviceGeneration, GpuDeviceLimits,
@@ -17,10 +18,8 @@ use crate::{
     allocate_context_id, select_candidate_inputs,
 };
 use std::sync::Arc;
-#[cfg(not(target_arch = "wasm32"))]
-use wgpu::Backends;
 use wgpu::{
-    Adapter, DeviceDescriptor, ExperimentalFeatures, Features, Instance, InstanceDescriptor,
+    Adapter, Backends, DeviceDescriptor, ExperimentalFeatures, Features, Instance, InstanceDescriptor,
     InstanceFlags, Limits, MemoryHints, RequestAdapterError, RequestAdapterOptions, Surface, Trace,
 };
 
@@ -32,23 +31,79 @@ struct NativeAdapterCandidate<T> {
     environment: GpuCandidateEnvironmentEvidence,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct NativeBackendPlan {
+    tiers: Vec<Backends>,
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl NativeBackendPlan {
+    pub(super) fn tiers(&self) -> &[Backends] {
+        &self.tiers
+    }
+}
+
 struct ContextGenerationSeed {
     id: GpuContextId,
     generation: GpuDeviceGeneration,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 pub(crate) async fn request_headless(
     descriptor: GpuContextDescriptor,
     realization_policies: GpuRealizationPolicies,
     execution_policy: GpuExecutionPolicy,
 ) -> Result<GpuContext, GpuContextRequestError> {
-    request_with_instance_generation(
-        Instance::new(runengpu_instance_descriptor()),
+    crate::validate_descriptor(&descriptor)?;
+    let plan = native_backend_plan(&descriptor)?;
+    let mut prior_dispositions = Vec::new();
+    for (index, backends) in plan.tiers().iter().copied().enumerate() {
+        let result = request_with_instance_generation_for_backends(
+            Instance::new(runengpu_instance_descriptor(backends)),
+            descriptor.clone(),
+            None,
+            realization_policies,
+            execution_policy,
+            None,
+            backends,
+            prior_dispositions.clone(),
+        )
+        .await;
+        match result {
+            Ok(context) => return Ok(context),
+            Err(error)
+                if index + 1 < plan.tiers().len()
+                    && native_tier_fallback_allowed(error.category()) =>
+            {
+                prior_dispositions = error.candidate_dispositions().to_vec();
+            }
+            Err(error) => return Err(error),
+        }
+    }
+    Err(GpuContextRequestError::new(
+        GpuContextRequestErrorCategory::NoAdapterAvailable,
+        "native backend initialization plan contained no usable tier",
+    ))
+}
+
+#[cfg(target_arch = "wasm32")]
+pub(crate) async fn request_headless(
+    descriptor: GpuContextDescriptor,
+    realization_policies: GpuRealizationPolicies,
+    execution_policy: GpuExecutionPolicy,
+) -> Result<GpuContext, GpuContextRequestError> {
+    request_with_instance_generation_for_backends(
+        Instance::new(enforce_runengpu_instance_flags(
+            InstanceDescriptor::new_without_display_handle_from_env(),
+        )),
         descriptor,
         None,
         realization_policies,
         execution_policy,
         None,
+        Backends::all(),
+        Vec::new(),
     )
     .await
 }
@@ -67,19 +122,129 @@ pub(crate) async fn request_generation_with_instance(
     id: GpuContextId,
     generation: GpuDeviceGeneration,
 ) -> Result<GpuContext, GpuContextRequestError> {
-    request_with_instance_generation(
+    request_with_instance_generation_for_backends(
         instance,
         descriptor,
         None,
         realization_policies,
         execution_policy,
         Some(ContextGenerationSeed { id, generation }),
+        Backends::all(),
+        Vec::new(),
     )
     .await
 }
 
-fn runengpu_instance_descriptor() -> InstanceDescriptor {
-    enforce_runengpu_instance_flags(InstanceDescriptor::new_without_display_handle_from_env())
+#[cfg(not(target_arch = "wasm32"))]
+fn runengpu_instance_descriptor(backends: Backends) -> InstanceDescriptor {
+    let mut descriptor = InstanceDescriptor::new_without_display_handle_from_env();
+    descriptor.backends = backends;
+    enforce_runengpu_instance_flags(descriptor)
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn native_backend_mask(backend: GpuBackendFamily) -> Backends {
+    match backend {
+        GpuBackendFamily::Vulkan => Backends::VULKAN,
+        GpuBackendFamily::Metal => Backends::METAL,
+        GpuBackendFamily::Direct3D12 => Backends::DX12,
+        GpuBackendFamily::OpenGl => Backends::GL,
+        GpuBackendFamily::BrowserWebGpu => Backends::BROWSER_WEBGPU,
+        GpuBackendFamily::UnknownBackend => Backends::empty(),
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn native_allowed_backend_mask(descriptor: &GpuContextDescriptor) -> Option<Backends> {
+    if descriptor.allowed_backends().is_empty() {
+        return None;
+    }
+    Some(
+        descriptor
+            .allowed_backends()
+            .iter()
+            .copied()
+            .fold(Backends::empty(), |mask, backend| {
+                mask | native_backend_mask(backend)
+            }),
+    )
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn explicitly_prefers_secondary_backend(descriptor: &GpuContextDescriptor) -> bool {
+    descriptor
+        .backend_preference()
+        .keys()
+        .copied()
+        .any(|backend| native_backend_mask(backend).intersects(Backends::SECONDARY))
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub(super) fn native_backend_plan(
+    descriptor: &GpuContextDescriptor,
+) -> Result<NativeBackendPlan, GpuContextRequestError> {
+    match Backends::from_env() {
+        Some(operator_backends) => native_backend_plan_for(descriptor, operator_backends, true),
+        None => native_backend_plan_for(descriptor, Backends::all(), false),
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn native_backend_plan_for(
+    descriptor: &GpuContextDescriptor,
+    operator_backends: Backends,
+    explicit_operator_override: bool,
+) -> Result<NativeBackendPlan, GpuContextRequestError> {
+    let native_supported =
+        Backends::VULKAN | Backends::METAL | Backends::DX12 | Backends::GL;
+    let mut effective = operator_backends & native_supported;
+    if let Some(allowed) = native_allowed_backend_mask(descriptor) {
+        effective &= allowed;
+    }
+    if effective.is_empty() {
+        return Err(GpuContextRequestError::new(
+            GpuContextRequestErrorCategory::NoAdapterAvailable,
+            "backend restrictions leave no native WGPU backend enabled",
+        ));
+    }
+
+    // WGPU itself classifies GL as SECONDARY. Ordinary RunenGPU discovery keeps that backend
+    // dormant until no PRIMARY backend can satisfy admission. Explicit WGPU_BACKEND remains an
+    // exact operator override, and an explicit preference naming GL retains historical joint
+    // discovery rather than silently changing public preference semantics.
+    if explicit_operator_override || explicitly_prefers_secondary_backend(descriptor) {
+        return Ok(NativeBackendPlan {
+            tiers: vec![effective],
+        });
+    }
+
+    let mut tiers = Vec::with_capacity(2);
+    let primary = effective & Backends::PRIMARY;
+    if !primary.is_empty() {
+        tiers.push(primary);
+    }
+    let secondary = effective & Backends::SECONDARY;
+    if !secondary.is_empty() {
+        tiers.push(secondary);
+    }
+    if tiers.is_empty() {
+        return Err(GpuContextRequestError::new(
+            GpuContextRequestErrorCategory::NoAdapterAvailable,
+            "backend restrictions leave no supported native WGPU backend tier",
+        ));
+    }
+    Ok(NativeBackendPlan { tiers })
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub(super) const fn native_tier_fallback_allowed(
+    category: GpuContextRequestErrorCategory,
+) -> bool {
+    matches!(
+        category,
+        GpuContextRequestErrorCategory::NoAdapterAvailable
+            | GpuContextRequestErrorCategory::NoAdmissibleCandidate
+    )
 }
 
 pub(super) fn enforce_runengpu_instance_flags(
@@ -100,28 +265,66 @@ pub(super) async fn request_with_instance(
     realization_policies: GpuRealizationPolicies,
     execution_policy: GpuExecutionPolicy,
 ) -> Result<GpuContext, GpuContextRequestError> {
-    request_with_instance_generation(
+    request_with_instance_generation_for_backends(
         instance,
         descriptor,
         compatible_surface,
         realization_policies,
         execution_policy,
         None,
+        Backends::all(),
+        Vec::new(),
     )
     .await
 }
 
-async fn request_with_instance_generation(
+#[cfg(not(target_arch = "wasm32"))]
+pub(super) async fn request_with_instance_for_backends(
+    instance: Instance,
+    descriptor: GpuContextDescriptor,
+    compatible_surface: Option<&Surface<'_>>,
+    realization_policies: GpuRealizationPolicies,
+    execution_policy: GpuExecutionPolicy,
+    enumeration_backends: Backends,
+    prior_dispositions: Vec<GpuCandidateDisposition>,
+) -> Result<GpuContext, GpuContextRequestError> {
+    request_with_instance_generation_for_backends(
+        instance,
+        descriptor,
+        compatible_surface,
+        realization_policies,
+        execution_policy,
+        None,
+        enumeration_backends,
+        prior_dispositions,
+    )
+    .await
+}
+
+async fn request_with_instance_generation_for_backends(
     instance: Instance,
     descriptor: GpuContextDescriptor,
     compatible_surface: Option<&Surface<'_>>,
     realization_policies: GpuRealizationPolicies,
     execution_policy: GpuExecutionPolicy,
     generation_seed: Option<ContextGenerationSeed>,
+    enumeration_backends: Backends,
+    mut prior_dispositions: Vec<GpuCandidateDisposition>,
 ) -> Result<GpuContext, GpuContextRequestError> {
     crate::validate_descriptor(&descriptor)?;
-    let (adapter, selection, selection_kind) =
-        select_backend_adapter(&instance, &descriptor, compatible_surface).await?;
+    let (adapter, mut selection, selection_kind) =
+        select_backend_adapter(
+            &instance,
+            &descriptor,
+            compatible_surface,
+            enumeration_backends,
+        )
+        .await
+        .map_err(|error| error.with_prior_candidate_dispositions(prior_dispositions.clone()))?;
+    if !prior_dispositions.is_empty() {
+        prior_dispositions.append(&mut selection.dispositions);
+        selection.dispositions = prior_dispositions;
+    }
     let candidate = selection.candidate;
     let requested_limits = requested_limits(&candidate)?;
     if !requested_limits.check_limits(&adapter.limits()) {
@@ -223,6 +426,7 @@ async fn select_backend_adapter(
     instance: &Instance,
     descriptor: &GpuContextDescriptor,
     compatible_surface: Option<&Surface<'_>>,
+    enumeration_backends: Backends,
 ) -> Result<(Adapter, GpuCandidateSelection, GpuCandidateSelectionKind), GpuContextRequestError> {
     if native_selection_route(descriptor.fallback_policy())
         == NativeAdapterSelectionRoute::ForcedFallback
@@ -231,7 +435,7 @@ async fn select_backend_adapter(
             .await;
     }
     let candidates = instance
-        .enumerate_adapters(Backends::all())
+        .enumerate_adapters(enumeration_backends)
         .await
         .into_iter()
         .map(|adapter| -> Result<_, GpuContextRequestError> {
@@ -316,6 +520,7 @@ async fn select_backend_adapter(
     instance: &Instance,
     descriptor: &GpuContextDescriptor,
     compatible_surface: Option<&Surface<'_>>,
+    _enumeration_backends: Backends,
 ) -> Result<(Adapter, GpuCandidateSelection, GpuCandidateSelectionKind), GpuContextRequestError> {
     let fallback_required = matches!(
         descriptor.fallback_policy(),
@@ -1345,6 +1550,113 @@ mod tests {
         );
         assert!(verify_requested_features(optional, Features::empty()).is_err());
         assert!(verify_requested_features(optional, optional).is_ok());
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn native_backend_plan_stages_primary_before_secondary_by_default() {
+        let descriptor = GpuContextDescriptor::new(GpuCapabilityRequirements::new());
+        let plan = native_backend_plan_for(&descriptor, Backends::all(), false).unwrap();
+        assert_eq!(
+            plan.tiers(),
+            &[
+                Backends::VULKAN | Backends::METAL | Backends::DX12,
+                Backends::GL,
+            ]
+        );
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn native_backend_plan_applies_allowlist_before_instance_initialization() {
+        let requirements = GpuCapabilityRequirements::new();
+        let vulkan = GpuContextDescriptor::new(requirements.clone())
+            .with_allowed_backends([GpuBackendFamily::Vulkan]);
+        assert_eq!(
+            native_backend_plan_for(&vulkan, Backends::all(), false)
+                .unwrap()
+                .tiers(),
+            &[Backends::VULKAN]
+        );
+
+        let gl = GpuContextDescriptor::new(requirements.clone())
+            .with_allowed_backends([GpuBackendFamily::OpenGl]);
+        assert_eq!(
+            native_backend_plan_for(&gl, Backends::all(), false)
+                .unwrap()
+                .tiers(),
+            &[Backends::GL]
+        );
+
+        let primary_and_gl = GpuContextDescriptor::new(requirements).with_allowed_backends([
+            GpuBackendFamily::Vulkan,
+            GpuBackendFamily::OpenGl,
+        ]);
+        assert_eq!(
+            native_backend_plan_for(&primary_and_gl, Backends::all(), false)
+                .unwrap()
+                .tiers(),
+            &[Backends::VULKAN, Backends::GL]
+        );
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn native_backend_plan_preserves_explicit_operator_and_secondary_preference_semantics() {
+        let descriptor = GpuContextDescriptor::new(GpuCapabilityRequirements::new())
+            .with_allowed_backends([GpuBackendFamily::Vulkan, GpuBackendFamily::OpenGl]);
+        assert_eq!(
+            native_backend_plan_for(
+                &descriptor,
+                Backends::VULKAN | Backends::GL,
+                true,
+            )
+            .unwrap()
+            .tiers(),
+            &[Backends::VULKAN | Backends::GL]
+        );
+
+        let preferred = descriptor
+            .clone()
+            .with_backend_preference([GpuBackendFamily::OpenGl, GpuBackendFamily::Vulkan]);
+        assert_eq!(
+            native_backend_plan_for(&preferred, Backends::all(), false)
+                .unwrap()
+                .tiers(),
+            &[Backends::VULKAN | Backends::GL]
+        );
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn native_backend_plan_rejects_empty_effective_backend_set_without_initialization() {
+        let descriptor = GpuContextDescriptor::new(GpuCapabilityRequirements::new())
+            .with_allowed_backends([GpuBackendFamily::Vulkan]);
+        let error = native_backend_plan_for(&descriptor, Backends::GL, true).unwrap_err();
+        assert_eq!(
+            error.category(),
+            GpuContextRequestErrorCategory::NoAdapterAvailable
+        );
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn native_tier_fallback_is_limited_to_discovery_and_admission_absence() {
+        for category in [
+            GpuContextRequestErrorCategory::NoAdapterAvailable,
+            GpuContextRequestErrorCategory::NoAdmissibleCandidate,
+        ] {
+            assert!(native_tier_fallback_allowed(category));
+        }
+        for category in [
+            GpuContextRequestErrorCategory::AmbiguousAdapterSelection,
+            GpuContextRequestErrorCategory::StaleCandidateRetryToken,
+            GpuContextRequestErrorCategory::BackendAdapterRequestFailure,
+            GpuContextRequestErrorCategory::BackendDeviceRequestFailure,
+            GpuContextRequestErrorCategory::SurfaceCreationFailure,
+        ] {
+            assert!(!native_tier_fallback_allowed(category), "{category:?}");
+        }
     }
 
     #[cfg(not(target_arch = "wasm32"))]

@@ -1,6 +1,9 @@
 pub(crate) mod execution;
 
-use super::device_request::{enforce_runengpu_instance_flags, request_with_instance};
+use super::device_request::{
+    enforce_runengpu_instance_flags, native_backend_plan, native_tier_fallback_allowed,
+    request_with_instance, request_with_instance_for_backends,
+};
 use super::texture_format_mapping::{TEXTURE_FORMATS, texture_format};
 use super::{WgpuDeviceHealth, WgpuErrorAttributionGate};
 use crate::{
@@ -881,43 +884,100 @@ where
 {
     let descriptor = descriptor_with_required_presentation(descriptor)?;
     let target = Arc::new(target);
-    let instance = Instance::new(surface_instance_descriptor(&target));
-    let surface = instance
-        .create_surface(Arc::clone(&target))
-        .map_err(|error| {
-            GpuContextRequestError::new(
-                GpuContextRequestErrorCategory::SurfaceCreationFailure,
-                error.to_string(),
-            )
-        })?;
-    let context = request_with_instance(
-        instance,
-        descriptor,
-        Some(&surface),
-        realization_policies,
-        execution_policy,
-    )
-    .await?;
-    let handle = context
-        .backend
-        .surfaces
-        .register_surface(&context.backend.adapter, surface)
-        .map_err(map_surface_registration_error)?;
-    Ok((context, handle))
-}
 
-fn surface_instance_descriptor<T: GpuSurfaceTarget>(target: &Arc<T>) -> InstanceDescriptor {
     #[cfg(not(target_arch = "wasm32"))]
     {
-        enforce_runengpu_instance_flags(InstanceDescriptor::new_with_display_handle_from_env(
-            Box::new(WgpuSurfaceDisplay(Arc::clone(target))),
-        ))
+        crate::validate_descriptor(&descriptor)?;
+        let plan = native_backend_plan(&descriptor)?;
+        let mut prior_dispositions = Vec::new();
+        for (index, backends) in plan.tiers().iter().copied().enumerate() {
+            let instance = Instance::new(surface_instance_descriptor(&target, backends));
+            let surface = instance
+                .create_surface(Arc::clone(&target))
+                .map_err(|error| {
+                    GpuContextRequestError::new(
+                        GpuContextRequestErrorCategory::SurfaceCreationFailure,
+                        error.to_string(),
+                    )
+                })?;
+            let result = request_with_instance_for_backends(
+                instance,
+                descriptor.clone(),
+                Some(&surface),
+                realization_policies,
+                execution_policy,
+                backends,
+                prior_dispositions.clone(),
+            )
+            .await;
+            match result {
+                Ok(context) => {
+                    let handle = context
+                        .backend
+                        .surfaces
+                        .register_surface(&context.backend.adapter, surface)
+                        .map_err(map_surface_registration_error)?;
+                    return Ok((context, handle));
+                }
+                Err(error)
+                    if index + 1 < plan.tiers().len()
+                        && native_tier_fallback_allowed(error.category()) =>
+                {
+                    prior_dispositions = error.candidate_dispositions().to_vec();
+                }
+                Err(error) => return Err(error),
+            }
+        }
+        return Err(GpuContextRequestError::new(
+            GpuContextRequestErrorCategory::NoAdapterAvailable,
+            "native surface backend initialization plan contained no usable tier",
+        ));
     }
+
     #[cfg(target_arch = "wasm32")]
     {
-        let _ = target;
-        enforce_runengpu_instance_flags(InstanceDescriptor::new_without_display_handle_from_env())
+        let instance = Instance::new(surface_instance_descriptor(&target));
+        let surface = instance
+            .create_surface(Arc::clone(&target))
+            .map_err(|error| {
+                GpuContextRequestError::new(
+                    GpuContextRequestErrorCategory::SurfaceCreationFailure,
+                    error.to_string(),
+                )
+            })?;
+        let context = request_with_instance(
+            instance,
+            descriptor,
+            Some(&surface),
+            realization_policies,
+            execution_policy,
+        )
+        .await?;
+        let handle = context
+            .backend
+            .surfaces
+            .register_surface(&context.backend.adapter, surface)
+            .map_err(map_surface_registration_error)?;
+        Ok((context, handle))
     }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn surface_instance_descriptor<T: GpuSurfaceTarget>(
+    target: &Arc<T>,
+    backends: wgpu::Backends,
+) -> InstanceDescriptor {
+    let mut descriptor = InstanceDescriptor::new_with_display_handle_from_env(Box::new(
+        WgpuSurfaceDisplay(Arc::clone(target)),
+    ));
+    descriptor.backends = backends;
+    enforce_runengpu_instance_flags(descriptor)
+}
+
+#[cfg(target_arch = "wasm32")]
+fn surface_instance_descriptor<T: GpuSurfaceTarget>(target: &Arc<T>) -> InstanceDescriptor {
+    let _ = target;
+    enforce_runengpu_instance_flags(InstanceDescriptor::new_without_display_handle_from_env())
 }
 
 fn map_surface_registration_error(error: GpuSurfaceError) -> GpuContextRequestError {
