@@ -912,10 +912,7 @@ where
             let surface = instance
                 .create_surface(Arc::clone(&target))
                 .map_err(|error| {
-                    surface_creation_failure_with_prior(
-                        error.to_string(),
-                        &prior_dispositions,
-                    )
+                    surface_creation_failure_with_prior(error.to_string(), &prior_dispositions)
                 })?;
             let result = request_with_instance_for_backends(
                 instance,
@@ -1110,15 +1107,15 @@ impl GpuContext {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        GpuContextId, GpuDeviceGeneration, GpuPreferredFallback, GpuResourceOwnership,
-        GpuSurfaceLeaseDisposition,
-    };
     #[cfg(not(target_arch = "wasm32"))]
     use crate::{
         GpuAdapterClass, GpuAdapterFacts, GpuAdapterLimits, GpuAlignmentFacts, GpuBackendFamily,
         GpuCandidateId, GpuCapabilities, GpuFallbackStatus, GpuLimits, GpuRejectedCandidateReport,
         GpuSoftwareStatus,
+    };
+    use crate::{
+        GpuContextId, GpuDeviceGeneration, GpuPreferredFallback, GpuResourceOwnership,
+        GpuSurfaceLeaseDisposition,
     };
     use std::num::NonZeroU64;
 
@@ -1166,16 +1163,14 @@ mod tests {
                 query_resolve_destination: Some(256),
             },
         );
-        GpuCandidateDisposition::Rejected(Box::new(
-            GpuRejectedCandidateReport::from_context_error(
-                GpuCandidateId::allocate().unwrap(),
-                adapter,
-                GpuContextRequestError::new(
-                    GpuContextRequestErrorCategory::NoAdmissibleCandidate,
-                    "primary tier rejected",
-                ),
+        GpuCandidateDisposition::Rejected(Box::new(GpuRejectedCandidateReport::from_context_error(
+            GpuCandidateId::allocate().unwrap(),
+            adapter,
+            GpuContextRequestError::new(
+                GpuContextRequestErrorCategory::NoAdmissibleCandidate,
+                "primary tier rejected",
             ),
-        ))
+        )))
     }
 
     fn capabilities() -> GpuSurfaceCapabilities {

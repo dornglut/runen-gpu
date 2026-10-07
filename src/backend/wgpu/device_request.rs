@@ -342,9 +342,8 @@ async fn request_with_instance_generation_for_backends(
     }
     let candidate_dispositions = selection.dispositions.clone();
     let candidate = selection.candidate;
-    let requested_limits = requested_limits(&candidate).map_err(|error| {
-        with_selection_candidate_dispositions(error, &candidate_dispositions)
-    })?;
+    let requested_limits = requested_limits(&candidate)
+        .map_err(|error| with_selection_candidate_dispositions(error, &candidate_dispositions))?;
     if !requested_limits.check_limits(&adapter.limits()) {
         return Err(with_selection_candidate_dispositions(
             GpuContextRequestError::new(
@@ -374,9 +373,8 @@ async fn request_with_instance_generation_for_backends(
                 &candidate_dispositions,
             )
         })?;
-    verify_requested_features(requested_features, device.features()).map_err(|error| {
-        with_selection_candidate_dispositions(error, &candidate_dispositions)
-    })?;
+    verify_requested_features(requested_features, device.features())
+        .map_err(|error| with_selection_candidate_dispositions(error, &candidate_dispositions))?;
     let actual_native_limits = device.limits();
     if !requested_limits.check_limits(&actual_native_limits) {
         return Err(with_selection_candidate_dispositions(
@@ -1652,8 +1650,8 @@ mod tests {
             &[Backends::VULKAN | Backends::GL]
         );
 
-        let strict = descriptor
-            .with_adapter_selection_policy(GpuAdapterSelectionPolicy::RequireUnambiguous);
+        let strict =
+            descriptor.with_adapter_selection_policy(GpuAdapterSelectionPolicy::RequireUnambiguous);
         assert_eq!(
             native_backend_plan_for(&strict, Backends::all(), false)
                 .unwrap()
