@@ -23,7 +23,8 @@ pub use admission::{
     GpuRejectedCandidateReport,
 };
 pub use descriptor::{
-    GpuAdapterClass, GpuAlignmentKind, GpuBackendFamily, GpuContextDescriptor, GpuFormatRole,
+    GpuAdapterClass, GpuAdapterSelectionPolicy, GpuAlignmentKind, GpuBackendFamily,
+    GpuContextDescriptor, GpuFormatRole,
     GpuLimitConstraint, GpuLimitKind, GpuPortabilityPolicy, GpuPowerPreference,
     GpuSoftwareFallbackPolicy,
 };

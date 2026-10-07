@@ -67,10 +67,11 @@ fn headless_context_admission_reports_a_real_context_or_a_strict_environment_out
                 context.device_facts().candidate_dispositions(),
                 context.admission_report().candidate_dispositions()
             );
-            assert_eq!(
+            assert!(matches!(
                 context.admission_report().selection_kind(),
                 runen_gpu::GpuCandidateSelectionKind::DeterministicallyRanked
-            );
+                    | runen_gpu::GpuCandidateSelectionKind::EquivalentCandidateSelected
+            ));
             assert!(
                 !context
                     .admission_report()

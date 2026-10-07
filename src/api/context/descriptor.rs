@@ -35,6 +35,13 @@ pub enum GpuPowerPreference {
     NoPreference,
 }
 
+/// Automatic selection is the normal GPU admission contract. Strict selection is opt-in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum GpuAdapterSelectionPolicy {
+    Automatic,
+    RequireUnambiguous,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum GpuSoftwareFallbackPolicy {
     Allow,
@@ -106,6 +113,7 @@ pub struct GpuContextDescriptor {
     label: Option<String>,
     provenance: Option<String>,
     power_preference: GpuPowerPreference,
+    adapter_selection_policy: GpuAdapterSelectionPolicy,
     fallback_policy: GpuSoftwareFallbackPolicy,
     allowed_backends: BTreeSet<GpuBackendFamily>,
     backend_preference: BTreeMap<GpuBackendFamily, u8>,
@@ -123,6 +131,7 @@ pub struct GpuContextDescriptor {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct GpuDescriptorRetryIdentity {
     power_preference: GpuPowerPreference,
+    adapter_selection_policy: GpuAdapterSelectionPolicy,
     fallback_policy: GpuSoftwareFallbackPolicy,
     allowed_backends: BTreeSet<GpuBackendFamily>,
     backend_preference: BTreeMap<GpuBackendFamily, u8>,
@@ -140,6 +149,7 @@ impl GpuContextDescriptor {
             label: None,
             provenance: None,
             power_preference: GpuPowerPreference::NoPreference,
+            adapter_selection_policy: GpuAdapterSelectionPolicy::Automatic,
             fallback_policy: GpuSoftwareFallbackPolicy::Allow,
             allowed_backends: BTreeSet::new(),
             backend_preference: BTreeMap::new(),
@@ -165,6 +175,12 @@ impl GpuContextDescriptor {
 
     pub const fn with_power_preference(mut self, preference: GpuPowerPreference) -> Self {
         self.power_preference = preference;
+        self
+    }
+
+    /// Defaults to automatic selection among the best admitted candidates.
+    pub const fn with_adapter_selection_policy(mut self, policy: GpuAdapterSelectionPolicy) -> Self {
+        self.adapter_selection_policy = policy;
         self
     }
 
@@ -227,6 +243,10 @@ impl GpuContextDescriptor {
         self.power_preference
     }
 
+    pub const fn adapter_selection_policy(&self) -> GpuAdapterSelectionPolicy {
+        self.adapter_selection_policy
+    }
+
     pub const fn fallback_policy(&self) -> GpuSoftwareFallbackPolicy {
         self.fallback_policy
     }
@@ -242,6 +262,7 @@ impl GpuContextDescriptor {
     pub(crate) fn retry_identity(&self) -> GpuDescriptorRetryIdentity {
         GpuDescriptorRetryIdentity {
             power_preference: self.power_preference,
+            adapter_selection_policy: self.adapter_selection_policy,
             fallback_policy: self.fallback_policy,
             allowed_backends: self.allowed_backends.clone(),
             backend_preference: self.backend_preference.clone(),
@@ -309,6 +330,15 @@ impl GpuContextDescriptor {
         };
         let mut merged = Self::new(requirements)
             .with_power_preference(power_preference)
+            .with_adapter_selection_policy(
+                if self.adapter_selection_policy == GpuAdapterSelectionPolicy::RequireUnambiguous
+                    || other.adapter_selection_policy == GpuAdapterSelectionPolicy::RequireUnambiguous
+                {
+                    GpuAdapterSelectionPolicy::RequireUnambiguous
+                } else {
+                    GpuAdapterSelectionPolicy::Automatic
+                },
+            )
             .with_fallback_policy(fallback_policy)
             .with_allowed_backends(allowed_backends)
             .with_backend_preference(
@@ -350,6 +380,7 @@ impl GpuContextDescriptor {
     /// Compares only request authority, intentionally excluding diagnostic text.
     pub fn semantically_eq(&self, other: &Self) -> bool {
         self.power_preference == other.power_preference
+            && self.adapter_selection_policy == other.adapter_selection_policy
             && self.fallback_policy == other.fallback_policy
             && self.allowed_backends == other.allowed_backends
             && self.backend_preference == other.backend_preference
@@ -596,6 +627,29 @@ mod tests {
         GpuPreferredFallback::DisableInstrumentation,
         GpuPreferredFallback::SelectAlternativeWork,
     ];
+
+    #[test]
+    fn automatic_adapter_policy_is_the_default_and_strict_merge_is_monotone() {
+        let automatic = GpuContextDescriptor::new(GpuCapabilityRequirements::new());
+        let strict = automatic
+            .clone()
+            .with_adapter_selection_policy(GpuAdapterSelectionPolicy::RequireUnambiguous);
+        assert_eq!(
+            automatic.adapter_selection_policy(),
+            GpuAdapterSelectionPolicy::Automatic
+        );
+        assert!(!automatic.semantically_eq(&strict));
+        assert_ne!(automatic.retry_identity(), strict.retry_identity());
+        assert_eq!(
+            automatic.merge(&strict).unwrap().adapter_selection_policy(),
+            GpuAdapterSelectionPolicy::RequireUnambiguous
+        );
+        assert_eq!(
+            strict.merge(&automatic).unwrap().adapter_selection_policy(),
+            GpuAdapterSelectionPolicy::RequireUnambiguous
+        );
+        assert!(automatic.merge(&automatic).unwrap().semantically_eq(&automatic));
+    }
 
     #[test]
     fn preferred_degradation_mapping_accepts_only_the_explicit_feature_pair() {
