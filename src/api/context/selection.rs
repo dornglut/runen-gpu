@@ -1,13 +1,13 @@
 use super::admission::{
-    GpuCandidateAdmissionReport, GpuCandidateEnvironmentEvidence, GpuRejectedCandidateReport,
-    evaluate_validated_candidate,
+    ALL_LIMIT_KINDS, GpuCandidateAdmissionReport, GpuCandidateEnvironmentEvidence,
+    GpuRejectedCandidateReport, evaluate_validated_candidate, limit_value,
 };
 use super::descriptor::{
     GpuAdapterSelectionPolicy, GpuContextDescriptor, GpuDescriptorRetryIdentity, GpuPowerPreference,
 };
 use super::diagnostics::{GpuContextRequestError, GpuContextRequestErrorCategory};
 use super::facts::{GpuAdapterFacts, GpuFallbackStatus, GpuPortabilityClass, GpuSoftwareStatus};
-use crate::{GpuCapabilityFeature, GpuTextureFormat, GpuTextureFormatCapabilities};
+use crate::{GpuCapabilityFeature, GpuLimits, GpuTextureFormat, GpuTextureFormatCapabilities};
 use std::{
     collections::BTreeMap,
     num::NonZeroU64,
@@ -561,6 +561,14 @@ struct GpuCanonicalFormatCapabilities {
     block_copy_size: Option<u32>,
 }
 
+/// Canonical candidate identity covers the complete admitted limit vocabulary. Reuse
+/// admission's single limit-kind census so later capabilities cannot silently be omitted.
+type GpuCanonicalLimitsKey = [u64; ALL_LIMIT_KINDS.len()];
+
+fn canonical_limits_key(limits: GpuLimits) -> GpuCanonicalLimitsKey {
+    std::array::from_fn(|index| limit_value(limits, ALL_LIMIT_KINDS[index]))
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 struct GpuCanonicalAdapterKey {
     backend: super::descriptor::GpuBackendFamily,
@@ -568,7 +576,8 @@ struct GpuCanonicalAdapterKey {
     software: GpuSoftwareStatus,
     fallback: GpuFallbackStatus,
     supported_features: Vec<GpuCapabilityFeature>,
-    adapter_limits: (u64, u64, u32, u32, u32, u32, u32, u32, u32, u32, u32),
+    adapter_limits: GpuCanonicalLimitsKey,
+    capability_limits: GpuCanonicalLimitsKey,
     supported_formats: Vec<(GpuTextureFormat, GpuCanonicalFormatCapabilities)>,
     alignments: super::facts::GpuAlignmentFacts,
     vendor: Option<u32>,
@@ -578,26 +587,14 @@ struct GpuCanonicalAdapterKey {
 }
 
 fn canonical_adapter_key(adapter: &GpuAdapterFacts) -> GpuCanonicalAdapterKey {
-    let limits = adapter.adapter_limits().values();
     GpuCanonicalAdapterKey {
         backend: adapter.backend(),
         class: adapter.class(),
         software: adapter.software(),
         fallback: adapter.fallback(),
         supported_features: adapter.supported().features().collect(),
-        adapter_limits: (
-            limits.max_uniform_buffer_binding_size(),
-            limits.max_storage_buffer_binding_size(),
-            limits.max_color_attachments(),
-            limits.max_vertex_buffers(),
-            limits.max_bindings_per_group(),
-            limits.max_texture_dimension_2d(),
-            limits.max_bind_groups(),
-            limits.max_bind_groups_plus_vertex_buffers(),
-            limits.max_dynamic_uniform_buffers_per_pipeline_layout(),
-            limits.max_dynamic_storage_buffers_per_pipeline_layout(),
-            limits.max_compute_workgroups_per_dimension(),
-        ),
+        adapter_limits: canonical_limits_key(adapter.adapter_limits().values()),
+        capability_limits: canonical_limits_key(adapter.supported().limits()),
         supported_formats: adapter
             .supported()
             .formats()
@@ -935,6 +932,71 @@ mod tests {
                 .unwrap_or_else(|poisoned| poisoned.into_inner())
                 .is_empty(),
             "automatic selection must not register exact-retry tokens"
+        );
+    }
+
+    #[test]
+    fn canonical_identity_covers_all_admitted_limits_and_separate_capability_limits() {
+        let _retry_registry = isolated_retry_registry();
+        let base = adapter();
+        let limits = base.adapter_limits().values();
+        let raised_buffer = GpuLimits::new(
+            limits.max_uniform_buffer_binding_size(),
+            limits.max_storage_buffer_binding_size(),
+            limits.max_color_attachments(),
+            limits.max_vertex_buffers(),
+            limits.max_bindings_per_group(),
+            limits.max_texture_dimension_2d(),
+            limits.max_bind_groups(),
+            limits.max_bind_groups_plus_vertex_buffers(),
+            limits.max_dynamic_uniform_buffers_per_pipeline_layout(),
+            limits.max_dynamic_storage_buffers_per_pipeline_layout(),
+            limits.max_compute_workgroups_per_dimension(),
+            limits.max_buffer_size() + 1,
+            limits.max_texture_dimension_1d(),
+            limits.max_texture_dimension_3d(),
+            limits.max_texture_array_layers(),
+            limits.max_vertex_attributes(),
+            limits.max_vertex_buffer_array_stride(),
+        )
+        .unwrap();
+        let larger = GpuAdapterFacts::new(
+            base.backend(),
+            base.class(),
+            base.software(),
+            base.fallback(),
+            GpuCapabilities::from_normalized_facts([], raised_buffer, []),
+            GpuAdapterLimits::new(raised_buffer),
+            base.alignments(),
+        );
+        let environment = GpuCandidateEnvironmentEvidence::headless();
+        assert_ne!(
+            canonical_candidate_input_key(&base, environment),
+            canonical_candidate_input_key(&larger, environment),
+            "the twelfth normalized physical limit cannot disappear from canonical identity"
+        );
+        let distinct_capability_limits = GpuAdapterFacts::new(
+            base.backend(),
+            base.class(),
+            base.software(),
+            base.fallback(),
+            GpuCapabilities::from_normalized_facts([], raised_buffer, []),
+            base.adapter_limits(),
+            base.alignments(),
+        );
+        assert_ne!(
+            canonical_candidate_input_key(&base, environment),
+            canonical_candidate_input_key(&distinct_capability_limits, environment),
+            "logical capability limits and adapter maxima are different observed authorities"
+        );
+
+        let descriptor = GpuContextDescriptor::new(GpuCapabilityRequirements::new());
+        let forward = select_candidate(&descriptor, [base.clone(), larger.clone()], true).unwrap();
+        let backward = select_candidate(&descriptor, [larger, base], true).unwrap();
+        assert_eq!(forward.kind, GpuCandidateSelectionKind::CanonicallyTieBroken);
+        assert_eq!(
+            forward.candidate.adapter().adapter_limits(),
+            backward.candidate.adapter().adapter_limits()
         );
     }
 

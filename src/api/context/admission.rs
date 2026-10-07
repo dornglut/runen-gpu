@@ -434,7 +434,7 @@ const FIXED_BINDING_ARRAY_ELEMENT_BASELINE: u32 = 500_000;
 const FIXED_BINDING_ARRAY_SAMPLER_ELEMENT_BASELINE: u32 = 1_000;
 const MULTIVIEW_VIEW_COUNT_BASELINE: u32 = 2;
 
-const ALL_LIMIT_KINDS: [GpuLimitKind; 20] = [
+pub(super) const ALL_LIMIT_KINDS: [GpuLimitKind; 20] = [
     GpuLimitKind::MaxUniformBufferBindingSize,
     GpuLimitKind::MaxStorageBufferBindingSize,
     GpuLimitKind::MaxColorAttachments,
