@@ -413,9 +413,9 @@ pub(crate) fn select_candidate_inputs(
         .first()
         .cloned()
         .expect("nonempty admitted candidates checked above");
-    let equal_best = admitted.get(1).filter(|second| {
-        candidate_rank(descriptor, second) == candidate_rank(descriptor, &best)
-    });
+    let equal_best = admitted
+        .get(1)
+        .filter(|second| candidate_rank(descriptor, second) == candidate_rank(descriptor, &best));
     if equal_best.is_some()
         && descriptor.adapter_selection_policy() == GpuAdapterSelectionPolicy::RequireUnambiguous
     {
@@ -890,7 +890,10 @@ mod tests {
             forward.candidate.adapter().backend(),
             reverse.candidate.adapter().backend()
         );
-        assert_eq!(forward.kind, GpuCandidateSelectionKind::CanonicallyTieBroken);
+        assert_eq!(
+            forward.kind,
+            GpuCandidateSelectionKind::CanonicallyTieBroken
+        );
         assert_eq!(
             forward.evidence.reason(),
             "stable observed-facts tie-break among equally preferred candidates"
@@ -939,8 +942,7 @@ mod tests {
     fn hardware_ids_are_diagnostics_not_selection_preferences() {
         let _retry_registry = isolated_retry_registry();
         let lower_id = adapter().with_diagnostics("lo".into(), 1, 1, "".into(), "".into());
-        let higher_id =
-            adapter().with_diagnostics("hi".into(), 4096, 9999, "".into(), "".into());
+        let higher_id = adapter().with_diagnostics("hi".into(), 4096, 9999, "".into(), "".into());
         let descriptor = GpuContextDescriptor::new(GpuCapabilityRequirements::new());
         let lower = select_candidate(&descriptor, [lower_id.clone()], true).unwrap();
         let higher = select_candidate(&descriptor, [higher_id.clone()], true).unwrap();

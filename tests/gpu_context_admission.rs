@@ -1,7 +1,7 @@
 use runen_gpu::{
     GpuAdapterSelectionPolicy, GpuCapabilityFeature, GpuCapabilityProfile,
-    GpuCapabilityRequirements, GpuContext, GpuContextDescriptor,
-    GpuContextRequestErrorCategory, GpuLimitKind,
+    GpuCapabilityRequirements, GpuContext, GpuContextDescriptor, GpuContextRequestErrorCategory,
+    GpuLimitKind,
 };
 use std::collections::BTreeSet;
 
@@ -111,7 +111,10 @@ fn public_adapter_selection_policy_defaults_to_automatic_and_strict_is_explicit(
     let strict = normal
         .clone()
         .with_adapter_selection_policy(GpuAdapterSelectionPolicy::RequireUnambiguous);
-    assert_ne!(normal.adapter_selection_policy(), strict.adapter_selection_policy());
+    assert_ne!(
+        normal.adapter_selection_policy(),
+        strict.adapter_selection_policy()
+    );
     assert_eq!(
         normal.merge(&strict).unwrap().adapter_selection_policy(),
         GpuAdapterSelectionPolicy::RequireUnambiguous
