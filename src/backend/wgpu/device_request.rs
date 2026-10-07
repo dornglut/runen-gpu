@@ -5,10 +5,10 @@ use super::{
     WgpuSurfaceState,
 };
 #[cfg(not(target_arch = "wasm32"))]
-use crate::GpuAdapterFacts;
+use crate::{GpuAdapterFacts, GpuBackendFamily};
 use crate::api::texture_format;
 use crate::{
-    GpuAlignmentFacts, GpuBackendFamily, GpuCandidateDisposition, GpuCandidateEnvironmentEvidence,
+    GpuAlignmentFacts, GpuCandidateDisposition, GpuCandidateEnvironmentEvidence,
     GpuCandidateId, GpuCandidateInput,
     GpuCandidateSelection, GpuCandidateSelectionKind, GpuCapabilityFeature, GpuContext,
     GpuContextAdmissionReport, GpuContextAffinity, GpuContextDescriptor, GpuContextId,
