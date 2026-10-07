@@ -993,7 +993,10 @@ mod tests {
         let descriptor = GpuContextDescriptor::new(GpuCapabilityRequirements::new());
         let forward = select_candidate(&descriptor, [base.clone(), larger.clone()], true).unwrap();
         let backward = select_candidate(&descriptor, [larger, base], true).unwrap();
-        assert_eq!(forward.kind, GpuCandidateSelectionKind::CanonicallyTieBroken);
+        assert_eq!(
+            forward.kind,
+            GpuCandidateSelectionKind::CanonicallyTieBroken
+        );
         assert_eq!(
             forward.candidate.adapter().adapter_limits(),
             backward.candidate.adapter().adapter_limits()
