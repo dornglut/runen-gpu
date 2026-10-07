@@ -1,11 +1,13 @@
 use super::admission::{
-    GpuCandidateAdmissionReport, GpuCandidateEnvironmentEvidence, GpuRejectedCandidateReport,
-    evaluate_validated_candidate,
+    ALL_LIMIT_KINDS, GpuCandidateAdmissionReport, GpuCandidateEnvironmentEvidence,
+    GpuRejectedCandidateReport, evaluate_validated_candidate, limit_value,
 };
-use super::descriptor::{GpuContextDescriptor, GpuDescriptorRetryIdentity, GpuPowerPreference};
+use super::descriptor::{
+    GpuAdapterSelectionPolicy, GpuContextDescriptor, GpuDescriptorRetryIdentity, GpuPowerPreference,
+};
 use super::diagnostics::{GpuContextRequestError, GpuContextRequestErrorCategory};
 use super::facts::{GpuAdapterFacts, GpuFallbackStatus, GpuPortabilityClass, GpuSoftwareStatus};
-use crate::{GpuCapabilityFeature, GpuTextureFormat, GpuTextureFormatCapabilities};
+use crate::{GpuCapabilityFeature, GpuLimits, GpuTextureFormat, GpuTextureFormatCapabilities};
 use std::{
     collections::BTreeMap,
     num::NonZeroU64,
@@ -130,15 +132,16 @@ impl GpuCandidateDisposition {
     }
 }
 
+/// Normalized policy preference rank. Adapter vendor and device IDs are separately observable
+/// facts and MUST NOT participate in this ordinal rank.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct GpuCandidateRankEvidence {
     fallback: u8,
     power: u8,
+    preferred_degradations: usize,
     portability: u8,
     adapter_class: u8,
     backend_preference: u8,
-    vendor: Option<u32>,
-    device: Option<u32>,
 }
 
 impl GpuCandidateRankEvidence {
@@ -148,6 +151,10 @@ impl GpuCandidateRankEvidence {
 
     pub const fn power_priority(&self) -> u8 {
         self.power
+    }
+
+    pub const fn preferred_degradation_count(&self) -> usize {
+        self.preferred_degradations
     }
 
     pub const fn portability_priority(&self) -> u8 {
@@ -160,14 +167,6 @@ impl GpuCandidateRankEvidence {
 
     pub const fn backend_preference_priority(&self) -> u8 {
         self.backend_preference
-    }
-
-    pub const fn vendor(&self) -> Option<u32> {
-        self.vendor
-    }
-
-    pub const fn device(&self) -> Option<u32> {
-        self.device
     }
 }
 
@@ -189,8 +188,17 @@ impl GpuCandidateSelectionEvidence {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GpuCandidateSelectionKind {
+    /// One candidate was selected directly by the platform/backend.
     BackendSelectedCandidate,
+    /// Native ranking found a unique normalized preference winner.
     DeterministicallyRanked,
+    /// An equal preference rank was resolved using a stable canonical observed-facts order.
+    CanonicallyTieBroken,
+    /// Several best-ranked candidates were indistinguishable using normalized observed facts.
+    /// The native enumeration chose an available handle; physical identity is not persistent.
+    EquivalentCandidateSelected,
+    /// The caller resolved an explicitly strict ambiguous set using a process-local retry token.
+    ExactCandidateRetry,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -234,6 +242,7 @@ pub(crate) struct GpuCandidateInput {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct GpuCandidateSelection {
+    pub(crate) kind: GpuCandidateSelectionKind,
     pub(crate) candidate: GpuCandidateAdmissionReport,
     /// The newly enumerated backend input selected for this request. This stays private so an
     /// exact retry can retain its disclosed public token without reconstructing a raw adapter.
@@ -362,6 +371,7 @@ pub(crate) fn select_candidate_inputs(
                 candidate.id = exact;
                 retoken_disposition(&mut dispositions, backend_candidate_id, exact);
                 Ok(GpuCandidateSelection {
+                    kind: GpuCandidateSelectionKind::ExactCandidateRetry,
                     evidence: GpuCandidateSelectionEvidence {
                         rank: candidate_rank(descriptor, matching[0]),
                         reason: "exact process-local candidate retry",
@@ -391,17 +401,26 @@ pub(crate) fn select_candidate_inputs(
         )
         .with_candidate_dispositions(dispositions));
     }
-    admitted.sort_by_key(|candidate| candidate_rank(descriptor, candidate));
+    admitted.sort_by(|left, right| {
+        candidate_rank(descriptor, left)
+            .cmp(&candidate_rank(descriptor, right))
+            // This order is NOT a capability/performance preference. It only makes a
+            // policy-equivalent choice independent of native enumeration order when observable
+            // adapter facts differ. Equivalent facts cannot establish physical identity.
+            .then_with(|| identities_by_id[&left.id()].cmp(&identities_by_id[&right.id()]))
+    });
     let best = admitted
         .first()
         .cloned()
         .expect("nonempty admitted candidates checked above");
-    if admitted.get(1).is_some_and(|second| {
-        candidate_rank(descriptor, second) == candidate_rank(descriptor, &best)
-    }) {
-        // Only an ambiguity report authorizes exact retry. Register every accepted candidate in
-        // one bounded transaction immediately before returning that report, so the report cannot
-        // expose a partially retained candidate set.
+    let equal_best = admitted
+        .get(1)
+        .filter(|second| candidate_rank(descriptor, second) == candidate_rank(descriptor, &best));
+    if equal_best.is_some()
+        && descriptor.adapter_selection_policy() == GpuAdapterSelectionPolicy::RequireUnambiguous
+    {
+        // Strict selection is opt-in. Only an ambiguity report authorizes exact retry; do not
+        // populate the bounded retry registry during ordinary automatic context creation.
         if let Err(error) = retain_ambiguous_retry_tokens(
             descriptor_retry_identity,
             candidate_set,
@@ -412,14 +431,29 @@ pub(crate) fn select_candidate_inputs(
         }
         return Err(GpuContextRequestError::new(
             GpuContextRequestErrorCategory::AmbiguousAdapterSelection,
-            "best candidates remain indistinguishable after normalized ranking",
+            "best candidates remain equally preferred after normalized ranking",
         )
         .with_candidate_dispositions(dispositions));
     }
+    let (kind, reason) = match equal_best {
+        Some(second) if identities_by_id[&second.id()] == identities_by_id[&best.id()] => (
+            GpuCandidateSelectionKind::EquivalentCandidateSelected,
+            "observationally indistinguishable best-ranked candidates; native enumeration chose",
+        ),
+        Some(_) => (
+            GpuCandidateSelectionKind::CanonicallyTieBroken,
+            "stable observed-facts tie-break among equally preferred candidates",
+        ),
+        None => (
+            GpuCandidateSelectionKind::DeterministicallyRanked,
+            "lowest normalized preference rank",
+        ),
+    };
     Ok(GpuCandidateSelection {
+        kind,
         evidence: GpuCandidateSelectionEvidence {
             rank: candidate_rank(descriptor, &best),
-            reason: "lowest complete normalized rank",
+            reason,
         },
         backend_candidate_id: best.id(),
         candidate: best,
@@ -527,6 +561,14 @@ struct GpuCanonicalFormatCapabilities {
     block_copy_size: Option<u32>,
 }
 
+/// Canonical candidate identity covers the complete admitted limit vocabulary. Reuse
+/// admission's single limit-kind census so later capabilities cannot silently be omitted.
+type GpuCanonicalLimitsKey = [u64; ALL_LIMIT_KINDS.len()];
+
+fn canonical_limits_key(limits: GpuLimits) -> GpuCanonicalLimitsKey {
+    std::array::from_fn(|index| limit_value(limits, ALL_LIMIT_KINDS[index]))
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 struct GpuCanonicalAdapterKey {
     backend: super::descriptor::GpuBackendFamily,
@@ -534,7 +576,8 @@ struct GpuCanonicalAdapterKey {
     software: GpuSoftwareStatus,
     fallback: GpuFallbackStatus,
     supported_features: Vec<GpuCapabilityFeature>,
-    adapter_limits: (u64, u64, u32, u32, u32, u32, u32, u32, u32, u32, u32),
+    adapter_limits: GpuCanonicalLimitsKey,
+    capability_limits: GpuCanonicalLimitsKey,
     supported_formats: Vec<(GpuTextureFormat, GpuCanonicalFormatCapabilities)>,
     alignments: super::facts::GpuAlignmentFacts,
     vendor: Option<u32>,
@@ -544,26 +587,14 @@ struct GpuCanonicalAdapterKey {
 }
 
 fn canonical_adapter_key(adapter: &GpuAdapterFacts) -> GpuCanonicalAdapterKey {
-    let limits = adapter.adapter_limits().values();
     GpuCanonicalAdapterKey {
         backend: adapter.backend(),
         class: adapter.class(),
         software: adapter.software(),
         fallback: adapter.fallback(),
         supported_features: adapter.supported().features().collect(),
-        adapter_limits: (
-            limits.max_uniform_buffer_binding_size(),
-            limits.max_storage_buffer_binding_size(),
-            limits.max_color_attachments(),
-            limits.max_vertex_buffers(),
-            limits.max_bindings_per_group(),
-            limits.max_texture_dimension_2d(),
-            limits.max_bind_groups(),
-            limits.max_bind_groups_plus_vertex_buffers(),
-            limits.max_dynamic_uniform_buffers_per_pipeline_layout(),
-            limits.max_dynamic_storage_buffers_per_pipeline_layout(),
-            limits.max_compute_workgroups_per_dimension(),
-        ),
+        adapter_limits: canonical_limits_key(adapter.adapter_limits().values()),
+        capability_limits: canonical_limits_key(adapter.supported().limits()),
         supported_formats: adapter
             .supported()
             .formats()
@@ -653,11 +684,10 @@ fn candidate_rank(
     GpuCandidateRankEvidence {
         fallback,
         power,
+        preferred_degradations: candidate.degradations().len(),
         portability,
         adapter_class: class,
         backend_preference: backend,
-        vendor: adapter.vendor(),
-        device: adapter.device(),
     }
 }
 
@@ -835,6 +865,208 @@ mod tests {
     }
 
     #[test]
+    fn automatic_selection_resolves_cross_backend_ties_without_fake_backend_priority() {
+        let _retry_registry = isolated_retry_registry();
+        let vulkan = adapter();
+        let limits = test_limits();
+        let direct3d = GpuAdapterFacts::new(
+            GpuBackendFamily::Direct3D12,
+            GpuAdapterClass::Discrete,
+            GpuSoftwareStatus::Hardware,
+            GpuFallbackStatus::ConfirmedNotFallback,
+            GpuCapabilities::from_normalized_facts([], limits, []),
+            GpuAdapterLimits::new(limits),
+            vulkan.alignments(),
+        );
+        let default = GpuContextDescriptor::new(GpuCapabilityRequirements::new());
+        let forward = select_candidate(&default, [vulkan.clone(), direct3d.clone()], true)
+            .expect("automatic admission must choose a policy-equivalent native backend");
+        let reverse = select_candidate(&default, [direct3d.clone(), vulkan.clone()], true)
+            .expect("enumeration order must not alter an observable choice");
+        assert_eq!(
+            forward.candidate.adapter().backend(),
+            reverse.candidate.adapter().backend()
+        );
+        assert_eq!(
+            forward.kind,
+            GpuCandidateSelectionKind::CanonicallyTieBroken
+        );
+        assert_eq!(
+            forward.evidence.reason(),
+            "stable observed-facts tie-break among equally preferred candidates"
+        );
+        assert_eq!(forward.dispositions.len(), 2);
+        assert_eq!(
+            candidate_rank(&default, &forward.candidate),
+            candidate_rank(&default, &reverse.candidate)
+        );
+
+        let preferred = default
+            .clone()
+            .with_backend_preference([GpuBackendFamily::Direct3D12, GpuBackendFamily::Vulkan]);
+        let chosen =
+            select_candidate(&preferred, [vulkan.clone(), direct3d.clone()], true).unwrap();
+        assert_eq!(
+            chosen.candidate.adapter().backend(),
+            GpuBackendFamily::Direct3D12
+        );
+        let constrained = default.with_allowed_backends([GpuBackendFamily::Vulkan]);
+        let chosen = select_candidate(&constrained, [vulkan, direct3d.clone()], true).unwrap();
+        assert_eq!(
+            chosen.candidate.adapter().backend(),
+            GpuBackendFamily::Vulkan
+        );
+        assert!(matches!(
+            chosen.dispositions.as_slice(),
+            [
+                GpuCandidateDisposition::Rejected(_),
+                GpuCandidateDisposition::Accepted(_)
+            ] | [
+                GpuCandidateDisposition::Accepted(_),
+                GpuCandidateDisposition::Rejected(_)
+            ]
+        ));
+        assert!(
+            candidate_retry_bindings()
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .is_empty(),
+            "automatic selection must not register exact-retry tokens"
+        );
+    }
+
+    #[test]
+    fn canonical_identity_covers_all_admitted_limits_and_separate_capability_limits() {
+        let _retry_registry = isolated_retry_registry();
+        let base = adapter();
+        let limits = base.adapter_limits().values();
+        let raised_buffer = GpuLimits::new(
+            limits.max_uniform_buffer_binding_size(),
+            limits.max_storage_buffer_binding_size(),
+            limits.max_color_attachments(),
+            limits.max_vertex_buffers(),
+            limits.max_bindings_per_group(),
+            limits.max_texture_dimension_2d(),
+            limits.max_bind_groups(),
+            limits.max_bind_groups_plus_vertex_buffers(),
+            limits.max_dynamic_uniform_buffers_per_pipeline_layout(),
+            limits.max_dynamic_storage_buffers_per_pipeline_layout(),
+            limits.max_compute_workgroups_per_dimension(),
+            limits.max_buffer_size() + 1,
+            limits.max_texture_dimension_1d(),
+            limits.max_texture_dimension_3d(),
+            limits.max_texture_array_layers(),
+            limits.max_vertex_attributes(),
+            limits.max_vertex_buffer_array_stride(),
+        )
+        .unwrap();
+        let larger = GpuAdapterFacts::new(
+            base.backend(),
+            base.class(),
+            base.software(),
+            base.fallback(),
+            GpuCapabilities::from_normalized_facts([], raised_buffer, []),
+            GpuAdapterLimits::new(raised_buffer),
+            base.alignments(),
+        );
+        let environment = GpuCandidateEnvironmentEvidence::headless();
+        assert_ne!(
+            canonical_candidate_input_key(&base, environment),
+            canonical_candidate_input_key(&larger, environment),
+            "the twelfth normalized physical limit cannot disappear from canonical identity"
+        );
+        let distinct_capability_limits = GpuAdapterFacts::new(
+            base.backend(),
+            base.class(),
+            base.software(),
+            base.fallback(),
+            GpuCapabilities::from_normalized_facts([], raised_buffer, []),
+            base.adapter_limits(),
+            base.alignments(),
+        );
+        assert_ne!(
+            canonical_candidate_input_key(&base, environment),
+            canonical_candidate_input_key(&distinct_capability_limits, environment),
+            "logical capability limits and adapter maxima are different observed authorities"
+        );
+
+        let descriptor = GpuContextDescriptor::new(GpuCapabilityRequirements::new());
+        let forward = select_candidate(&descriptor, [base.clone(), larger.clone()], true).unwrap();
+        let backward = select_candidate(&descriptor, [larger, base], true).unwrap();
+        assert_eq!(
+            forward.kind,
+            GpuCandidateSelectionKind::CanonicallyTieBroken
+        );
+        assert_eq!(
+            forward.candidate.adapter().adapter_limits(),
+            backward.candidate.adapter().adapter_limits()
+        );
+    }
+
+    #[test]
+    fn hardware_ids_are_diagnostics_not_selection_preferences() {
+        let _retry_registry = isolated_retry_registry();
+        let lower_id = adapter().with_diagnostics("lo".into(), 1, 1, "".into(), "".into());
+        let higher_id = adapter().with_diagnostics("hi".into(), 4096, 9999, "".into(), "".into());
+        let descriptor = GpuContextDescriptor::new(GpuCapabilityRequirements::new());
+        let lower = select_candidate(&descriptor, [lower_id.clone()], true).unwrap();
+        let higher = select_candidate(&descriptor, [higher_id.clone()], true).unwrap();
+        assert_eq!(lower.evidence.rank(), higher.evidence.rank());
+        let strict =
+            descriptor.with_adapter_selection_policy(GpuAdapterSelectionPolicy::RequireUnambiguous);
+        assert_eq!(
+            select_candidate(&strict, [lower_id, higher_id], true)
+                .unwrap_err()
+                .category(),
+            GpuContextRequestErrorCategory::AmbiguousAdapterSelection
+        );
+    }
+
+    #[test]
+    fn automatic_selection_handles_observationally_identical_native_handles() {
+        let _retry_registry = isolated_retry_registry();
+        let first = with_diagnostics(adapter(), "one", "driver one", "info one");
+        let second = with_diagnostics(adapter(), "two", "driver two", "info two");
+        let descriptor = GpuContextDescriptor::new(GpuCapabilityRequirements::new());
+        let selected = select_candidate(&descriptor, [second, first], true)
+            .expect("indistinguishable eligible adapters are interchangeable by default");
+        assert_eq!(
+            selected.kind,
+            GpuCandidateSelectionKind::EquivalentCandidateSelected
+        );
+        assert_eq!(
+            selected.evidence.reason(),
+            "observationally indistinguishable best-ranked candidates; native enumeration chose"
+        );
+        assert_eq!(selected.dispositions.len(), 2);
+    }
+
+    #[test]
+    fn preferred_capability_degradations_affect_selection_before_canonical_tie_breaks() {
+        let mut requirements = GpuCapabilityRequirements::new();
+        requirements
+            .insert(GpuCapabilityRequirement::Preferred {
+                feature: GpuCapabilityFeature::Compute,
+                fallback: crate::GpuPreferredFallback::SelectAlternativeWork,
+            })
+            .unwrap();
+        let descriptor = GpuContextDescriptor::new(requirements);
+        let preferred = adapter_with([GpuCapabilityFeature::Compute]);
+        let degraded = adapter();
+        let selected = select_candidate(&descriptor, [degraded, preferred], true)
+            .expect("a fully preferred candidate is available");
+        assert!(
+            selected
+                .candidate
+                .adapter()
+                .supported()
+                .supports(GpuCapabilityFeature::Compute)
+        );
+        assert_eq!(selected.evidence.rank().preferred_degradation_count(), 0);
+        assert!(selected.candidate.degradations().is_empty());
+    }
+
+    #[test]
     fn exact_retry_tokens_bind_one_disclosed_candidate_without_diagnostic_identity() {
         let _retry_registry = isolated_retry_registry();
         let first = with_diagnostics(
@@ -849,7 +1081,8 @@ mod tests {
             "driver beta",
             "driver-info beta",
         );
-        let descriptor = GpuContextDescriptor::new(GpuCapabilityRequirements::new());
+        let descriptor = GpuContextDescriptor::new(GpuCapabilityRequirements::new())
+            .with_adapter_selection_policy(GpuAdapterSelectionPolicy::RequireUnambiguous);
         let ambiguous =
             select_candidate(&descriptor, [second.clone(), first.clone()], true).unwrap_err();
         assert_eq!(
@@ -904,6 +1137,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(retry.candidate.id(), retry_token);
+        assert_eq!(retry.kind, GpuCandidateSelectionKind::ExactCandidateRetry);
         assert!(
             retry
                 .candidate
@@ -985,7 +1219,8 @@ mod tests {
         let _retry_registry = isolated_retry_registry();
         let first = adapter_with([GpuCapabilityFeature::Compute]);
         let second = adapter_with([GpuCapabilityFeature::TimestampQuery]);
-        let descriptor = GpuContextDescriptor::new(GpuCapabilityRequirements::new());
+        let descriptor = GpuContextDescriptor::new(GpuCapabilityRequirements::new())
+            .with_adapter_selection_policy(GpuAdapterSelectionPolicy::RequireUnambiguous);
         let ambiguous =
             select_candidate(&descriptor, [first.clone(), second.clone()], true).unwrap_err();
         let retry_token = ambiguous
@@ -1043,7 +1278,8 @@ mod tests {
             ),
             "diagnostic names and driver facts must not create retry identity"
         );
-        let descriptor = GpuContextDescriptor::new(GpuCapabilityRequirements::new());
+        let descriptor = GpuContextDescriptor::new(GpuCapabilityRequirements::new())
+            .with_adapter_selection_policy(GpuAdapterSelectionPolicy::RequireUnambiguous);
         let ambiguous =
             select_candidate(&descriptor, [first.clone(), second.clone()], true).unwrap_err();
         let token = ambiguous.candidate_dispositions()[0].id();

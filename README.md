@@ -34,6 +34,22 @@ MSRV: 1.87
 publish: false
 ```
 
+## Adapter admission
+
+Context creation automatically evaluates available native adapters against the declared
+capability requirements, limits, host compatibility, and allowed backends/classes.
+It chooses the best admitted preference rank. Equally preferred adapters are
+resolved by stable observed facts where possible; observationally identical native
+handles are interchangeable, so physical selection across runs is not promised.
+Numeric hardware vendor and device IDs are diagnostics, not preference scores.
+
+Applications that need an explicit backend can use
+`GpuContextDescriptor::with_backend_preference` or `with_allowed_backends`.
+Strict opt-in tie rejection uses
+`with_adapter_selection_policy(GpuAdapterSelectionPolicy::RequireUnambiguous)`
+and the process-local candidate retry contract. An explicit strict request may
+return `GpuContextRequestErrorCategory::AmbiguousAdapterSelection`.
+
 ## Validation
 
 `cargo validate` is the single repository-owned validation command. It verifies

@@ -255,11 +255,8 @@ async fn select_backend_adapter(
         })
         .collect::<Result<Vec<_>, GpuContextRequestError>>()?;
     select_enumerated_adapter(descriptor, candidates).map(|(adapter, selection)| {
-        (
-            adapter,
-            selection,
-            GpuCandidateSelectionKind::DeterministicallyRanked,
-        )
+        let kind = selection.kind;
+        (adapter, selection, kind)
     })
 }
 
