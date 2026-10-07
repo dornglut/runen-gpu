@@ -408,14 +408,8 @@ mod tests {
             GpuContextRequestErrorCategory::NoAdmissibleCandidate,
             "secondary tier also rejected",
         )
-        .with_candidate_dispositions(vec![rejected(
-            GpuBackendFamily::OpenGl,
-            "secondary",
-        )])
-        .with_prior_candidate_dispositions(vec![rejected(
-            GpuBackendFamily::Vulkan,
-            "primary",
-        )]);
+        .with_candidate_dispositions(vec![rejected(GpuBackendFamily::OpenGl, "secondary")])
+        .with_prior_candidate_dispositions(vec![rejected(GpuBackendFamily::Vulkan, "primary")]);
 
         assert_eq!(error.candidate_dispositions().len(), 2);
         let backends = error

@@ -4,14 +4,13 @@ use super::{
     WgpuContextState, WgpuDeviceHealth, WgpuErrorAttributionGate, WgpuExecutionState,
     WgpuSurfaceState,
 };
+use crate::api::texture_format;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::{GpuAdapterFacts, GpuBackendFamily};
-use crate::api::texture_format;
 use crate::{
-    GpuAlignmentFacts, GpuCandidateDisposition, GpuCandidateEnvironmentEvidence,
-    GpuCandidateId, GpuCandidateInput,
-    GpuCandidateSelection, GpuCandidateSelectionKind, GpuCapabilityFeature, GpuContext,
-    GpuContextAdmissionReport, GpuContextAffinity, GpuContextDescriptor, GpuContextId,
+    GpuAlignmentFacts, GpuCandidateDisposition, GpuCandidateEnvironmentEvidence, GpuCandidateId,
+    GpuCandidateInput, GpuCandidateSelection, GpuCandidateSelectionKind, GpuCapabilityFeature,
+    GpuContext, GpuContextAdmissionReport, GpuContextAffinity, GpuContextDescriptor, GpuContextId,
     GpuContextRequestError, GpuContextRequestErrorCategory, GpuDeviceGeneration, GpuDeviceLimits,
     GpuDeviceRequestProfile, GpuExecutionPolicy, GpuFallbackStatus, GpuLimits,
     GpuRealizationPolicies, GpuSoftwareFallbackPolicy, GpuTextureFormat, admitted_device_facts,
@@ -19,8 +18,9 @@ use crate::{
 };
 use std::sync::Arc;
 use wgpu::{
-    Adapter, Backends, DeviceDescriptor, ExperimentalFeatures, Features, Instance, InstanceDescriptor,
-    InstanceFlags, Limits, MemoryHints, RequestAdapterError, RequestAdapterOptions, Surface, Trace,
+    Adapter, Backends, DeviceDescriptor, ExperimentalFeatures, Features, Instance,
+    InstanceDescriptor, InstanceFlags, Limits, MemoryHints, RequestAdapterError,
+    RequestAdapterOptions, Surface, Trace,
 };
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -195,8 +195,7 @@ fn native_backend_plan_for(
     operator_backends: Backends,
     explicit_operator_override: bool,
 ) -> Result<NativeBackendPlan, GpuContextRequestError> {
-    let native_supported =
-        Backends::VULKAN | Backends::METAL | Backends::DX12 | Backends::GL;
+    let native_supported = Backends::VULKAN | Backends::METAL | Backends::DX12 | Backends::GL;
     let mut effective = operator_backends & native_supported;
     if let Some(allowed) = native_allowed_backend_mask(descriptor) {
         effective &= allowed;
@@ -237,9 +236,7 @@ fn native_backend_plan_for(
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-pub(super) const fn native_tier_fallback_allowed(
-    category: GpuContextRequestErrorCategory,
-) -> bool {
+pub(super) const fn native_tier_fallback_allowed(category: GpuContextRequestErrorCategory) -> bool {
     matches!(
         category,
         GpuContextRequestErrorCategory::NoAdapterAvailable
@@ -312,15 +309,14 @@ async fn request_with_instance_generation_for_backends(
     mut prior_dispositions: Vec<GpuCandidateDisposition>,
 ) -> Result<GpuContext, GpuContextRequestError> {
     crate::validate_descriptor(&descriptor)?;
-    let (adapter, mut selection, selection_kind) =
-        select_backend_adapter(
-            &instance,
-            &descriptor,
-            compatible_surface,
-            enumeration_backends,
-        )
-        .await
-        .map_err(|error| error.with_prior_candidate_dispositions(prior_dispositions.clone()))?;
+    let (adapter, mut selection, selection_kind) = select_backend_adapter(
+        &instance,
+        &descriptor,
+        compatible_surface,
+        enumeration_backends,
+    )
+    .await
+    .map_err(|error| error.with_prior_candidate_dispositions(prior_dispositions.clone()))?;
     if !prior_dispositions.is_empty() {
         prior_dispositions.append(&mut selection.dispositions);
         selection.dispositions = prior_dispositions;
@@ -1588,10 +1584,8 @@ mod tests {
             &[Backends::GL]
         );
 
-        let primary_and_gl = GpuContextDescriptor::new(requirements).with_allowed_backends([
-            GpuBackendFamily::Vulkan,
-            GpuBackendFamily::OpenGl,
-        ]);
+        let primary_and_gl = GpuContextDescriptor::new(requirements)
+            .with_allowed_backends([GpuBackendFamily::Vulkan, GpuBackendFamily::OpenGl]);
         assert_eq!(
             native_backend_plan_for(&primary_and_gl, Backends::all(), false)
                 .unwrap()
@@ -1606,13 +1600,9 @@ mod tests {
         let descriptor = GpuContextDescriptor::new(GpuCapabilityRequirements::new())
             .with_allowed_backends([GpuBackendFamily::Vulkan, GpuBackendFamily::OpenGl]);
         assert_eq!(
-            native_backend_plan_for(
-                &descriptor,
-                Backends::VULKAN | Backends::GL,
-                true,
-            )
-            .unwrap()
-            .tiers(),
+            native_backend_plan_for(&descriptor, Backends::VULKAN | Backends::GL, true,)
+                .unwrap()
+                .tiers(),
             &[Backends::VULKAN | Backends::GL]
         );
 
