@@ -1,10 +1,12 @@
 pub(crate) mod execution;
 
-use super::device_request::{enforce_runengpu_instance_flags, request_with_instance};
+use super::device_request::enforce_runengpu_instance_flags;
 #[cfg(not(target_arch = "wasm32"))]
 use super::device_request::{
     native_backend_plan, native_tier_fallback_allowed, request_with_instance_for_backends,
 };
+#[cfg(target_arch = "wasm32")]
+use super::device_request::request_with_instance;
 use super::texture_format_mapping::{TEXTURE_FORMATS, texture_format};
 use super::{WgpuDeviceHealth, WgpuErrorAttributionGate};
 use crate::{
