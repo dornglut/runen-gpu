@@ -158,6 +158,10 @@ impl GpuExplicitOrder {
     }
 }
 
+/// Non-data execution order added at graph-composition time, after immutable
+/// fragment nodes are authored. Endpoints may belong to the same fragment or
+/// different fragments; G3 validates their exact identities and keeps typed
+/// access-derived dependencies authoritative.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GpuGraphExplicitOrder {
     before: GpuWorkNodeId,
@@ -178,15 +182,7 @@ impl GpuGraphExplicitOrder {
                 "construct graph-scope explicit GPU work order",
                 GpuWorkAuthoringErrorContext::new(None, None, Some(before.clone()), None, None),
                 GpuWorkAuthoringCause::InvalidExplicitOrder,
-                "provide distinct nodes from different fragments and a nonempty non-data reason",
-            ));
-        }
-        if Arc::ptr_eq(&before.fragment_identity, &after.fragment_identity) {
-            return Err(GpuWorkAuthoringError::invalid(
-                "construct graph-scope explicit GPU work order",
-                GpuWorkAuthoringErrorContext::new(None, None, Some(before.clone()), None, None),
-                GpuWorkAuthoringCause::InvalidExplicitOrder,
-                "use GpuExplicitOrder for nodes owned by the same fragment",
+                "provide distinct authored work nodes and a nonempty non-data reason",
             ));
         }
         Ok(Self {
