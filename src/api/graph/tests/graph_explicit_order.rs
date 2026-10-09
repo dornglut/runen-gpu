@@ -99,16 +99,12 @@ fn data_fragments() -> (
 }
 
 #[test]
-fn graph_scope_order_is_distinct_from_fragment_local_order() {
+fn graph_scope_order_supports_late_same_fragment_constraints_without_weakening_local_validation() {
     let mut local = builder("local order");
     let first = add_compute(&mut local, "local first", []);
     let second = add_compute(&mut local, "local second", []);
-    assert_eq!(
-        GpuGraphExplicitOrder::new(&first, &second, "wrong scope")
-            .unwrap_err()
-            .cause(),
-        GpuWorkAuthoringCause::InvalidExplicitOrder
-    );
+    let late_order = GpuGraphExplicitOrder::new(&first, &second, "late independent control")
+        .expect("composition-time graph orders may refer to the same immutable fragment");
     local
         .add_explicit_order(GpuExplicitOrder::new(&first, &second, "local scope").unwrap())
         .unwrap();
@@ -122,6 +118,78 @@ fn graph_scope_order_is_distinct_from_fragment_local_order() {
         GpuWorkAuthoringCause::ForeignIdentity
     );
     GpuGraphExplicitOrder::new(&first, &foreign_node, "graph scope").unwrap();
+    // This duplicate graph-scope order is valid as a standalone contract;
+    // fragment-local and composition-time ordering remain separate request sites.
+    assert_eq!(late_order.before(), &first);
+    assert_eq!(late_order.after(), &second);
+}
+
+#[test]
+fn composition_time_orders_bracket_one_immutable_fragment_without_data_causality() {
+    let mut fragment = builder("late ordered controls");
+    let predecessor = add_compute(&mut fragment, "independent predecessor", []);
+    let first = add_compute(&mut fragment, "first middle", []);
+    let last = add_compute(&mut fragment, "last middle", []);
+    let successor = add_compute(&mut fragment, "independent successor", []);
+    let immutable = fragment.finish().expect("complete source graph fragment");
+    let (other, _other_node) = independent_fragment("unrelated fragment", "unrelated node");
+
+    let orders = [
+        GpuGraphExplicitOrder::new(&predecessor, &first, "before first").unwrap(),
+        GpuGraphExplicitOrder::new(&first, &last, "middle ordered").unwrap(),
+        GpuGraphExplicitOrder::new(&last, &successor, "after last").unwrap(),
+    ];
+    for fragments in [
+        vec![immutable.clone(), other.clone()],
+        vec![other.clone(), immutable.clone()],
+    ] {
+        let graph = GpuPreparedWorkGraph::prepare_with_orders(
+            label("composition-time same-fragment controls"),
+            fragments,
+            orders.clone(),
+        )
+        .expect("G3 is the only graph/hazard and control-order authority");
+        let positions = [
+            "independent predecessor",
+            "first middle",
+            "last middle",
+            "independent successor",
+        ]
+        .map(|node| prepared_position(&graph, node));
+        assert!(
+            positions.windows(2).all(|pair| pair[0] < pair[1]),
+            "all four resource-independent nodes retain explicit authored control ordering"
+        );
+        let explicit = graph
+            .dependencies()
+            .iter()
+            .filter(|dependency| {
+                dependency.reasons().iter().any(|reason| {
+                    matches!(reason, GpuDependencyReason::ExplicitNonData { .. })
+                })
+            })
+            .count();
+        assert_eq!(explicit, 3, "each distinct non-data edge remains visible");
+    }
+
+    assert_eq!(
+        GpuGraphExplicitOrder::new(&first, &first, "self")
+            .unwrap_err()
+            .cause(),
+        GpuWorkAuthoringCause::InvalidExplicitOrder
+    );
+    let cycle = GpuGraphExplicitOrder::new(&successor, &predecessor, "back edge")
+        .expect("well-formed control order; cycle detected by G3");
+    assert_eq!(
+        GpuPreparedWorkGraph::prepare_with_orders(
+            label("same-fragment explicit cycle"),
+            [immutable],
+            orders.into_iter().chain([cycle]),
+        )
+        .unwrap_err()
+        .cause(),
+        GpuWorkGraphCause::Cycle
+    );
 }
 
 #[test]
