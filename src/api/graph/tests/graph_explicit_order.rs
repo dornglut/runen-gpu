@@ -164,9 +164,10 @@ fn composition_time_orders_bracket_one_immutable_fragment_without_data_causality
             .dependencies()
             .iter()
             .filter(|dependency| {
-                dependency.reasons().iter().any(|reason| {
-                    matches!(reason, GpuDependencyReason::ExplicitNonData { .. })
-                })
+                dependency
+                    .reasons()
+                    .iter()
+                    .any(|reason| matches!(reason, GpuDependencyReason::ExplicitNonData { .. }))
             })
             .count();
         assert_eq!(explicit, 3, "each distinct non-data edge remains visible");
