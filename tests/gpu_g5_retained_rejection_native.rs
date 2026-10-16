@@ -9,10 +9,9 @@ use runen_gpu::{
     GpuCapabilityProfile, GpuCapabilityRequirements, GpuContext, GpuContextDescriptor,
     GpuContextRequestErrorCategory, GpuExecutionPreference, GpuReadbackId, GpuReadbackOperation,
     GpuReadbackStatus, GpuReconstruction, GpuResourceLabel, GpuResourceLifetime,
-    GpuResourceProvenance, GpuRetainedSubmissionRejectionCause, GpuSubmission, GpuSubmissionRejectionKind,
-    GpuSubmissionStatus,
-    GpuWorkFragment, GpuWorkFragmentBuilder, GpuWorkOperation, GpuWorkResourceIdAllocator,
-    GpuWorkSubmissionError,
+    GpuResourceProvenance, GpuRetainedSubmissionRejectionCause, GpuSubmission,
+    GpuSubmissionRejectionKind, GpuSubmissionStatus, GpuWorkFragment, GpuWorkFragmentBuilder,
+    GpuWorkOperation, GpuWorkResourceIdAllocator, GpuWorkSubmissionError,
 };
 use std::time::{Duration, Instant};
 
@@ -150,9 +149,8 @@ fn retained_read_only_reservation_is_not_an_implicit_ordered_continuation() {
     );
     assert_eq!(first.status(), GpuSubmissionStatus::Accepted);
 
-    let (independent, independent_readback) =
-        submit(&context, &unrelated, "g5.typed.independent")
-            .expect("unrelated retained resource can submit without globally waiting");
+    let (independent, independent_readback) = submit(&context, &unrelated, "g5.typed.independent")
+        .expect("unrelated retained resource can submit without globally waiting");
     assert_eq!(independent.status(), GpuSubmissionStatus::Accepted);
 
     complete(&context, &first);

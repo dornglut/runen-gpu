@@ -6,10 +6,9 @@ use crate::{
     GpuInitialCoverage, GpuOpaqueContentContinuity, GpuOpaqueContentIndeterminateReason,
     GpuPreparedWorkGraph, GpuRealizationPolicies, GpuReconstruction, GpuResourceLabel,
     GpuResourceRef, GpuRetainedInitializationSeed, GpuRetainedReconstructionRequirement,
-    GpuRetainedReconstructionSeed, GpuRetainedResourceContinuity, GpuSubmissionId,
-    GpuRetainedSubmissionRejectionCause, GpuSubmissionRejectionReason, GpuWorkFragment,
-    GpuWorkGraphError,
-    GpuWorkResourceId,
+    GpuRetainedReconstructionSeed, GpuRetainedResourceContinuity,
+    GpuRetainedSubmissionRejectionCause, GpuSubmissionId, GpuSubmissionRejectionReason,
+    GpuWorkFragment, GpuWorkGraphError, GpuWorkResourceId,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Mutex;
@@ -334,10 +333,10 @@ impl RetainedContinuityState {
             if let Some(current) = current {
                 if !same_resource_descriptor(&current.resource, &prepared.resource) {
                     return Err(self.continuity_changed(
-                    identity,
-                    GpuRetainedSubmissionRejectionCause::DescriptorMismatch,
-                    "the retained resource descriptor changed for the same logical identity",
-                ));
+                        identity,
+                        GpuRetainedSubmissionRejectionCause::DescriptorMismatch,
+                        "the retained resource descriptor changed for the same logical identity",
+                    ));
                 }
             }
 
@@ -415,10 +414,10 @@ impl RetainedContinuityState {
                     current.and_then(|record| record.initialized_coverage.as_ref())
                 else {
                     return Err(self.continuity_changed(
-                    identity,
-                    GpuRetainedSubmissionRejectionCause::CoverageChanged,
-                    "retained coverage used during graph preparation is no longer established",
-                ));
+                        identity,
+                        GpuRetainedSubmissionRejectionCause::CoverageChanged,
+                        "retained coverage used during graph preparation is no longer established",
+                    ));
                 };
                 if !initial_coverage_contains(current_coverage, seed) {
                     return Err(self.continuity_changed(
@@ -726,4 +725,3 @@ fn failure_safe_coverage(prepared: &PreparedRetainedResource) -> Option<GpuIniti
     let failure_preserved = prepared.failure_preserved_coverage.as_ref()?;
     initial_coverage_intersection(&prepared.resource, initial, failure_preserved)
 }
-

@@ -1041,7 +1041,9 @@ fn stale_coverage_without_lifecycle_loss_reports_coverage_changed() {
 
     let empty_record_state = RetainedContinuityState::new(affinity(23, 9));
     let empty_record = transition(&buffer, None, None, None, None);
-    empty_record_state.validate_and_reserve(&empty_record).unwrap();
+    empty_record_state
+        .validate_and_reserve(&empty_record)
+        .unwrap();
     empty_record_state.complete(submission(2), &empty_record, &BTreeSet::new());
     let stale = transition(&buffer, Some(full.clone()), Some(full), None, None);
     let err = empty_record_state.validate_and_reserve(&stale).unwrap_err();
