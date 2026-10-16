@@ -218,6 +218,7 @@ jobs:
         run: |
           set -euo pipefail
           cargo +stable test --test gpu_g5b_native_runtime --locked -- --ignored --nocapture
+          RUNEN_GPU_G5_REQUIRE_GPU=1 cargo +stable test --test gpu_g5_retained_rejection_native --locked -- --nocapture
           cargo +stable test --test gpu_g5b_native_render --locked -- --ignored --nocapture
           cargo +stable test --test gpu_initial_content_native --locked -- --ignored --nocapture
           cargo +stable test --test gpu_r32float --locked -- --ignored --nocapture

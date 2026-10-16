@@ -6,9 +6,9 @@ use crate::{
     GpuInitialCoverage, GpuOpaqueContentContinuity, GpuOpaqueContentIndeterminateReason,
     GpuPreparedWorkGraph, GpuRealizationPolicies, GpuReconstruction, GpuResourceLabel,
     GpuResourceRef, GpuRetainedInitializationSeed, GpuRetainedReconstructionRequirement,
-    GpuRetainedReconstructionSeed, GpuRetainedResourceContinuity, GpuSubmissionId,
-    GpuSubmissionRejectionKind, GpuSubmissionRejectionReason, GpuWorkFragment, GpuWorkGraphError,
-    GpuWorkResourceId,
+    GpuRetainedReconstructionSeed, GpuRetainedResourceContinuity,
+    GpuRetainedSubmissionRejectionCause, GpuSubmissionId, GpuSubmissionRejectionReason,
+    GpuWorkFragment, GpuWorkGraphError, GpuWorkResourceId,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Mutex;
@@ -284,6 +284,22 @@ impl RetainedContinuityState {
             })
     }
 
+    fn continuity_changed(
+        &self,
+        resource: GpuWorkResourceId,
+        cause: GpuRetainedSubmissionRejectionCause,
+        detail: &'static str,
+    ) -> GpuSubmissionRejectionReason {
+        GpuSubmissionRejectionReason::from_retained_continuity(
+            resource,
+            self.affinity,
+            cause,
+            format!(
+                "retained resource {resource}: {detail}; prepare the work again against current retained lifecycle state"
+            ),
+        )
+    }
+
     pub(super) fn validate_and_reserve(
         &self,
         transition: &PreparedRetainedContinuity,
@@ -307,16 +323,18 @@ impl RetainedContinuityState {
 
         for (&identity, prepared) in &transition.resources {
             if reserved.contains(&identity) {
-                return Err(continuity_changed(
+                return Err(self.continuity_changed(
                     identity,
+                    GpuRetainedSubmissionRejectionCause::InFlightParticipation,
                     "another accepted submission still owns retained-state transition authority for this resource",
                 ));
             }
             let current = records.get(&identity);
             if let Some(current) = current {
                 if !same_resource_descriptor(&current.resource, &prepared.resource) {
-                    return Err(continuity_changed(
+                    return Err(self.continuity_changed(
                         identity,
+                        GpuRetainedSubmissionRejectionCause::DescriptorMismatch,
                         "the retained resource descriptor changed for the same logical identity",
                     ));
                 }
@@ -325,30 +343,41 @@ impl RetainedContinuityState {
             let reconstruction = reconstruction_required.get(&identity);
             if let Some(required) = reconstruction {
                 if !same_resource_descriptor(required.resource(), &prepared.resource) {
-                    return Err(continuity_changed(
-                        identity,
-                        "the reconstruction requirement names a different descriptor for this logical identity",
-                    ));
+                    return Err(self.continuity_changed(
+                    identity,
+                    GpuRetainedSubmissionRejectionCause::DescriptorMismatch,
+                    "the reconstruction requirement names a different descriptor for this logical identity",
+                ));
                 }
             }
             if reconstruction.is_some() && !prepared.reconstruction.target {
-                return Err(reconstruction_required_reason(identity));
+                return Err(self.continuity_changed(
+                    identity,
+                    GpuRetainedSubmissionRejectionCause::ReconstructionRequired,
+                    "current required contents need explicit reconstruction before ordinary use",
+                ));
             }
             if prepared.reconstruction.target {
                 let Some(required) = reconstruction else {
-                    return Err(continuity_changed(
-                        identity,
-                        "work was designated as reconstruction but no current reconstruction requirement exists",
-                    ));
+                    return Err(self.continuity_changed(
+                    identity,
+                    GpuRetainedSubmissionRejectionCause::UnexpectedReconstruction,
+                    "work was designated as reconstruction but no current reconstruction requirement exists",
+                ));
                 };
                 match prepared.resource.common().reconstruction() {
                     GpuReconstruction::NonReconstructable => {
-                        return Err(reconstruction_unavailable(identity));
+                        return Err(self.continuity_changed(
+                            identity,
+                            GpuRetainedSubmissionRejectionCause::ReconstructionUnavailable,
+                            "the NonReconstructable contract cannot certify recovery of lost current contents; use a new logical state identity for an explicit reset",
+                        ));
                     }
                     GpuReconstruction::ExternallyReconstructed => {
                         if !prepared.reconstruction.explicit_write {
-                            return Err(continuity_changed(
+                            return Err(self.continuity_changed(
                                 identity,
+                                GpuRetainedSubmissionRejectionCause::ReconstructionInputInsufficient,
                                 "external reconstruction must provide a canonical explicit write/reimport effect",
                             ));
                         }
@@ -358,8 +387,9 @@ impl RetainedContinuityState {
                             .descriptor_initial_state_matches_required_contents()
                             && prepared.reconstruction.fresh_descriptor_initial_state;
                         if !prepared.reconstruction.explicit_write && !descriptor_source_is_valid {
-                            return Err(continuity_changed(
+                            return Err(self.continuity_changed(
                                 identity,
+                                GpuRetainedSubmissionRejectionCause::ReconstructionInputInsufficient,
                                 "descriptor initial state cannot reconstruct the required current contents; provide explicit deterministic replay/materialization work",
                             ));
                         }
@@ -373,22 +403,28 @@ impl RetainedContinuityState {
                 } else {
                     "retained lifecycle state consumed during graph preparation is no longer current"
                 };
-                return Err(continuity_changed(identity, detail));
+                return Err(self.continuity_changed(
+                    identity,
+                    GpuRetainedSubmissionRejectionCause::LifecycleChanged,
+                    detail,
+                ));
             }
             if let Some(seed) = &prepared.consumed_seed {
                 let Some(current_coverage) =
                     current.and_then(|record| record.initialized_coverage.as_ref())
                 else {
-                    return Err(continuity_changed(
+                    return Err(self.continuity_changed(
                         identity,
+                        GpuRetainedSubmissionRejectionCause::CoverageChanged,
                         "retained coverage used during graph preparation is no longer established",
                     ));
                 };
                 if !initial_coverage_contains(current_coverage, seed) {
-                    return Err(continuity_changed(
-                        identity,
-                        "retained coverage used during graph preparation is no longer contained by current continuity",
-                    ));
+                    return Err(self.continuity_changed(
+                    identity,
+                    GpuRetainedSubmissionRejectionCause::CoverageChanged,
+                    "retained coverage used during graph preparation is no longer contained by current continuity",
+                ));
                 }
             }
             if let Some(current_coverage) =
@@ -399,10 +435,11 @@ impl RetainedContinuityState {
                     .as_ref()
                     .is_some_and(|initial| initial_coverage_contains(initial, current_coverage))
                 {
-                    return Err(continuity_changed(
-                        identity,
-                        "current retained coverage contains state not represented by the prepared graph entry state",
-                    ));
+                    return Err(self.continuity_changed(
+                    identity,
+                    GpuRetainedSubmissionRejectionCause::CoverageChanged,
+                    "current retained coverage contains state not represented by the prepared graph entry state",
+                ));
                 }
             }
         }
@@ -687,30 +724,4 @@ fn failure_safe_coverage(prepared: &PreparedRetainedResource) -> Option<GpuIniti
     let initial = prepared.initial.as_ref()?;
     let failure_preserved = prepared.failure_preserved_coverage.as_ref()?;
     initial_coverage_intersection(&prepared.resource, initial, failure_preserved)
-}
-
-fn continuity_changed(
-    resource: GpuWorkResourceId,
-    detail: &'static str,
-) -> GpuSubmissionRejectionReason {
-    GpuSubmissionRejectionReason::new(
-        GpuSubmissionRejectionKind::RetainedContinuityChanged,
-        format!(
-            "retained resource {resource}: {detail}; prepare the work again against current retained lifecycle state"
-        ),
-    )
-}
-
-fn reconstruction_required_reason(resource: GpuWorkResourceId) -> GpuSubmissionRejectionReason {
-    continuity_changed(
-        resource,
-        "current required contents need explicit reconstruction before ordinary use",
-    )
-}
-
-fn reconstruction_unavailable(resource: GpuWorkResourceId) -> GpuSubmissionRejectionReason {
-    continuity_changed(
-        resource,
-        "the NonReconstructable contract cannot certify recovery of lost current contents; use a new logical state identity for an explicit reset",
-    )
 }

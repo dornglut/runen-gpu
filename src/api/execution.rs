@@ -1,7 +1,7 @@
 use super::{
     GpuContextAffinity, GpuInitialCoverage, GpuProgramContractError, GpuReadbackBytes,
     GpuReadbackId, GpuResourceRef, GpuSurfaceLeaseError, GpuTransferRegion, GpuWorkNodeId,
-    GpuWorkOperationError,
+    GpuWorkOperationError, GpuWorkResourceId,
 };
 use core::fmt;
 use core::num::{NonZeroU64, NonZeroUsize};
@@ -534,6 +534,56 @@ pub enum GpuSubmissionRejectionKind {
     IdentityExhausted,
 }
 
+/// Observed first failing retained participant at the authoritative G5 admission check.
+///
+/// A reservation conflict is not a guarantee that the prepared work is otherwise
+/// valid or will be accepted after progress; later checks may still fail.
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GpuRetainedSubmissionRejectionCause {
+    /// Another accepted submission currently participates in this retained resource.
+    InFlightParticipation,
+    /// The retained logical identity currently names a different descriptor.
+    DescriptorMismatch,
+    /// Ordinary work attempted to use contents requiring explicit reconstruction.
+    ReconstructionRequired,
+    /// Work claims reconstruction without a corresponding current obligation.
+    UnexpectedReconstruction,
+    /// Lost contents cannot be certified for this non-reconstructable identity.
+    ReconstructionUnavailable,
+    /// The proposed replay, reimport, or descriptor source cannot establish required contents.
+    ReconstructionInputInsufficient,
+    /// The prepared graph consumed a different retained lifecycle presence.
+    LifecycleChanged,
+    /// Prepared initialized coverage no longer matches the current retained state.
+    CoverageChanged,
+}
+
+/// Immutable diagnostic observation from an already failed G5 submission.
+///
+/// The resource identifier is process-local; context affinity includes device
+/// generation. This does not confer a lock, a predecessor ID, or future admission.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GpuRetainedSubmissionRejection {
+    resource: GpuWorkResourceId,
+    affinity: GpuContextAffinity,
+    cause: GpuRetainedSubmissionRejectionCause,
+}
+
+impl GpuRetainedSubmissionRejection {
+    pub const fn resource(&self) -> GpuWorkResourceId {
+        self.resource
+    }
+
+    pub const fn affinity(&self) -> GpuContextAffinity {
+        self.affinity
+    }
+
+    pub const fn cause(&self) -> GpuRetainedSubmissionRejectionCause {
+        self.cause
+    }
+}
+
 /// Typed current pressure and policy for one rejected additional in-flight submission.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct GpuInFlightCapacityEvidence {
@@ -564,15 +614,42 @@ pub struct GpuSubmissionRejectionReason {
     detail: String,
     in_flight_capacity_evidence: Option<Box<GpuInFlightCapacityEvidence>>,
     surface_error: Option<Box<GpuSurfaceLeaseError>>,
+    retained_continuity: Option<GpuRetainedSubmissionRejection>,
 }
 
 impl GpuSubmissionRejectionReason {
     pub(crate) fn new(kind: GpuSubmissionRejectionKind, detail: impl Into<String>) -> Self {
+        debug_assert_ne!(
+            kind,
+            GpuSubmissionRejectionKind::RetainedContinuityChanged,
+            "G5 rejections require owner-captured typed continuity evidence"
+        );
         Self {
             kind,
             detail: detail.into(),
             in_flight_capacity_evidence: None,
             surface_error: None,
+            retained_continuity: None,
+        }
+    }
+
+    /// Captures the first failed retained participant while G5 admission is authoritative.
+    pub(crate) fn from_retained_continuity(
+        resource: GpuWorkResourceId,
+        affinity: GpuContextAffinity,
+        cause: GpuRetainedSubmissionRejectionCause,
+        detail: impl Into<String>,
+    ) -> Self {
+        Self {
+            kind: GpuSubmissionRejectionKind::RetainedContinuityChanged,
+            detail: detail.into(),
+            in_flight_capacity_evidence: None,
+            surface_error: None,
+            retained_continuity: Some(GpuRetainedSubmissionRejection {
+                resource,
+                affinity,
+                cause,
+            }),
         }
     }
 
@@ -582,6 +659,7 @@ impl GpuSubmissionRejectionReason {
             detail: error.to_string(),
             in_flight_capacity_evidence: None,
             surface_error: Some(Box::new(error)),
+            retained_continuity: None,
         }
     }
 
@@ -614,6 +692,14 @@ impl GpuSubmissionRejectionReason {
 
     pub fn surface_error(&self) -> Option<&GpuSurfaceLeaseError> {
         self.surface_error.as_deref()
+    }
+
+    /// Admission-time G5 evidence; absent for every other rejection kind.
+    ///
+    /// This is not a safe-to-retry flag: callers must freshly prepare and submit
+    /// against current state after the appropriate owner-defined recovery/progress.
+    pub fn retained_continuity_evidence(&self) -> Option<&GpuRetainedSubmissionRejection> {
+        self.retained_continuity.as_ref()
     }
 }
 
@@ -688,7 +774,7 @@ impl Drop for GpuPreparedSubmission {
 
 pub struct GpuPreparedSubmissionRejected {
     prepared: GpuPreparedSubmission,
-    reason: GpuSubmissionRejectionReason,
+    reason: Box<GpuSubmissionRejectionReason>,
 }
 
 impl GpuPreparedSubmissionRejected {
@@ -706,7 +792,10 @@ impl GpuPreparedSubmissionRejected {
                 );
             }
         }
-        Self { prepared, reason }
+        Self {
+            prepared,
+            reason: Box::new(reason),
+        }
     }
 
     pub fn prepared(&self) -> &GpuPreparedSubmission {
@@ -714,11 +803,11 @@ impl GpuPreparedSubmissionRejected {
     }
 
     pub fn reason(&self) -> &GpuSubmissionRejectionReason {
-        &self.reason
+        self.reason.as_ref()
     }
 
     pub fn into_parts(self) -> (GpuPreparedSubmission, GpuSubmissionRejectionReason) {
-        (self.prepared, self.reason)
+        (self.prepared, *self.reason)
     }
 }
 
@@ -735,6 +824,11 @@ impl fmt::Debug for GpuPreparedSubmissionRejected {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn prepared_rejection_carrier_stays_bounded_as_diagnostics_evolve() {
+        assert!(std::mem::size_of::<GpuPreparedSubmissionRejected>() < 128);
+    }
 
     #[test]
     fn diagnostic_detail_does_not_define_execution_error_equality() {
@@ -772,6 +866,7 @@ mod tests {
             "backend diagnostic B",
         );
         assert_eq!(rejection_a, rejection_b);
+        assert!(rejection_a.retained_continuity_evidence().is_none());
 
         assert_eq!(
             GpuSubmissionStatus::Failed(failure_a),

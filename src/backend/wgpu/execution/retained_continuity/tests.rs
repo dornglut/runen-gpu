@@ -251,6 +251,24 @@ fn establish(
     );
 }
 
+fn assert_retained_rejection(
+    reason: &GpuSubmissionRejectionReason,
+    resource: GpuWorkResourceId,
+    affinity: GpuContextAffinity,
+    cause: GpuRetainedSubmissionRejectionCause,
+) {
+    assert_eq!(
+        reason.kind(),
+        GpuSubmissionRejectionKind::RetainedContinuityChanged
+    );
+    let evidence = reason
+        .retained_continuity_evidence()
+        .expect("G5 rejection must report immutable owner-captured evidence");
+    assert_eq!(evidence.resource(), resource);
+    assert_eq!(evidence.affinity(), affinity);
+    assert_eq!(evidence.cause(), cause);
+}
+
 #[test]
 fn completion_carries_initialized_coverage_and_read_only_completion_preserves_opaque_epoch() {
     let mut allocator = GpuWorkResourceIdAllocator::new();
@@ -452,6 +470,12 @@ fn acceptance_rejects_seed_after_completed_coverage_no_longer_contains_it() {
         error.kind(),
         GpuSubmissionRejectionKind::RetainedContinuityChanged
     );
+    assert_retained_rejection(
+        &error,
+        buffer.diagnostic_identity(),
+        affinity(5, 1),
+        GpuRetainedSubmissionRejectionCause::CoverageChanged,
+    );
 }
 
 #[test]
@@ -474,6 +498,12 @@ fn retained_transition_reservation_serializes_same_resource_acceptance() {
     assert_eq!(
         error.kind(),
         GpuSubmissionRejectionKind::RetainedContinuityChanged
+    );
+    assert_retained_rejection(
+        &error,
+        buffer.diagnostic_identity(),
+        affinity(6, 1),
+        GpuRetainedSubmissionRejectionCause::InFlightParticipation,
     );
     state.fail_after_acceptance(&prepared, &BTreeSet::new());
 }
@@ -502,6 +532,12 @@ fn device_generation_owner_does_not_inherit_previous_generation_continuity() {
         error.kind(),
         GpuSubmissionRejectionKind::RetainedContinuityChanged
     );
+    assert_retained_rejection(
+        &error,
+        buffer.diagnostic_identity(),
+        affinity(7, 2),
+        GpuRetainedSubmissionRejectionCause::LifecycleChanged,
+    );
 }
 
 #[test]
@@ -526,6 +562,12 @@ fn reconstruction_requirement_is_observable_without_fabricating_continuity() {
     assert_eq!(
         error.kind(),
         GpuSubmissionRejectionKind::RetainedContinuityChanged
+    );
+    assert_retained_rejection(
+        &error,
+        buffer.diagnostic_identity(),
+        affinity(9, 2),
+        GpuRetainedSubmissionRejectionCause::ReconstructionRequired,
     );
 }
 
@@ -578,6 +620,12 @@ fn source_backed_descriptor_state_reconstructs_only_while_it_still_matches_requi
     assert_eq!(
         error.kind(),
         GpuSubmissionRejectionKind::RetainedContinuityChanged
+    );
+    assert_retained_rejection(
+        &error,
+        buffer.diagnostic_identity(),
+        affinity(11, 2),
+        GpuRetainedSubmissionRejectionCause::ReconstructionInputInsufficient,
     );
     assert!(
         mutated
@@ -661,7 +709,13 @@ fn external_reconstruction_requires_an_explicit_canonical_write() {
             fresh_descriptor_initial_state: true,
         },
     );
-    assert!(state.validate_and_reserve(&metadata_only).is_err());
+    let rejection = state.validate_and_reserve(&metadata_only).unwrap_err();
+    assert_retained_rejection(
+        &rejection,
+        buffer.diagnostic_identity(),
+        affinity(13, 2),
+        GpuRetainedSubmissionRejectionCause::ReconstructionInputInsufficient,
+    );
 
     let reimport = transition_with_reconstruction(
         &buffer,
@@ -713,6 +767,12 @@ fn non_reconstructable_loss_cannot_be_certified_as_reconstructed() {
     assert_eq!(
         error.kind(),
         GpuSubmissionRejectionKind::RetainedContinuityChanged
+    );
+    assert_retained_rejection(
+        &error,
+        buffer.diagnostic_identity(),
+        affinity(14, 2),
+        GpuRetainedSubmissionRejectionCause::ReconstructionUnavailable,
     );
     assert!(
         state
@@ -859,4 +919,167 @@ fn acceptance_rejects_changed_descriptor_for_same_logical_identity() {
         error.kind(),
         GpuSubmissionRejectionKind::RetainedContinuityChanged
     );
+    assert_retained_rejection(
+        &error,
+        replacement.diagnostic_identity(),
+        affinity(8, 1),
+        GpuRetainedSubmissionRejectionCause::DescriptorMismatch,
+    );
+}
+
+#[test]
+fn reservation_conflict_can_mask_later_invalid_descriptor() {
+    let owner = NonZeroU64::new(92).unwrap();
+    let mut canonical_allocator = GpuWorkResourceIdAllocator::for_owner_scope(owner);
+    let mut other_allocator = GpuWorkResourceIdAllocator::for_owner_scope(owner);
+    let canonical = retained_buffer(&mut canonical_allocator, "canonical state");
+    let changed = retained_external_buffer(&mut other_allocator, "different state");
+    let identity = canonical.diagnostic_identity();
+    assert_eq!(identity, changed.diagnostic_identity());
+    assert_ne!(canonical.descriptor(), changed.descriptor());
+
+    let coverage = coverage(&canonical, 0, 16);
+    let state = RetainedContinuityState::new(affinity(20, 4));
+    establish(&state, &canonical, &coverage, submission(1));
+
+    let valid = transition(
+        &canonical,
+        Some(coverage.clone()),
+        Some(coverage.clone()),
+        Some(coverage.clone()),
+        Some(coverage),
+    );
+    state.validate_and_reserve(&valid).unwrap();
+    let stale = transition(&changed, None, None, None, None);
+    let blocked = state.validate_and_reserve(&stale).unwrap_err();
+    assert_retained_rejection(
+        &blocked,
+        identity,
+        affinity(20, 4),
+        GpuRetainedSubmissionRejectionCause::InFlightParticipation,
+    );
+
+    // A truthful transient conflict does not certify the rest of the prepared request.
+    state.complete(submission(2), &valid, &BTreeSet::new());
+    let invalid = state.validate_and_reserve(&stale).unwrap_err();
+    assert_retained_rejection(
+        &invalid,
+        identity,
+        affinity(20, 4),
+        GpuRetainedSubmissionRejectionCause::DescriptorMismatch,
+    );
+}
+
+#[test]
+fn unexpected_reconstruction_and_stale_lifecycle_have_distinct_causes() {
+    let mut allocator = GpuWorkResourceIdAllocator::new();
+    let buffer = retained_buffer(&mut allocator, "unestablished lifecycle");
+    let state = RetainedContinuityState::new(affinity(21, 8));
+
+    let invented = transition_with_reconstruction(
+        &buffer,
+        None,
+        None,
+        None,
+        None,
+        PreparedReconstructionEvidence {
+            target: true,
+            explicit_write: true,
+            fresh_descriptor_initial_state: false,
+        },
+    );
+    let err = state.validate_and_reserve(&invented).unwrap_err();
+    assert_retained_rejection(
+        &err,
+        buffer.diagnostic_identity(),
+        affinity(21, 8),
+        GpuRetainedSubmissionRejectionCause::UnexpectedReconstruction,
+    );
+
+    let seeded = coverage(&buffer, 0, 16);
+    let stale = transition(
+        &buffer,
+        Some(seeded.clone()),
+        Some(seeded.clone()),
+        Some(seeded.clone()),
+        Some(seeded),
+    );
+    let err = state.validate_and_reserve(&stale).unwrap_err();
+    assert_retained_rejection(
+        &err,
+        buffer.diagnostic_identity(),
+        affinity(21, 8),
+        GpuRetainedSubmissionRejectionCause::LifecycleChanged,
+    );
+}
+
+#[test]
+fn stale_coverage_without_lifecycle_loss_reports_coverage_changed() {
+    let mut allocator = GpuWorkResourceIdAllocator::new();
+    let buffer = retained_buffer(&mut allocator, "changed coverage");
+    let identity = buffer.diagnostic_identity();
+    let full = coverage(&buffer, 0, 32);
+    let half = coverage(&buffer, 0, 16);
+    let state = RetainedContinuityState::new(affinity(22, 9));
+    establish(&state, &buffer, &full, submission(1));
+    let missing_current_coverage = transition(
+        &buffer,
+        Some(half.clone()),
+        Some(half.clone()),
+        Some(half.clone()),
+        Some(half),
+    );
+    let err = state
+        .validate_and_reserve(&missing_current_coverage)
+        .unwrap_err();
+    assert_retained_rejection(
+        &err,
+        identity,
+        affinity(22, 9),
+        GpuRetainedSubmissionRejectionCause::CoverageChanged,
+    );
+
+    let empty_record_state = RetainedContinuityState::new(affinity(23, 9));
+    let empty_record = transition(&buffer, None, None, None, None);
+    empty_record_state
+        .validate_and_reserve(&empty_record)
+        .unwrap();
+    empty_record_state.complete(submission(2), &empty_record, &BTreeSet::new());
+    let stale = transition(&buffer, Some(full.clone()), Some(full), None, None);
+    let err = empty_record_state.validate_and_reserve(&stale).unwrap_err();
+    assert_retained_rejection(
+        &err,
+        identity,
+        affinity(23, 9),
+        GpuRetainedSubmissionRejectionCause::CoverageChanged,
+    );
+}
+
+#[test]
+fn first_failing_identity_is_reported_without_shadowing_reservations() {
+    let mut allocator = GpuWorkResourceIdAllocator::new();
+    let first = retained_buffer(&mut allocator, "first participant");
+    let second = retained_buffer(&mut allocator, "second participant");
+    let state = RetainedContinuityState::new(affinity(24, 1));
+
+    let hold = transition(&first, None, None, None, None);
+    state.validate_and_reserve(&hold).unwrap();
+    let combined = PreparedRetainedContinuity {
+        resources: BTreeMap::from([
+            prepared_resource(&first, None, None, None, None),
+            prepared_resource(&second, None, None, None, None),
+        ]),
+    };
+    let err = state.validate_and_reserve(&combined).unwrap_err();
+    assert_retained_rejection(
+        &err,
+        first.diagnostic_identity(),
+        affinity(24, 1),
+        GpuRetainedSubmissionRejectionCause::InFlightParticipation,
+    );
+    // Failure before any possible write releases reservation without inventing
+    // a completed retained lifecycle record. Both resources stay admissible.
+    state.fail_after_acceptance(&hold, &BTreeSet::new());
+    state.validate_and_reserve(&combined).unwrap();
+    state.complete(submission(4), &combined, &BTreeSet::new());
 }

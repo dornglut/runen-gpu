@@ -60,6 +60,45 @@ Strict opt-in tie rejection uses
 and the process-local candidate retry contract. An explicit strict request may
 return `GpuContextRequestErrorCategory::AmbiguousAdapterSelection`.
 
+## Typed retained submission rejections
+
+`GpuContext::submit_prepared` reports failed G5 retained admission using the
+existing `GpuSubmissionRejectionKind::RetainedContinuityChanged`. The
+`GpuSubmissionRejectionReason::retained_continuity_evidence()` accessor returns
+an immutable `GpuRetainedSubmissionRejection` for this kind only, containing
+the exact first rejected `GpuWorkResourceId`, its context/device generation
+(`GpuContextAffinity`), and `GpuRetainedSubmissionRejectionCause`.
+The identifier is process-local and not a persistent state identifier. Other
+submission rejection kinds have no G5 evidence.
+
+`InFlightParticipation` means the retained storage identity was reserved by
+another accepted submission **when G5 checked admission**. G5 includes read-only
+access and required descriptor initial-content materialization, not just writes.
+This does **not** identify the predecessor submission, certify any other
+condition as valid, or promise future admission: reservation is checked *before*
+descriptor, lifecycle, coverage, and reconstruction constraints. A temporary
+conflict can therefore mask a subsequently detected permanent invalidity.
+Callers must preserve their own as-yet-unsubmitted source inputs, use existing
+nonblocking lifecycle observation, and **freshly prepare** against current state
+before another independent submission attempt. The rejected prepared ticket
+is not an automatic retry token.
+
+`DescriptorMismatch`, `LifecycleChanged`, `CoverageChanged`,
+`ReconstructionRequired`, `UnexpectedReconstruction`,
+`ReconstructionUnavailable` and `ReconstructionInputInsufficient` describe
+specific invalid or changed requests, not ordinary contention. Explicit content
+recovery and semantic source history belong to the application producer.
+`GpuContext::retained_resource_reconstruction_requirement` provides
+current-generation reconstruction obligations; `GpuBufferInitialization::Zeroed`
+does not restore lost semantic contents. Physical Accepted/Completed/Failed,
+readback, presentation and simulation-domain verification remain separate.
+
+The cause enum is non-exhaustive; unknown future causes must fail closed, not
+be classified as transient. Existing top-level rejection kinds, error
+equality-by-kind and submission ownership remain unchanged. This diagnostic
+does not introduce a scheduler, a reservation/continuation contract, automatic
+retry, or device/backend-specific queue authority.
+
 ## Validation
 
 `cargo validate` is the single repository-owned validation command. It verifies
