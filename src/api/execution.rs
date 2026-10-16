@@ -614,11 +614,16 @@ pub struct GpuSubmissionRejectionReason {
     detail: String,
     in_flight_capacity_evidence: Option<Box<GpuInFlightCapacityEvidence>>,
     surface_error: Option<Box<GpuSurfaceLeaseError>>,
-    retained_continuity: Option<Box<GpuRetainedSubmissionRejection>>,
+    retained_continuity: Option<GpuRetainedSubmissionRejection>,
 }
 
 impl GpuSubmissionRejectionReason {
     pub(crate) fn new(kind: GpuSubmissionRejectionKind, detail: impl Into<String>) -> Self {
+        debug_assert_ne!(
+            kind,
+            GpuSubmissionRejectionKind::RetainedContinuityChanged,
+            "G5 rejections require owner-captured typed continuity evidence"
+        );
         Self {
             kind,
             detail: detail.into(),
@@ -640,11 +645,11 @@ impl GpuSubmissionRejectionReason {
             detail: detail.into(),
             in_flight_capacity_evidence: None,
             surface_error: None,
-            retained_continuity: Some(Box::new(GpuRetainedSubmissionRejection {
+            retained_continuity: Some(GpuRetainedSubmissionRejection {
                 resource,
                 affinity,
                 cause,
-            })),
+            }),
         }
     }
 
@@ -694,7 +699,7 @@ impl GpuSubmissionRejectionReason {
     /// This is not a safe-to-retry flag: callers must freshly prepare and submit
     /// against current state after the appropriate owner-defined recovery/progress.
     pub fn retained_continuity_evidence(&self) -> Option<&GpuRetainedSubmissionRejection> {
-        self.retained_continuity.as_deref()
+        self.retained_continuity.as_ref()
     }
 }
 
@@ -769,7 +774,7 @@ impl Drop for GpuPreparedSubmission {
 
 pub struct GpuPreparedSubmissionRejected {
     prepared: GpuPreparedSubmission,
-    reason: GpuSubmissionRejectionReason,
+    reason: Box<GpuSubmissionRejectionReason>,
 }
 
 impl GpuPreparedSubmissionRejected {
@@ -787,7 +792,10 @@ impl GpuPreparedSubmissionRejected {
                 );
             }
         }
-        Self { prepared, reason }
+        Self {
+            prepared,
+            reason: Box::new(reason),
+        }
     }
 
     pub fn prepared(&self) -> &GpuPreparedSubmission {
@@ -795,11 +803,11 @@ impl GpuPreparedSubmissionRejected {
     }
 
     pub fn reason(&self) -> &GpuSubmissionRejectionReason {
-        &self.reason
+        self.reason.as_ref()
     }
 
     pub fn into_parts(self) -> (GpuPreparedSubmission, GpuSubmissionRejectionReason) {
-        (self.prepared, self.reason)
+        (self.prepared, *self.reason)
     }
 }
 
@@ -816,6 +824,11 @@ impl fmt::Debug for GpuPreparedSubmissionRejected {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn prepared_rejection_carrier_stays_bounded_as_diagnostics_evolve() {
+        assert!(std::mem::size_of::<GpuPreparedSubmissionRejected>() < 128);
+    }
 
     #[test]
     fn diagnostic_detail_does_not_define_execution_error_equality() {
