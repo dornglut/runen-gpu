@@ -1077,7 +1077,9 @@ fn first_failing_identity_is_reported_without_shadowing_reservations() {
         affinity(24, 1),
         GpuRetainedSubmissionRejectionCause::InFlightParticipation,
     );
-    state.complete(submission(3), &hold, &BTreeSet::new());
+    // Failure before any possible write releases reservation without inventing
+    // a completed retained lifecycle record. Both resources stay admissible.
+    state.fail_after_acceptance(&hold, &BTreeSet::new());
     state.validate_and_reserve(&combined).unwrap();
     state.complete(submission(4), &combined, &BTreeSet::new());
 }
