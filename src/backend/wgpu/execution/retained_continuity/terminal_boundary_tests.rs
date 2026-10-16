@@ -289,6 +289,13 @@ fn revocation_requires_explicit_reconstruction_before_later_ordinary_work() {
         rejection.kind(),
         GpuSubmissionRejectionKind::RetainedContinuityChanged
     );
+    let evidence = rejection.retained_continuity_evidence().unwrap();
+    assert_eq!(evidence.resource(), buffer.diagnostic_identity());
+    assert_eq!(evidence.affinity(), affinity());
+    assert_eq!(
+        evidence.cause(),
+        GpuRetainedSubmissionRejectionCause::ReconstructionRequired
+    );
 
     let reconstruction = transition_with_target(
         &buffer,

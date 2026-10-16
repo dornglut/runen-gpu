@@ -125,6 +125,13 @@ fn zeroed_descriptor_match_does_not_make_read_only_reconstruction_a_content_epoc
         rejection.kind(),
         GpuSubmissionRejectionKind::RetainedContinuityChanged
     );
+    let evidence = rejection.retained_continuity_evidence().unwrap();
+    assert_eq!(evidence.resource(), identity);
+    assert_eq!(evidence.affinity(), affinity());
+    assert_eq!(
+        evidence.cause(),
+        GpuRetainedSubmissionRejectionCause::ReconstructionInputInsufficient
+    );
     let requirement = state.reconstruction_requirement(identity).unwrap();
     assert!(requirement.descriptor_initial_state_matches_required_contents());
     assert!(state.snapshot(identity).is_none());
