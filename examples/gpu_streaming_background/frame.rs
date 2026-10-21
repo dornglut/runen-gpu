@@ -22,12 +22,17 @@ pub(crate) struct Reference {
 
 impl Reference {
     pub(crate) fn new(pixels: usize) -> Self {
-        Self { background: vec![0; pixels] }
+        Self {
+            background: vec![0; pixels],
+        }
     }
 
     pub(crate) fn accept(&mut self, frame: Frame) -> Result<ExpectedFrame, String> {
         if frame.pixels.len() != self.background.len() || !matches!(frame.q, 2 | 4) {
-            return Err(format!("invalid dimensions or adaptation in frame {}", frame.id));
+            return Err(format!(
+                "invalid dimensions or adaptation in frame {}",
+                frame.id
+            ));
         }
         let mut mask = Vec::with_capacity(frame.pixels.len());
         for (&sample, old) in frame.pixels.iter().zip(&mut self.background) {
@@ -54,10 +59,20 @@ pub(crate) fn generated(id: usize, width: u32, height: u32) -> Frame {
         for x in 0..width {
             let level = 20 + ((x / 16 + y / 16) % 4) * 38;
             let moving = x >= left && x < left + side && y >= height / 3 && y < height / 3 + side;
-            pixels.push(if moving { 240 } else { (level + ((id / 8) as u32 % 9)).min(255) });
+            pixels.push(if moving {
+                240
+            } else {
+                (level + ((id / 8) as u32 % 9)).min(255)
+            });
         }
     }
-    Frame { id, q: if id % 2 == 0 { 2 } else { 4 }, pixels, receipt: Instant::now(), external_capture_us: None }
+    Frame {
+        id,
+        q: if id % 2 == 0 { 2 } else { 4 },
+        pixels,
+        receipt: Instant::now(),
+        external_capture_us: None,
+    }
 }
 
 /// Framed stdin: little-endian capture Unix microseconds (u64), q (u32), then width*height
@@ -80,7 +95,10 @@ pub(crate) fn read_stdin_frame(
     let external_capture_us = u64::from_le_bytes(header[..8].try_into().expect("fixed header"));
     let q = u32::from_le_bytes(header[8..].try_into().expect("fixed header"));
     if !matches!(q, 2 | 4) {
-        return Err(io::Error::new(io::ErrorKind::InvalidData, "q must be 2 or 4"));
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "q must be 2 or 4",
+        ));
     }
     Ok(Some(Frame {
         id,
@@ -99,13 +117,19 @@ mod tests {
     fn integer_reference_uses_previous_background_and_exact_threshold() {
         let mut reference = Reference::new(2);
         let frame = Frame {
-            id: 1, q: 4, pixels: vec![32, 31], receipt: Instant::now(),
+            id: 1,
+            q: 4,
+            pixels: vec![32, 31],
+            receipt: Instant::now(),
             external_capture_us: None,
         };
         assert_eq!(reference.accept(frame).unwrap().mask, vec![255, 0]);
         assert_eq!(reference.background(), &[8, 7]);
         let frame = Frame {
-            id: 2, q: 2, pixels: vec![8, 255], receipt: Instant::now(),
+            id: 2,
+            q: 2,
+            pixels: vec![8, 255],
+            receipt: Instant::now(),
             external_capture_us: None,
         };
         assert_eq!(reference.accept(frame).unwrap().mask, vec![0, 255]);
@@ -115,6 +139,9 @@ mod tests {
     #[test]
     fn truncated_stdin_frame_fails_instead_of_accepting_partial_input() {
         let mut bytes: &[u8] = &[0_u8; 15];
-        assert_eq!(read_stdin_frame(&mut bytes, 0, 4).unwrap_err().kind(), io::ErrorKind::UnexpectedEof);
+        assert_eq!(
+            read_stdin_frame(&mut bytes, 0, 4).unwrap_err().kind(),
+            io::ErrorKind::UnexpectedEof
+        );
     }
 }
