@@ -124,9 +124,7 @@ impl Config {
                 "--batch-wait-ms" => {
                     config.batch_wait_ms = Some(val.parse().map_err(|_| "invalid batch wait")?)
                 }
-                "--timeout-ms" => {
-                    config.timeout_ms = val.parse().map_err(|_| "invalid timeout")?
-                }
+                "--timeout-ms" => config.timeout_ms = val.parse().map_err(|_| "invalid timeout")?,
                 "--output-dir" => config.output_dir = Some(PathBuf::from(val)),
                 _ => return Err(format!("unrecognized flag {key}")),
             }
