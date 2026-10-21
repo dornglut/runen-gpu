@@ -236,6 +236,17 @@ jobs:
               --mode batch --batch "${k}" --source generated --width 64 --height 64 --frames 8 \
               --output-dir "${root}/batch${k}" > "${root}/batch${k}.jsonl"
           done
+          # Two larger exact-CPU-oracle controls on the declared Vulkan adapter.
+          # These are source-replay correctness envelopes, not real-time FPS claims.
+          cargo +stable run --example gpu_streaming_background --locked -- \
+            --mode serial --source generated --width 640 --height 360 --frames 8 \
+            > "${root}/scale-640-serial.jsonl"
+          cargo +stable run --example gpu_streaming_background --locked -- \
+            --mode batch --batch 4 --source generated --width 640 --height 360 --frames 8 \
+            > "${root}/scale-640-batch.jsonl"
+          cargo +stable run --example gpu_streaming_background --locked -- \
+            --mode batch --batch 2 --source generated --width 1280 --height 720 --frames 4 \
+            > "${root}/scale-1280-batch.jsonl"
           # Source waits for GPU initialization; every later frame is GENERATED
           # only after the previous frame was accepted. This establishes *arrival
           # causality*, not still-in-flight GPU overlap or a camera FPS target.
@@ -364,6 +375,20 @@ jobs:
           assert bounded[-1]["frames_exactly_verified"] == 4
           assert bounded[-1]["accepted_batches"] >= 2, "first partial batch must not wait for EOF"
           assert bounded[-1]["final_background_exact_cpu_match"] is True
+          for name, size, frames, batches in (
+              ("scale-640-serial", [640, 360], 8, 8),
+              ("scale-640-batch", [640, 360], 8, 2),
+              ("scale-1280-batch", [1280, 720], 4, 2),
+          ):
+              scale = [json.loads(row) for row in
+                       (root / f"{name}.jsonl").read_text().splitlines()]
+              assert len(scale) == frames + 1
+              assert all(item["exact_cpu_match"] is True for item in scale[:-1])
+              final = scale[-1]
+              assert final["dimensions"] == size
+              assert final["accepted_batches"] == batches
+              assert final["frames_exactly_verified"] == frames
+              assert final["final_background_exact_cpu_match"] is True
           for variant in ("batch", "batch1", "batch2"):
               for frame in range(1, 9):
                   reference = root / "serial" / f"mask_{frame:06d}.pgm"
