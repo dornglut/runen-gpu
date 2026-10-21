@@ -262,6 +262,7 @@ impl GpuWorkload {
         }
     }
 
+    #[cfg(test)]
     pub(crate) fn background_identity(&self) -> GpuWorkResourceId {
         self.background.diagnostic_identity()
     }

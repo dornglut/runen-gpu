@@ -68,7 +68,7 @@ pub(crate) fn generated(id: usize, width: u32, height: u32) -> Frame {
     }
     Frame {
         id,
-        q: if id % 2 == 0 { 2 } else { 4 },
+        q: if id.is_multiple_of(2) { 2 } else { 4 },
         pixels,
         receipt: Instant::now(),
         external_capture_us: None,

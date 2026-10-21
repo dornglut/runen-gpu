@@ -212,7 +212,7 @@ jobs:
           path: ${{ runner.temp }}/runengpu-proof-artifacts/game-of-life
           if-no-files-found: error
 
-      - name: Run #172 streaming retained-state example and exact oracle
+      - name: Run streaming retained-state example and exact oracle
         env:
           RUST_BACKTRACE: '1'
           RUNEN_GPU_STREAMING_REQUIRE_GPU: '1'
@@ -234,7 +234,7 @@ jobs:
             find "${root}/${variant}" -maxdepth 1 -type f -name 'mask_*.pgm' -exec test -s {} \;
           done
 
-      - name: Retain #172 streaming example proof artifacts
+      - name: Retain streaming example proof artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: runengpu-streaming-background-${{ steps.revision.outputs.expected_revision }}
