@@ -294,6 +294,49 @@ jobs:
                      for i in range(1, 4)), "later frames must arrive after earlier GPU acceptance"
           PY
 
+          # Keep stdin OPEN after the first frame, and prove a caller-bounded
+          # partial batch produces a verified mask without K frames or EOF.
+          python3 - "${root}/stdin_bounded.jsonl" <<'PY'
+          import json
+          import os
+          import select
+          import struct
+          import subprocess
+          import sys
+          import time
+
+          command = ["cargo", "+stable", "run", "--example", "gpu_streaming_background",
+                     "--locked", "--", "--source", "stdin", "--mode", "batch",
+                     "--batch", "4", "--batch-wait-ms", "10",
+                     "--width", "16", "--height", "16", "--frames", "4"]
+          process = subprocess.Popen(command, stdin=subprocess.PIPE,
+                                     stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+          def packet(i):
+              return struct.pack("<QI", time.time_ns() // 1000, 2 if i % 2 == 0 else 4) + os.urandom(256)
+          try:
+              process.stdin.write(packet(0))
+              process.stdin.flush()
+              readable, _, _ = select.select([process.stdout], [], [], 10)
+              assert readable, "first partial batch must finish with stdin still open"
+              first = process.stdout.readline()
+              assert first, "partial batch did not emit a verified mask"
+              event = json.loads(first)
+              assert event["frame_id"] == 1 and event["exact_cpu_match"] is True
+              assert process.poll() is None, "proof must still be running with open input"
+              for i in range(1, 4):
+                  process.stdin.write(packet(i))
+              process.stdin.flush()
+              process.stdin.close()
+              process.stdin = None
+              remaining, stderr = process.communicate(timeout=30)
+              assert process.returncode == 0, stderr.decode(errors="replace")
+              with open(sys.argv[1], "wb") as output:
+                  output.write(first + remaining)
+          finally:
+              if process.poll() is None:
+                  process.kill()
+                  process.wait()
+          PY
           for variant in serial batch batch1 batch2; do
             test -s "${root}/${variant}.jsonl"
             test "$(find "${root}/${variant}" -maxdepth 1 -type f -name 'mask_*.pgm' | wc -l)" -eq 8
@@ -315,6 +358,12 @@ jobs:
               assert reports[-1]["receipt_to_verified"]["n"] == reports[-1]["frames_exactly_verified"]
               records[variant] = reports
           assert records["stdin"][-1]["received_after_prior_accept"] == 3
+          bounded = [json.loads(row) for row in
+                     (root / "stdin_bounded.jsonl").read_text().splitlines()]
+          assert [item["frame_id"] for item in bounded[:-1]] == [1, 2, 3, 4]
+          assert bounded[-1]["frames_exactly_verified"] == 4
+          assert bounded[-1]["accepted_batches"] >= 2, "first partial batch must not wait for EOF"
+          assert bounded[-1]["final_background_exact_cpu_match"] is True
           for variant in ("batch", "batch1", "batch2"):
               for frame in range(1, 9):
                   reference = root / "serial" / f"mask_{frame:06d}.pgm"
