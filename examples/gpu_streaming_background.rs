@@ -56,6 +56,7 @@ struct Config {
     batch_size: usize,
     output_dir: Option<PathBuf>,
     producer_signals: bool,
+    batch_wait_ms: Option<u64>,
 }
 
 impl Default for Config {
@@ -69,6 +70,7 @@ impl Default for Config {
             batch_size: 4,
             output_dir: None,
             producer_signals: false,
+            batch_wait_ms: None,
         }
     }
 }
@@ -82,7 +84,7 @@ impl Config {
             .any(|value| matches!(value.as_str(), "--help" | "-h"))
         {
             println!(
-                "Options: --mode cpu|serial|batch --source generated|stdin \\n                 --width N --height N --frames N --batch 1|2|4|8 --output-dir PATH \\n                 [--producer-signals (stdin serial only)]"
+                "Options: --mode cpu|serial|batch --source generated|stdin \\n                 --width N --height N --frames N --batch 1|2|4|8 --batch-wait-ms N --output-dir PATH \\n                 [--producer-signals (stdin serial only)]"
             );
             std::process::exit(0);
         }
@@ -117,6 +119,9 @@ impl Config {
                 "--height" => config.height = val.parse().map_err(|_| "invalid height")?,
                 "--frames" => config.max_frames = val.parse().map_err(|_| "invalid frame count")?,
                 "--batch" => config.batch_size = val.parse().map_err(|_| "invalid batch size")?,
+                "--batch-wait-ms" => {
+                    config.batch_wait_ms = Some(val.parse().map_err(|_| "invalid batch wait")?)
+                }
                 "--output-dir" => config.output_dir = Some(PathBuf::from(val)),
                 _ => return Err(format!("unrecognized flag {key}")),
             }
@@ -136,6 +141,12 @@ impl Config {
         }
         if self.producer_signals && (self.source != Source::Stdin || self.mode != Mode::Serial) {
             return Err("producer signals require --source stdin --mode serial".into());
+        }
+        if self.mode == Mode::Batch && self.source == Source::Stdin && self.batch_wait_ms.is_none() {
+            return Err("stdin batch mode requires an explicit --batch-wait-ms".into());
+        }
+        if self.batch_wait_ms.is_some() && self.mode != Mode::Batch {
+            return Err("batch wait only applies to --mode batch".into());
         }
         if u64::from(pixels) * 4 > 64 * 1024 * 1024 {
             return Err("fixture exceeds the default 64 MiB upload/readback budget".into());
@@ -215,16 +226,17 @@ fn publish(
     terminal_at: Option<Instant>,
     mask: &[u32],
     kind: &str,
-) -> Result<(), String> {
+) -> Result<u128, String> {
     if mask != item.mask {
         return Err(format!("GPU/CPU mismatch on frame {}", item.frame.id));
     }
+    // CPU-verification time does not include optional file or JSONL output.
+    let verified = Instant::now();
     if let Some(root) = &config.output_dir {
         fs::create_dir_all(root).map_err(|e| e.to_string())?;
         let path = root.join(format!("mask_{:06}.pgm", item.frame.id));
         checked_mask_png_free_pgm(&path, config.width, config.height, mask)?;
     }
-    let verified = Instant::now();
     println!(
         "{}",
         json!({
@@ -241,7 +253,25 @@ fn publish(
             "exact_cpu_match": true,
         })
     );
-    Ok(())
+    Ok(verified.duration_since(item.frame.receipt).as_micros())
+}
+
+/// Nearest-rank percentiles: observable receipt-to-verified values, no interpolation.
+fn latency_summary(samples: &[u128]) -> serde_json::Value {
+    if samples.is_empty() {
+        return json!(null);
+    }
+    let mut sorted = samples.to_vec();
+    sorted.sort_unstable();
+    let at = |percent: usize| sorted[(sorted.len() * percent).div_ceil(100) - 1];
+    json!({
+        "n": sorted.len(),
+        "p50_us": at(50),
+        "p95_us": at(95),
+        "p99_us": at(99),
+        "min_us": sorted[0],
+        "max_us": sorted[sorted.len() - 1],
+    })
 }
 
 fn run_cpu(
@@ -251,9 +281,13 @@ fn run_cpu(
 ) -> Result<usize, String> {
     let mut reference = Reference::new(config.pixels());
     let mut count = 0;
+    let mut latencies = Vec::new();
+    let mut reference_cpu_us = 0_u128;
     for message in receiver {
+        let begin = Instant::now();
         let item = reference.accept(message?)?;
-        publish(
+        reference_cpu_us += begin.elapsed().as_micros();
+        latencies.push(publish(
             config,
             start,
             &item,
@@ -261,9 +295,25 @@ fn run_cpu(
             None,
             &item.mask,
             "cpu_reference",
-        )?;
+        )?);
         count += 1;
     }
+    if count == 0 {
+        return Err("no input frames in CPU control".into());
+    }
+    println!(
+        "{}",
+        json!({
+            "kind": "run_complete",
+            "mode": "cpu",
+            "source": match config.source { Source::Stdin => "external_stdin", Source::Generated => "generated_offline_control" },
+            "frames_exactly_verified": count,
+            "elapsed_us": start.elapsed().as_micros(),
+            "reference_cpu_us": reference_cpu_us,
+            "receipt_to_verified": latency_summary(&latencies),
+            "benchmark_scope": "diagnostic_only",
+        })
+    );
     Ok(count)
 }
 
@@ -299,13 +349,42 @@ fn run_gpu(
     let mut last_retained: Option<runen_gpu::GpuSubmission> = None;
     let mut producer_done = false;
     let mut verified = 0usize;
+    let mut verified_latencies = Vec::<u128>::new();
+    let mut reference_cpu_us = 0_u128;
+    let mut progress_cpu_us = 0_u128;
+    let mut prepare_and_submit_cpu_us = 0_u128;
+    let mut capacity_rejections = 0_u64;
+    let mut peak_application_backlog = 0_usize;
+    let mut peak_pending_results = 0_usize;
+    let mut accepted_batches = 0_usize;
+    let mut received_after_prior_accept = 0_usize;
+    let mut received_while_prior_still_accepted = 0_usize;
+    let mut last_acceptance: Option<Instant> = None;
     let deadline = Instant::now() + Duration::from_secs(120);
 
     loop {
+        let progress_start = Instant::now();
         gpu.context.progress();
+        progress_cpu_us += progress_start.elapsed().as_micros();
         while backlog.len() < SOURCE_QUEUE_BOUND {
             match receiver.try_recv() {
-                Ok(Ok(frame)) => backlog.push_back(oracle.accept(frame)?),
+                Ok(Ok(frame)) => {
+                    // This second observation is intentional: receipt may have happened
+                    // before polling, so both temporal facts are retained separately.
+                    if last_acceptance.is_some_and(|t| frame.receipt > t) {
+                        received_after_prior_accept += 1;
+                        if last_retained.as_ref().is_some_and(|submission| {
+                            matches!(submission.status(), GpuSubmissionStatus::Accepted)
+                        }) {
+                            received_while_prior_still_accepted += 1;
+                        }
+                    }
+                    let begin = Instant::now();
+                    let expected = oracle.accept(frame)?;
+                    reference_cpu_us += begin.elapsed().as_micros();
+                    backlog.push_back(expected);
+                    peak_application_backlog = peak_application_backlog.max(backlog.len());
+                }
                 Ok(Err(e)) => return Err(e),
                 Err(TryRecvError::Empty) => break,
                 Err(TryRecvError::Disconnected) => {
@@ -333,7 +412,7 @@ fn run_gpu(
                     return Err("lost or duplicated mask results".into());
                 }
                 for (item, mask) in finished.frames.iter().zip(&masks) {
-                    publish(
+                    verified_latencies.push(publish(
                         config,
                         start,
                         item,
@@ -341,7 +420,7 @@ fn run_gpu(
                         finished.terminal_at,
                         mask,
                         "gpu_verified",
-                    )?;
+                    )?);
                     verified += 1;
                 }
             } else {
@@ -359,7 +438,16 @@ fn run_gpu(
             }
         }
 
-        let eligible = backlog.len() >= config.group() || (producer_done && !backlog.is_empty());
+        // A live producer need not send another K-1 frames or close stdin.
+        // The caller owns the maximum delay; no inferred frame-rate policy.
+        let wait_expired = config.batch_wait_ms.is_some_and(|millis| {
+            backlog.front().is_some_and(|item| {
+                item.frame.receipt.elapsed() >= Duration::from_millis(millis)
+            })
+        });
+        let eligible = backlog.len() >= config.group()
+            || (producer_done && !backlog.is_empty())
+            || wait_expired;
         if eligible && last_retained.is_none() && pending.len() < MAX_PENDING_RESULTS {
             let size = backlog.len().min(config.group());
             let inputs = backlog
@@ -367,9 +455,13 @@ fn run_gpu(
                 .take(size)
                 .map(|item| item.frame.clone())
                 .collect::<Vec<_>>();
+            let submit_started = Instant::now();
             match gpu.submit(&inputs) {
                 Ok(batch) => {
                     let accepted_at = Instant::now();
+                    prepare_and_submit_cpu_us += accepted_at.duration_since(submit_started).as_micros();
+                    accepted_batches += 1;
+                    last_acceptance = Some(accepted_at);
                     last_retained = Some(batch.submission.clone());
                     if config.producer_signals {
                         eprintln!("RUNEN_GPU_172_ACCEPTED {}", inputs[0].id);
@@ -383,8 +475,11 @@ fn run_gpu(
                         accepted_at,
                         terminal_at: None,
                     });
+                    peak_pending_results = peak_pending_results.max(pending.len());
                 }
                 Err(BatchError::Submission(error)) if cap_backpressure(&error) => {
+                    capacity_rejections += 1;
+                    prepare_and_submit_cpu_us += submit_started.elapsed().as_micros();
                     // Capacity conflicts are transient observations. Re-author from current
                     // state on a future nonblocking progress point, never cache a rejected ticket.
                 }
@@ -417,6 +512,24 @@ fn run_gpu(
             "elapsed_us": Instant::now().duration_since(start).as_micros(),
             "adapter_backend": format!("{:?}", gpu.context.adapter_facts().backend()),
             "adapter_fallback": format!("{:?}", gpu.context.adapter_facts().fallback()),
+            "adapter_name": gpu.context.adapter_facts().diagnostic_name(),
+            "adapter_vendor": gpu.context.adapter_facts().vendor(),
+            "adapter_device": gpu.context.adapter_facts().device(),
+            "adapter_driver": gpu.context.adapter_facts().driver(),
+            "adapter_driver_info": gpu.context.adapter_facts().driver_info(),
+            "dimensions": [config.width, config.height],
+            "accepted_batches": accepted_batches,
+            "peak_application_backlog": peak_application_backlog,
+            "peak_pending_results": peak_pending_results,
+            "pending_input_channel_capacity": SOURCE_QUEUE_BOUND,
+            "capacity_rejections": capacity_rejections,
+            "received_after_prior_accept": received_after_prior_accept,
+            "received_while_prior_still_accepted_at_poll": received_while_prior_still_accepted,
+            "reference_cpu_us": reference_cpu_us,
+            "progress_cpu_us": progress_cpu_us,
+            "prepare_and_submit_cpu_us": prepare_and_submit_cpu_us,
+            "receipt_to_verified": latency_summary(&verified_latencies),
+            "benchmark_scope": "diagnostic_only",
         })
     );
     Ok(verified)
@@ -476,6 +589,15 @@ mod tests {
     }
 
     #[test]
+    fn nearest_rank_latencies_are_exact_for_small_samples() {
+        let report = latency_summary(&[40, 10, 30, 20]);
+        assert_eq!(report["p50_us"], 20);
+        assert_eq!(report["p95_us"], 40);
+        assert_eq!(report["p99_us"], 40);
+        assert!(latency_summary(&[]).is_null());
+    }
+
+    #[test]
     fn producer_signals_are_serial_stdin_only() {
         let invalid = Config {
             producer_signals: true,
@@ -488,6 +610,21 @@ mod tests {
             ..invalid
         };
         assert!(valid.validate().is_ok());
+    }
+
+    #[test]
+    fn live_batch_requires_operator_owned_wait_bound() {
+        let source = Config {
+            mode: Mode::Batch,
+            source: Source::Stdin,
+            ..Config::default()
+        };
+        assert!(source.validate().is_err());
+        let bounded = Config {
+            batch_wait_ms: Some(10),
+            ..source
+        };
+        assert!(bounded.validate().is_ok());
     }
 
     #[test]

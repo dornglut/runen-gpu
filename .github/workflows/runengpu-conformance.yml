@@ -228,6 +228,14 @@ jobs:
           cargo +stable run --example gpu_streaming_background --locked -- \
             --mode batch --batch 4 --source generated --width 64 --height 64 --frames 8 \
             --output-dir "${root}/batch" > "${root}/batch.jsonl"
+          cargo +stable run --example gpu_streaming_background --locked -- \
+            --mode cpu --source generated --width 64 --height 64 --frames 8 \
+            > "${root}/cpu.jsonl"
+          for k in 1 2; do
+            cargo +stable run --example gpu_streaming_background --locked -- \
+              --mode batch --batch "${k}" --source generated --width 64 --height 64 --frames 8 \
+              --output-dir "${root}/batch${k}" > "${root}/batch${k}.jsonl"
+          done
           # Source waits for GPU initialization; every later frame is GENERATED
           # only after the previous frame was accepted. This establishes *arrival
           # causality*, not still-in-flight GPU overlap or a camera FPS target.
@@ -286,11 +294,33 @@ jobs:
                      for i in range(1, 4)), "later frames must arrive after earlier GPU acceptance"
           PY
 
-          for variant in serial batch; do
+          for variant in serial batch batch1 batch2; do
             test -s "${root}/${variant}.jsonl"
             test "$(find "${root}/${variant}" -maxdepth 1 -type f -name 'mask_*.pgm' | wc -l)" -eq 8
             find "${root}/${variant}" -maxdepth 1 -type f -name 'mask_*.pgm' -exec test -s {} \;
           done
+          python3 - "${root}" <<'PY'
+          import json
+          import pathlib
+          import sys
+
+          root = pathlib.Path(sys.argv[1])
+          records = {}
+          for variant in ("cpu", "serial", "batch", "batch1", "batch2", "stdin"):
+              reports = [json.loads(row) for row in
+                         (root / f"{variant}.jsonl").read_text().splitlines()]
+              assert reports[-1]["kind"] == "run_complete"
+              assert reports[-1]["frames_exactly_verified"] == (4 if variant == "stdin" else 8)
+              assert reports[-1]["benchmark_scope"] == "diagnostic_only"
+              assert reports[-1]["receipt_to_verified"]["n"] == reports[-1]["frames_exactly_verified"]
+              records[variant] = reports
+          assert records["stdin"][-1]["received_after_prior_accept"] == 3
+          for variant in ("batch", "batch1", "batch2"):
+              for frame in range(1, 9):
+                  reference = root / "serial" / f"mask_{frame:06d}.pgm"
+                  candidate = root / variant / f"mask_{frame:06d}.pgm"
+                  assert candidate.read_bytes() == reference.read_bytes()
+          PY
 
       - name: Retain streaming example proof artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
