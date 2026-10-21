@@ -228,6 +228,38 @@ jobs:
           cargo +stable run --example gpu_streaming_background --locked -- \
             --mode batch --batch 4 --source generated --width 64 --height 64 --frames 8 \
             --output-dir "${root}/batch" > "${root}/batch.jsonl"
+          # Separate producer process: contents are generated only as packets are emitted.
+          # This verifies late external source delivery, NOT physical-camera realism,
+          # host/device overlap, deadline satisfaction, or a performance advantage.
+          python3 - <<'PY' | cargo +stable run --example gpu_streaming_background --locked -- \
+            --source stdin --mode serial --width 16 --height 16 --frames 4 \
+            > "${root}/stdin.jsonl"
+          import os
+          import struct
+          import sys
+          import time
+
+          for i in range(4):
+              time.sleep(0.03)
+              packet = struct.pack("<QI", time.time_ns() // 1000, 2 if i % 2 == 0 else 4)
+              sys.stdout.buffer.write(packet + os.urandom(16 * 16))
+              sys.stdout.buffer.flush()
+          PY
+          python3 - "${root}/stdin.jsonl" <<'PY'
+          import json
+          import sys
+
+          with open(sys.argv[1], encoding="utf-8") as file:
+              report = [json.loads(line) for line in file if line.strip()]
+          assert len(report) == 5, report
+          assert [item["frame_id"] for item in report[:-1]] == [1, 2, 3, 4]
+          assert all(item["source"] == "external_stdin" and
+                     item["exact_cpu_match"] is True for item in report[:-1])
+          assert report[-1]["mode"] == "serial"
+          assert report[-1]["frames_exactly_verified"] == 4
+          assert report[-1]["final_background_exact_cpu_match"] is True
+          PY
+
           for variant in serial batch; do
             test -s "${root}/${variant}.jsonl"
             test "$(find "${root}/${variant}" -maxdepth 1 -type f -name 'mask_*.pgm' | wc -l)" -eq 8
