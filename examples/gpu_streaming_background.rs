@@ -484,6 +484,7 @@ mod tests {
             Err(BatchError::Submission(GpuWorkSubmissionError::GraphPreparation(error))) => {
                 assert_eq!(error.cause(), GpuWorkGraphCause::ReadBeforeInitialization);
                 assert_eq!(error.resource(), Some(gpu.background_identity()));
+                eprintln!("RUNEN_GPU_172_OBSERVED_PENDING_BOUNDARY=G3:{:?}", error.cause());
             }
             Err(BatchError::Submission(GpuWorkSubmissionError::SubmissionRejected(reason))) => {
                 assert_eq!(
@@ -498,6 +499,8 @@ mod tests {
                     GpuRetainedSubmissionRejectionCause::InFlightParticipation
                 );
                 assert_eq!(evidence.resource(), gpu.background_identity());
+                assert_eq!(evidence.affinity(), gpu.context.affinity());
+                eprintln!("RUNEN_GPU_172_OBSERVED_PENDING_BOUNDARY=G5:{:?}", evidence.cause());
             }
             Err(other) => panic!("unexpected boundary: {other:?}"),
             Ok(_) => panic!("next pending dependent retained update must not already be admitted"),
