@@ -142,7 +142,8 @@ impl Config {
         if self.producer_signals && (self.source != Source::Stdin || self.mode != Mode::Serial) {
             return Err("producer signals require --source stdin --mode serial".into());
         }
-        if self.mode == Mode::Batch && self.source == Source::Stdin && self.batch_wait_ms.is_none() {
+        if self.mode == Mode::Batch && self.source == Source::Stdin && self.batch_wait_ms.is_none()
+        {
             return Err("stdin batch mode requires an explicit --batch-wait-ms".into());
         }
         if self.batch_wait_ms.is_some() && self.mode != Mode::Batch {
@@ -441,9 +442,9 @@ fn run_gpu(
         // A live producer need not send another K-1 frames or close stdin.
         // The caller owns the maximum delay; no inferred frame-rate policy.
         let wait_expired = config.batch_wait_ms.is_some_and(|millis| {
-            backlog.front().is_some_and(|item| {
-                item.frame.receipt.elapsed() >= Duration::from_millis(millis)
-            })
+            backlog
+                .front()
+                .is_some_and(|item| item.frame.receipt.elapsed() >= Duration::from_millis(millis))
         });
         let eligible = backlog.len() >= config.group()
             || (producer_done && !backlog.is_empty())
@@ -459,7 +460,8 @@ fn run_gpu(
             match gpu.submit(&inputs) {
                 Ok(batch) => {
                     let accepted_at = Instant::now();
-                    prepare_and_submit_cpu_us += accepted_at.duration_since(submit_started).as_micros();
+                    prepare_and_submit_cpu_us +=
+                        accepted_at.duration_since(submit_started).as_micros();
                     accepted_batches += 1;
                     last_acceptance = Some(accepted_at);
                     last_retained = Some(batch.submission.clone());
