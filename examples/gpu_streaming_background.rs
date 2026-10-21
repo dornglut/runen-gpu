@@ -219,20 +219,18 @@ fn checked_mask_png_free_pgm(
     file.write_all(&pixels).map_err(|e| e.to_string())
 }
 
-fn publish(
+/// Only callers that have already established their CPU/reference comparison
+/// can publish a result. Artifact I/O must not move the verification timestamp.
+fn publish_verified(
     config: &Config,
     start: Instant,
     item: &ExpectedFrame,
     accepted_at: Option<Instant>,
     terminal_at: Option<Instant>,
+    verified: Instant,
     mask: &[u32],
     kind: &str,
 ) -> Result<u128, String> {
-    if mask != item.mask {
-        return Err(format!("GPU/CPU mismatch on frame {}", item.frame.id));
-    }
-    // CPU-verification time does not include optional file or JSONL output.
-    let verified = Instant::now();
     if let Some(root) = &config.output_dir {
         fs::create_dir_all(root).map_err(|e| e.to_string())?;
         let path = root.join(format!("mask_{:06}.pgm", item.frame.id));
@@ -288,12 +286,15 @@ fn run_cpu(
         let begin = Instant::now();
         let item = reference.accept(message?)?;
         reference_cpu_us += begin.elapsed().as_micros();
-        latencies.push(publish(
+        // The CPU recurrence itself is the control; no GPU result is implied.
+        let verified = Instant::now();
+        latencies.push(publish_verified(
             config,
             start,
             &item,
             None,
             None,
+            verified,
             &item.mask,
             "cpu_reference",
         )?);
@@ -412,13 +413,28 @@ fn run_gpu(
                 if masks.len() != finished.frames.len() {
                     return Err("lost or duplicated mask results".into());
                 }
+                // Compare every complete mask before any artifact I/O. Otherwise
+                // earlier file writes bias later frames' verification timestamps.
+                let mut verification_times = Vec::with_capacity(masks.len());
                 for (item, mask) in finished.frames.iter().zip(&masks) {
-                    verified_latencies.push(publish(
+                    if mask != &item.mask {
+                        return Err(format!("GPU/CPU mismatch on frame {}", item.frame.id));
+                    }
+                    verification_times.push(Instant::now());
+                }
+                for ((item, mask), verified_at) in finished
+                    .frames
+                    .iter()
+                    .zip(&masks)
+                    .zip(verification_times)
+                {
+                    verified_latencies.push(publish_verified(
                         config,
                         start,
                         item,
                         Some(finished.accepted_at),
                         finished.terminal_at,
+                        verified_at,
                         mask,
                         "gpu_verified",
                     )?);

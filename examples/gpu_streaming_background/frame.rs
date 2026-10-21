@@ -50,6 +50,18 @@ impl Reference {
     }
 }
 
+/// Fixed-seed, per-pixel perturbation: independent of thread order or RNG state.
+fn seeded_noise(id: usize, x: u32, y: u32) -> u32 {
+    let mut value = 0xC0FF_EE11_u32
+        .wrapping_add(u32::try_from(id).unwrap_or(u32::MAX).wrapping_mul(747_796_405))
+        .wrapping_add(x.wrapping_mul(1_664_525))
+        .wrapping_add(y.wrapping_mul(1_013_904_223));
+    value ^= value >> 16;
+    value = value.wrapping_mul(2_246_822_519);
+    value ^= value >> 13;
+    value & 7
+}
+
 pub(crate) fn generated(id: usize, width: u32, height: u32) -> Frame {
     let mut pixels = Vec::with_capacity((width as usize) * (height as usize));
     let side = (width.min(height) / 8).max(1);
@@ -62,7 +74,7 @@ pub(crate) fn generated(id: usize, width: u32, height: u32) -> Frame {
             pixels.push(if moving {
                 240
             } else {
-                (level + ((id / 8) as u32 % 9)).min(255)
+                (level + ((id / 8) as u32 % 9) + seeded_noise(id, x, y)).min(255)
             });
         }
     }
@@ -134,6 +146,16 @@ mod tests {
         };
         assert_eq!(reference.accept(frame).unwrap().mask, vec![0, 255]);
         assert_eq!(reference.background(), &[8, 131]);
+    }
+
+    #[test]
+    fn generated_noise_is_reproducible_and_changes_with_frame() {
+        let first = generated(3, 32, 16);
+        let repeat = generated(3, 32, 16);
+        let next = generated(4, 32, 16);
+        assert_eq!(first.pixels, repeat.pixels);
+        assert_ne!(first.pixels, next.pixels);
+        assert!(first.pixels.iter().all(|v| *v <= 255));
     }
 
     #[test]
