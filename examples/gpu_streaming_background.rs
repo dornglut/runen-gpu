@@ -57,6 +57,7 @@ struct Config {
     output_dir: Option<PathBuf>,
     producer_signals: bool,
     batch_wait_ms: Option<u64>,
+    timeout_ms: u64,
 }
 
 impl Default for Config {
@@ -71,6 +72,7 @@ impl Default for Config {
             output_dir: None,
             producer_signals: false,
             batch_wait_ms: None,
+            timeout_ms: 120_000,
         }
     }
 }
@@ -84,7 +86,7 @@ impl Config {
             .any(|value| matches!(value.as_str(), "--help" | "-h"))
         {
             println!(
-                "Options: --mode cpu|serial|batch --source generated|stdin \\n                 --width N --height N --frames N --batch 1|2|4|8 --batch-wait-ms N --output-dir PATH \\n                 [--producer-signals (stdin serial only)]"
+                "Options: --mode cpu|serial|batch --source generated|stdin \\n                 --width N --height N --frames N --batch 1|2|4|8 --batch-wait-ms N --timeout-ms N --output-dir PATH \\n                 [--producer-signals (stdin serial only)]"
             );
             std::process::exit(0);
         }
@@ -122,6 +124,9 @@ impl Config {
                 "--batch-wait-ms" => {
                     config.batch_wait_ms = Some(val.parse().map_err(|_| "invalid batch wait")?)
                 }
+                "--timeout-ms" => {
+                    config.timeout_ms = val.parse().map_err(|_| "invalid timeout")?
+                }
                 "--output-dir" => config.output_dir = Some(PathBuf::from(val)),
                 _ => return Err(format!("unrecognized flag {key}")),
             }
@@ -148,6 +153,9 @@ impl Config {
         }
         if self.batch_wait_ms.is_some() && self.mode != Mode::Batch {
             return Err("batch wait only applies to --mode batch".into());
+        }
+        if self.timeout_ms == 0 {
+            return Err("timeout must be positive".into());
         }
         if u64::from(pixels) * 4 > 64 * 1024 * 1024 {
             return Err("fixture exceeds the default 64 MiB upload/readback budget".into());
@@ -369,7 +377,7 @@ fn run_gpu(
     let mut received_after_prior_accept = 0_usize;
     let mut received_while_prior_still_accepted = 0_usize;
     let mut last_acceptance: Option<Instant> = None;
-    let deadline = Instant::now() + Duration::from_secs(120);
+    let deadline = Instant::now() + Duration::from_millis(config.timeout_ms);
 
     loop {
         let progress_start = Instant::now();
@@ -578,12 +586,17 @@ fn run(config: Config) -> Result<usize, String> {
     } else {
         run_cpu(&config, receiver, start)
     };
-    // Dropping the receiver on failure releases a backpressured producer.
-    let joined = worker.join();
-    match (result, joined) {
-        (Err(error), _) => Err(error),
-        (Ok(_), Err(_)) => Err("input producer thread panicked".into()),
-        (Ok(count), Ok(())) => Ok(count),
+    // The external stdin reader may be blocked in a non-interruptible read
+    // even after the application deadline expires. On failure the receiver has
+    // already been dropped; never join that reader here. The example process
+    // reports the error and exits, releasing the pipe at the OS boundary.
+    // Successful completion requires the producer to have ended normally.
+    match result {
+        Err(error) => Err(error),
+        Ok(count) => worker
+            .join()
+            .map(|()| count)
+            .map_err(|_| "input producer thread panicked".into()),
     }
 }
 
@@ -631,6 +644,20 @@ mod tests {
         let valid = Config {
             source: Source::Stdin,
             mode: Mode::Serial,
+            ..invalid
+        };
+        assert!(valid.validate().is_ok());
+    }
+
+    #[test]
+    fn timeouts_are_positive_and_explicitly_configurable() {
+        let invalid = Config {
+            timeout_ms: 0,
+            ..Config::default()
+        };
+        assert!(invalid.validate().is_err());
+        let valid = Config {
+            timeout_ms: 200,
             ..invalid
         };
         assert!(valid.validate().is_ok());
