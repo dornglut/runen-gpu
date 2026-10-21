@@ -212,6 +212,35 @@ jobs:
           path: ${{ runner.temp }}/runengpu-proof-artifacts/game-of-life
           if-no-files-found: error
 
+      - name: Run #172 streaming retained-state example and exact oracle
+        env:
+          RUST_BACKTRACE: '1'
+          RUNEN_GPU_STREAMING_REQUIRE_GPU: '1'
+        run: |
+          set -euo pipefail
+          cargo +stable test --example gpu_streaming_background --locked -- --nocapture
+          cargo +stable test --example gpu_streaming_background --locked -- --ignored --nocapture --test-threads=1
+          root="${RUNNER_TEMP}/runengpu-streaming-background"
+          mkdir -p "${root}"
+          cargo +stable run --example gpu_streaming_background --locked -- \
+            --mode serial --source generated --width 64 --height 64 --frames 8 \
+            --output-dir "${root}/serial" > "${root}/serial.jsonl"
+          cargo +stable run --example gpu_streaming_background --locked -- \
+            --mode batch --batch 4 --source generated --width 64 --height 64 --frames 8 \
+            --output-dir "${root}/batch" > "${root}/batch.jsonl"
+          for variant in serial batch; do
+            test -s "${root}/${variant}.jsonl"
+            test "$(find "${root}/${variant}" -maxdepth 1 -type f -name 'mask_*.pgm' | wc -l)" -eq 8
+            find "${root}/${variant}" -maxdepth 1 -type f -name 'mask_*.pgm' -exec test -s {} \;
+          done
+
+      - name: Retain #172 streaming example proof artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: runengpu-streaming-background-${{ steps.revision.outputs.expected_revision }}
+          path: ${{ runner.temp }}/runengpu-streaming-background
+          if-no-files-found: error
+
       - name: Run native G5 transfer, G5R initial-content, and R32Float proofs
         env:
           RUST_BACKTRACE: '1'
