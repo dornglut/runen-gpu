@@ -219,15 +219,20 @@ fn checked_mask_png_free_pgm(
     file.write_all(&pixels).map_err(|e| e.to_string())
 }
 
+/// Distinct application observation boundaries; no backend-timing assertion.
+struct PublicationTimes {
+    accepted: Option<Instant>,
+    terminal: Option<Instant>,
+    verified: Instant,
+}
+
 /// Only callers that have already established their CPU/reference comparison
 /// can publish a result. Artifact I/O must not move the verification timestamp.
 fn publish_verified(
     config: &Config,
     start: Instant,
     item: &ExpectedFrame,
-    accepted_at: Option<Instant>,
-    terminal_at: Option<Instant>,
-    verified: Instant,
+    when: PublicationTimes,
     mask: &[u32],
     kind: &str,
 ) -> Result<u128, String> {
@@ -245,14 +250,14 @@ fn publish_verified(
             "frame_id": item.frame.id,
             "capture_unix_us_unverified_clock": item.frame.external_capture_us,
             "received_us": item.frame.receipt.duration_since(start).as_micros(),
-            "accepted_us": accepted_at.map(|x| x.duration_since(start).as_micros()),
-            "terminal_us": terminal_at.map(|x| x.duration_since(start).as_micros()),
-            "verified_us": verified.duration_since(start).as_micros(),
-            "receipt_to_verified_us": verified.duration_since(item.frame.receipt).as_micros(),
+            "accepted_us": when.accepted.map(|x| x.duration_since(start).as_micros()),
+            "terminal_us": when.terminal.map(|x| x.duration_since(start).as_micros()),
+            "verified_us": when.verified.duration_since(start).as_micros(),
+            "receipt_to_verified_us": when.verified.duration_since(item.frame.receipt).as_micros(),
             "exact_cpu_match": true,
         })
     );
-    Ok(verified.duration_since(item.frame.receipt).as_micros())
+    Ok(when.verified.duration_since(item.frame.receipt).as_micros())
 }
 
 /// Nearest-rank percentiles: observable receipt-to-verified values, no interpolation.
@@ -292,9 +297,11 @@ fn run_cpu(
             config,
             start,
             &item,
-            None,
-            None,
-            verified,
+            PublicationTimes {
+                accepted: None,
+                terminal: None,
+                verified,
+            },
             &item.mask,
             "cpu_reference",
         )?);
@@ -429,9 +436,11 @@ fn run_gpu(
                         config,
                         start,
                         item,
-                        Some(finished.accepted_at),
-                        finished.terminal_at,
-                        verified_at,
+                        PublicationTimes {
+                            accepted: Some(finished.accepted_at),
+                            terminal: finished.terminal_at,
+                            verified: verified_at,
+                        },
                         mask,
                         "gpu_verified",
                     )?);
