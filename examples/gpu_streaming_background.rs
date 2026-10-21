@@ -55,6 +55,7 @@ struct Config {
     source: Source,
     batch_size: usize,
     output_dir: Option<PathBuf>,
+    producer_signals: bool,
 }
 
 impl Default for Config {
@@ -67,6 +68,7 @@ impl Default for Config {
             source: Source::Generated,
             batch_size: 4,
             output_dir: None,
+            producer_signals: false,
         }
     }
 }
@@ -80,13 +82,18 @@ impl Config {
             .any(|value| matches!(value.as_str(), "--help" | "-h"))
         {
             println!(
-                "Options: --mode cpu|serial|batch --source generated|stdin \\n                 --width N --height N --frames N --batch 1|2|4|8 --output-dir PATH"
+                "Options: --mode cpu|serial|batch --source generated|stdin \\n                 --width N --height N --frames N --batch 1|2|4|8 --output-dir PATH \\n                 [--producer-signals (stdin serial only)]"
             );
             std::process::exit(0);
         }
         let mut index = 0;
         while index < args.len() {
             let key = &args[index];
+            if key == "--producer-signals" {
+                config.producer_signals = true;
+                index += 1;
+                continue;
+            }
             let val = args
                 .get(index + 1)
                 .ok_or_else(|| format!("missing value for {key}"))?;
@@ -126,6 +133,9 @@ impl Config {
             .ok_or("pixel count overflow")?;
         if pixels == 0 || self.max_frames == 0 || !matches!(self.batch_size, 1 | 2 | 4 | 8) {
             return Err("width/height/frames must be positive and batch one of 1,2,4,8".into());
+        }
+        if self.producer_signals && (self.source != Source::Stdin || self.mode != Mode::Serial) {
+            return Err("producer signals require --source stdin --mode serial".into());
         }
         if u64::from(pixels) * 4 > 64 * 1024 * 1024 {
             return Err("fixture exceeds the default 64 MiB upload/readback budget".into());
@@ -281,8 +291,8 @@ fn run_gpu(
     config: &Config,
     receiver: Receiver<Result<Frame, String>>,
     start: Instant,
+    mut gpu: GpuWorkload,
 ) -> Result<usize, String> {
-    let mut gpu = GpuWorkload::new(config.width, config.height)?;
     let mut oracle = Reference::new(config.pixels());
     let mut backlog: VecDeque<ExpectedFrame> = VecDeque::new();
     let mut pending: Vec<Pending> = Vec::new();
@@ -361,6 +371,9 @@ fn run_gpu(
                 Ok(batch) => {
                     let accepted_at = Instant::now();
                     last_retained = Some(batch.submission.clone());
+                    if config.producer_signals {
+                        eprintln!("RUNEN_GPU_172_ACCEPTED {}", inputs[0].id);
+                    }
                     let frames = (0..size)
                         .map(|_| backlog.pop_front().expect("checked backlog"))
                         .collect();
@@ -411,12 +424,22 @@ fn run_gpu(
 
 fn run(config: Config) -> Result<usize, String> {
     config.validate()?;
+    // A producer must not be started before the GPU context is ready: otherwise
+    // the initial frames can be buffered during adapter/pipeline initialization.
+    let workload = if config.mode == Mode::Cpu {
+        None
+    } else {
+        Some(GpuWorkload::new(config.width, config.height)?)
+    };
     let start = Instant::now();
     let (receiver, worker) = producer(config.clone());
-    let result = if config.mode == Mode::Cpu {
-        run_cpu(&config, receiver, start)
+    if config.producer_signals {
+        eprintln!("RUNEN_GPU_172_READY");
+    }
+    let result = if let Some(gpu) = workload {
+        run_gpu(&config, receiver, start, gpu)
     } else {
-        run_gpu(&config, receiver, start)
+        run_cpu(&config, receiver, start)
     };
     // Dropping the receiver on failure releases a backpressured producer.
     let joined = worker.join();
@@ -450,6 +473,21 @@ mod tests {
             ..Config::default()
         };
         assert_eq!(run(config).unwrap(), 4);
+    }
+
+    #[test]
+    fn producer_signals_are_serial_stdin_only() {
+        let invalid = Config {
+            producer_signals: true,
+            ..Config::default()
+        };
+        assert!(invalid.validate().is_err());
+        let valid = Config {
+            source: Source::Stdin,
+            mode: Mode::Serial,
+            ..invalid
+        };
+        assert!(valid.validate().is_ok());
     }
 
     #[test]

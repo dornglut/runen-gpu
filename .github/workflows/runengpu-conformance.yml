@@ -228,22 +228,46 @@ jobs:
           cargo +stable run --example gpu_streaming_background --locked -- \
             --mode batch --batch 4 --source generated --width 64 --height 64 --frames 8 \
             --output-dir "${root}/batch" > "${root}/batch.jsonl"
-          # Separate producer process: contents are generated only as packets are emitted.
-          # This verifies late external source delivery, NOT physical-camera realism,
-          # host/device overlap, deadline satisfaction, or a performance advantage.
-          python3 - <<'PY' | cargo +stable run --example gpu_streaming_background --locked -- \
-            --source stdin --mode serial --width 16 --height 16 --frames 4 \
-            > "${root}/stdin.jsonl"
+          # Source waits for GPU initialization; every later frame is GENERATED
+          # only after the previous frame was accepted. This establishes *arrival
+          # causality*, not still-in-flight GPU overlap or a camera FPS target.
+          python3 - "${root}/stdin.jsonl" <<'PY'
           import os
           import struct
+          import subprocess
           import sys
           import time
 
-          for i in range(4):
-              time.sleep(0.03)
-              packet = struct.pack("<QI", time.time_ns() // 1000, 2 if i % 2 == 0 else 4)
-              sys.stdout.buffer.write(packet + os.urandom(16 * 16))
-              sys.stdout.buffer.flush()
+          output = open(sys.argv[1], "wb")
+          command = ["cargo", "+stable", "run", "--example", "gpu_streaming_background",
+                     "--locked", "--", "--source", "stdin", "--mode", "serial",
+                     "--width", "16", "--height", "16", "--frames", "4",
+                     "--producer-signals"]
+          process = subprocess.Popen(command, stdin=subprocess.PIPE,
+                                     stdout=output, stderr=subprocess.PIPE)
+          def expect(token):
+              while True:
+                  line = process.stderr.readline()
+                  if not line:
+                      raise RuntimeError(f"producer handshake missing {token!r}; exit={process.poll()}")
+                  if token in line:
+                      return
+
+          try:
+              expect(b"RUNEN_GPU_172_READY")
+              for i in range(4):
+                  packet = struct.pack("<QI", time.time_ns() // 1000, 2 if i % 2 == 0 else 4)
+                  process.stdin.write(packet + os.urandom(16 * 16))
+                  process.stdin.flush()
+                  expect(f"RUNEN_GPU_172_ACCEPTED {i + 1}".encode())
+              process.stdin.close()
+              if process.wait(timeout=30) != 0:
+                  raise RuntimeError("stdin GPU proof failed")
+          finally:
+              if process.poll() is None:
+                  process.kill()
+                  process.wait()
+              output.close()
           PY
           python3 - "${root}/stdin.jsonl" <<'PY'
           import json
@@ -258,6 +282,8 @@ jobs:
           assert report[-1]["mode"] == "serial"
           assert report[-1]["frames_exactly_verified"] == 4
           assert report[-1]["final_background_exact_cpu_match"] is True
+          assert all(report[i]["received_us"] > report[i - 1]["accepted_us"]
+                     for i in range(1, 4)), "later frames must arrive after earlier GPU acceptance"
           PY
 
           for variant in serial batch; do
