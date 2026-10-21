@@ -53,7 +53,11 @@ impl Reference {
 /// Fixed-seed, per-pixel perturbation: independent of thread order or RNG state.
 fn seeded_noise(id: usize, x: u32, y: u32) -> u32 {
     let mut value = 0xC0FF_EE11_u32
-        .wrapping_add(u32::try_from(id).unwrap_or(u32::MAX).wrapping_mul(747_796_405))
+        .wrapping_add(
+            u32::try_from(id)
+                .unwrap_or(u32::MAX)
+                .wrapping_mul(747_796_405),
+        )
         .wrapping_add(x.wrapping_mul(1_664_525))
         .wrapping_add(y.wrapping_mul(1_013_904_223));
     value ^= value >> 16;

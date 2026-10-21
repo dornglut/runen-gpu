@@ -422,11 +422,8 @@ fn run_gpu(
                     }
                     verification_times.push(Instant::now());
                 }
-                for ((item, mask), verified_at) in finished
-                    .frames
-                    .iter()
-                    .zip(&masks)
-                    .zip(verification_times)
+                for ((item, mask), verified_at) in
+                    finished.frames.iter().zip(&masks).zip(verification_times)
                 {
                     verified_latencies.push(publish_verified(
                         config,
