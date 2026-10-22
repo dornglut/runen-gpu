@@ -572,3 +572,6 @@ const fn canonical_f64_bits(value: f64) -> u64 {
         value.to_bits()
     }
 }
+
+#[cfg(test)]
+mod tests;
