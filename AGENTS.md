@@ -2,8 +2,8 @@
 
 Begin with `README.md`, `ARCHITECTURE.md`, `ROADMAP.md`, `TESTING.md`, and
 the current owning issue. Consult `BOOTSTRAP.md` for provenance or source-transfer
-work. Confirm the accepted base, repository state, and applicable Engineering
-authority before editing.
+work. Confirm the accepted base, repository state, and applicable Engineering and
+Runenwerk authority before editing.
 
 ## Durable constraints
 
