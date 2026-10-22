@@ -276,7 +276,7 @@ impl GpuSurfaceConfiguration {
         }) {
             return Err(GpuSurfaceConfigurationError::new(
                 GpuSurfaceConfigurationCause::UnsupportedUsage,
-                "G7A surfaces permit only color-attachment and supported copy usages",
+                "surface textures permit color-attachment and supported copy usages only",
             ));
         }
 
