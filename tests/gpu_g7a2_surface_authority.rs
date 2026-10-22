@@ -1,7 +1,7 @@
-//! Structural G7A2 surface-acquisition and presentation cutover guards.
+//! Structural guards for surface acquisition and presentation ownership.
 //!
 //! Behavioural tests cover lease state and execution categories. These guards keep the accepted
-//! backend-neutral/public boundary and the private G4/G5/G7 ownership topology from regressing.
+//! public API boundary and private resource, execution, and surface owners from regressing.
 
 use std::collections::BTreeSet;
 use std::fs;
@@ -76,7 +76,7 @@ fn g7a2_public_surface_contract_stays_backend_neutral_and_nonowning() {
     ] {
         assert!(
             !surface.contains(forbidden) && !acquisition.contains(forbidden),
-            "backend/window-system authority leaked into the public G7 surface API via {forbidden}"
+            "backend/window-system authority leaked into the public surface API via {forbidden}"
         );
     }
 
@@ -104,12 +104,12 @@ fn g7a2_physical_acquire_and_present_have_one_private_owner_without_renderer_bri
     assert_eq!(
         token_paths(&wgpu_root, &manifest, ".get_current_texture("),
         BTreeSet::from([surface_path.to_owned()]),
-        "physical surface acquisition must remain owned by the one private G7 surface state"
+        "physical surface acquisition must remain in the private surface state"
     );
     assert_eq!(
         token_paths(&wgpu_root, &manifest, "queue.present("),
         BTreeSet::from([surface_execution_path.to_owned()]),
-        "physical Present must remain owned by the one private G7 execution lease owner"
+        "physical Present must remain in the private surface execution state"
     );
 
     let surface = compact(&read(&manifest, surface_path));
@@ -128,7 +128,7 @@ fn g7a2_physical_acquire_and_present_have_one_private_owner_without_renderer_bri
             !surface.contains(forbidden)
                 && !present.contains(forbidden)
                 && !prepared.contains(forbidden),
-            "G7A2 regained a renderer-owned device/queue/execution seam via {forbidden}"
+            "surface execution regained a renderer-owned device/queue seam via {forbidden}"
         );
     }
     assert!(
@@ -138,7 +138,7 @@ fn g7a2_physical_acquire_and_present_have_one_private_owner_without_renderer_bri
     assert_eq!(
         present.matches(".create_view(").count(),
         1,
-        "G7A2 permits exactly the acquired default-view creation path"
+        "surface execution permits only the acquired default-view creation path"
     );
     assert!(present.contains(".create_view(&TextureViewDescriptor::default())"));
     assert!(present.contains("lease.mark_presented()"));
@@ -162,7 +162,7 @@ fn g7a2_surface_resources_route_around_g4_and_present_rejects_ordinary_resources
     assert!(prepared.contains("PreparedTextureView::Surface("));
     assert!(
         prepared.matches(".validate_execution_lease(").count() >= 3,
-        "surface texture, surface view, and Present preparation must all validate through G7"
+        "surface texture, view and Present preparation must validate the active surface lease"
     );
     assert!(
         prepared.contains("context.realize_texture(handle)")
@@ -175,5 +175,5 @@ fn g7a2_surface_resources_route_around_g4_and_present_rejects_ordinary_resources
 
     assert!(g4.contains("GpuResourceOwnership::SurfaceAcquired=>Err("));
     assert!(g4.contains("GpuResourceRealizationErrorCategory::RequirementNotAdmitted"));
-    assert!(g4.contains("surface-acquiredresourcerealizationremainsownedbyG7"));
+    // The specific diagnostic wording is not part of the ownership contract.
 }

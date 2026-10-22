@@ -373,12 +373,12 @@ pub(super) fn validate_resource_ownership(
         GpuResourceOwnership::Imported => Err(GpuResourceRealizationError::new(
             GpuResourceRealizationErrorCategory::ImportSourceUnavailable,
             Some(identity),
-            "no accepted concrete import-source contract is available in G4C1",
+            "imported resource realization is unsupported: no public physical import-source contract exists",
         )),
         GpuResourceOwnership::SurfaceAcquired => Err(GpuResourceRealizationError::new(
             GpuResourceRealizationErrorCategory::RequirementNotAdmitted,
             Some(identity),
-            "surface-acquired resource realization remains owned by G7",
+            "surface-acquired resources must be resolved through their active surface lease",
         )),
     }
 }
