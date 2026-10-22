@@ -546,8 +546,8 @@ pub(crate) fn validate_descriptor_semantics(
     Ok(())
 }
 
-/// G4A owns this explicit workload-level compatibility table. Generic G2/G3 capability
-/// requirements stay representable; only a context descriptor may admit their degradation.
+/// Context admission validates which preferred-capability degradation policies are supported.
+/// Generic capability requirements remain representable independently of that policy.
 pub(crate) const fn preferred_degradation_is_valid(
     feature: GpuCapabilityFeature,
     fallback: GpuPreferredFallback,

@@ -534,7 +534,7 @@ pub enum GpuSubmissionRejectionKind {
     IdentityExhausted,
 }
 
-/// Observed first failing retained participant at the authoritative G5 admission check.
+/// Observed first failing retained participant during submission acceptance.
 ///
 /// A reservation conflict is not a guarantee that the prepared work is otherwise
 /// valid or will be accepted after progress; later checks may still fail.
@@ -559,7 +559,7 @@ pub enum GpuRetainedSubmissionRejectionCause {
     CoverageChanged,
 }
 
-/// Immutable diagnostic observation from an already failed G5 submission.
+/// Immutable diagnostic observation from an already rejected submission.
 ///
 /// The resource identifier is process-local; context affinity includes device
 /// generation. This does not confer a lock, a predecessor ID, or future admission.
@@ -633,7 +633,7 @@ impl GpuSubmissionRejectionReason {
         }
     }
 
-    /// Captures the first failed retained participant while G5 admission is authoritative.
+    /// Captures the first failed retained participant during retained-continuity admission.
     pub(crate) fn from_retained_continuity(
         resource: GpuWorkResourceId,
         affinity: GpuContextAffinity,
@@ -694,7 +694,7 @@ impl GpuSubmissionRejectionReason {
         self.surface_error.as_deref()
     }
 
-    /// Admission-time G5 evidence; absent for every other rejection kind.
+    /// Submission-acceptance evidence; absent for every other rejection kind.
     ///
     /// This is not a safe-to-retry flag: callers must freshly prepare and submit
     /// against current state after the appropriate owner-defined recovery/progress.

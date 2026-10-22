@@ -138,7 +138,7 @@ impl GpuSurfaceLeaseState {
 ///
 /// This value deliberately contains no backend object and no strong physical-owner reference.
 /// Logical handle clones retain one shared backend-neutral identity/lifecycle record; retaining it
-/// cannot keep a physical swapchain image alive. The private G7 owner remains solely responsible
+/// cannot keep a physical swapchain image alive. The private surface state remains responsible
 /// for mapping that identity to the exact active physical acquisition.
 #[repr(transparent)]
 #[derive(Clone)]
@@ -361,7 +361,7 @@ pub(crate) trait GpuSurfaceLeaseReleaser: fmt::Debug {
 /// Only `GpuAcquiredSurfaceImage` and a short private execution interval may retain this physical
 /// owner marker. Logical texture/view handles retain only `GpuSurfaceResourceLease` metadata, so
 /// cloning them cannot keep physical swapchain authority alive. Dropping this marker marks an
-/// unpresented lease abandoned and asks the owning G7 backend state to release the physical image.
+/// unpresented lease abandoned and asks the owning surface backend state to release the physical image.
 #[derive(Debug)]
 pub(crate) struct GpuSurfaceLeaseOwner {
     lease: GpuSurfaceResourceLease,
@@ -449,10 +449,10 @@ impl GpuAcquiredSurfaceImage {
         &self.texture
     }
 
-    /// Returns the explicit single-mip/single-layer view for ordinary G5 render attachments.
+    /// Returns the explicit single-mip/single-layer view for render attachments.
     ///
-    /// G5 keeps its explicit `GpuTextureViewHandle` attachment contract; G7A does not weaken that
-    /// boundary merely because the parent texture came from a presentation surface.
+    /// Render attachments use an explicit `GpuTextureViewHandle` even when
+    /// the parent texture comes from a presentation surface.
     pub fn default_view(&self) -> &GpuTextureViewHandle {
         &self.default_view
     }

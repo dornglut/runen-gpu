@@ -1,4 +1,4 @@
-//! Future-transferable, backend-neutral RunenGPU contracts.
+//! Backend-neutral GPU execution contracts.
 
 mod access;
 mod capability;

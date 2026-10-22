@@ -377,7 +377,7 @@ impl GpuTextureFormatCapabilities {
     }
 }
 
-/// Closed normalized limit vocabulary required through G5A.
+/// Normalized limits used for adapter, device, and workload admission.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct GpuLimits {
     max_uniform_buffer_binding_size: u64,
@@ -637,7 +637,7 @@ impl GpuCapabilities {
         self.features.contains(&feature)
     }
 
-    /// Generic logical capability limits. G4A additionally exposes typed adapter,
+    /// Generic logical capability limits. Context admission also exposes typed adapter,
     /// device, and workload facts so this value is never published as device truth.
     pub const fn limits(&self) -> GpuLimits {
         self.limits

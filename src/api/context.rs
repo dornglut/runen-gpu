@@ -74,7 +74,7 @@ impl GpuContext {
         .await
     }
 
-    /// Requests a context with explicit G4C1 and G4C2 realization-record bounds.
+    /// Requests a context with explicit resource and program/binding record bounds.
     ///
     /// Policies do not alter adapter selection, device admission, or retry identity.
     pub async fn request_with_realization_policies(

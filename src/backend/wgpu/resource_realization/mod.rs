@@ -29,7 +29,7 @@ pub(super) const fn map_texture_aspect(aspect: GpuTextureAspect) -> wgpu::Textur
     lowering::map_texture_aspect(aspect)
 }
 
-/// The sole authoritative owner of G4C1 lookup state for one context/device generation.
+/// Owns resource-realization lookup state for one context/device generation.
 pub(crate) struct ResourceRealizationState {
     affinity: GpuContextAffinity,
     policy: GpuResourceRealizationPolicy,
@@ -85,8 +85,7 @@ impl ResourceRealizationState {
         })
     }
 
-    /// Acquires the shared WGPU attribution gate before this G4C1 owner takes its registry
-    /// mutex. The execution bridge takes those locks in the same order while a raw operation loan
+    /// Acquires the shared WGPU attribution gate before locking the resource registry. The execution bridge takes those locks in the same order while a raw operation loan
     /// is live, so reversing them would permit a cross-thread gate/registry deadlock.
     fn attributed_registries(
         &self,
@@ -98,12 +97,12 @@ impl ResourceRealizationState {
         let gate = self.error_attribution_gate.acquire();
         let mut registries = self.registries(resource)?;
         if !registries.has_capacity(self.policy) {
-            // Lookup-only bind groups can hold resources after all caller/G5 owners
-            // have released them, even while G4C2 remains below its own capacity.
-            // Never nest the G4C1 and G4C2 registry locks or reacquire the device
+            // Lookup-only bind groups can hold resources after caller/submission
+            // references disappear, even with program/binding record capacity available.
+            // Never nest resource and program/binding registry locks or reacquire the device
             // attribution gate. One dependent sweep is sufficient; the caller's
             // authoritative recheck still rejects genuinely live capacity. Do not
-            // collect G4C1 here: the constructor's second lookup and kind checks
+            // collect resource records here: the constructor's second lookup and kind checks
             // must see any identity published while this caller waited for the gate.
             drop(registries);
             bindings.collect_lookup_only_bind_groups();
@@ -120,7 +119,7 @@ impl ResourceRealizationState {
         create: impl FnOnce() -> Object,
     ) -> Result<Object, GpuResourceRealizationError> {
         self.ensure_available(resource)?;
-        // A G4C1 creation can synchronously trigger an uncaptured WGPU callback. The caller
+        // Backend creation can synchronously trigger an uncaptured WGPU callback. The caller
         // retains the one shared gate from creation through authoritative publication.
         let created = create();
         self.ensure_available(resource)?;
@@ -634,7 +633,7 @@ mod tests {
         // Model a competing constructor publishing and dropping its handle after
         // this caller's optimistic miss, before it acquires the attribution gate.
         // The full record is now lookup-only, but second-pass identity validation
-        // must still see it before ordinary G4C1 capacity collection can run.
+        // must still see it before ordinary resource-record capacity collection can run.
         let (_gate, registries) = context
             .backend
             .resource_realization

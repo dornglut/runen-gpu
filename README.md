@@ -1,29 +1,70 @@
 # RunenGPU
 
-RunenGPU is a standalone Rust framework for backend-neutral GPU execution
-contracts. It owns reusable GPU execution semantics while keeping renderer and
-application meaning above the framework boundary.
+RunenGPU is a Rust framework for backend-neutral GPU execution. It provides
+reusable resource, program, work-graph and submission contracts without owning
+renderer, application or product policy. WGPU is its private implementation.
 
-## Maturity
+## Using RunenGPU
 
-This repository contains the accepted standalone RunenGPU implementation and its
-proof portfolio. `dornglut/runen-gpu` is the sole RunenGPU semantic implementation
-authority. The public API is backend-neutral; WGPU is a private realization.
+The ordinary execution path is:
 
-The ADR-0008 authority transfer is complete: Runenwerk consumes an exact accepted
-RunenGPU revision and its predecessor RunenGPU implementation/namespace has been
-deleted. Runenwerk integration remains a separate downstream responsibility and is
-not owned by this repository.
+1. **Request a context.** `GpuContext::request` checks adapter capabilities,
+   required limits and backend policy before creating a device.
+2. **Declare resources and programs.** `GpuResourceScope` creates logical
+   handles; `GpuProgramSourceRegistry` admits canonical WGSL for pipeline
+   contracts.
+3. **Describe work.** `GpuWorkFragment` contains compute, render, transfer,
+   readback and Present operations. Compose and prepare the graph to validate
+   resource access, dependencies and initialization.
+4. **Prepare and submit.** `GpuContext::prepare_submission` realizes the
+   context-bound execution plan; `submit_prepared` returns a submission to
+   observe. `GpuContext::submit_work` is a convenience path through the same
+   execution authority.
+5. **Observe completion.** `GpuContext::progress` advances nonblocking
+   observations. Submission acceptance is not GPU completion, readback
+   materialization or proof of application-level results.
 
-## Boundary
+See [the public crate](src/lib.rs), the
+[standalone consumer](conformance/downstream), and the
+[compute, render and surface examples](examples). The
+[architecture](ARCHITECTURE.md) explains responsibility boundaries.
 
-RunenGPU owns reusable GPU execution semantics, resource/work submission
-contracts, and private backend realization. It does not own renderer image
-formation, scene/material/lighting semantics, ECS/UI/world/application behavior,
-window/event-loop ownership, shader-file policy, product recovery, or media and
-artifact persistence.
+## Adapter selection
 
-## Package
+RunenGPU evaluates admitted adapters against requested capabilities, limits,
+classes and allowed backends. Primary native backends are considered before
+secondary OpenGL fallback when no primary candidate qualifies; an explicit
+backend allowlist restricts discovery. Stable observable facts break preference
+ties where possible, but physically indistinguishable adapters do not promise
+a stable physical choice.
+
+Use `GpuContextDescriptor::with_allowed_backends` or
+`with_backend_preference` when the host needs an explicit choice.
+`WGPU_BACKEND` is an operator-level backend override. Strict tie rejection is
+available through
+`GpuAdapterSelectionPolicy::RequireUnambiguous` and can return
+`GpuContextRequestErrorCategory::AmbiguousAdapterSelection`.
+
+## Retained resources and failure
+
+Retained data does not acquire automatic scheduling, recovery or retry.
+`GpuContext::submit_prepared` may reject changed retained state with
+`GpuSubmissionRejectionKind::RetainedContinuityChanged`. Its
+`retained_continuity_evidence()` describes the first rejected resource,
+context generation and typed cause. `InFlightParticipation` records a
+reservation conflict *at acceptance*, including read-only participation; it
+does not prove that later conditions would succeed or identify the other
+submission. A rejected prepared ticket cannot be retried automatically:
+preserve source inputs and freshly prepare after observing the relevant
+state.
+
+Descriptor, lifecycle, coverage and reconstruction failures are distinct from
+temporary reservation conflicts. Check
+`GpuContext::retained_resource_reconstruction_requirement` for
+current-generation obligations; zero initialization does not restore lost
+semantic data. Unknown future rejection causes must fail closed.
+
+## Package and validation
 
 ```text
 package: runen-gpu
@@ -34,107 +75,30 @@ MSRV: 1.87
 publish: false
 ```
 
-## Adapter admission
-
-Context creation automatically evaluates native adapters against the declared
-capability requirements, limits, host compatibility, and allowed backends/classes.
-Ordinary native discovery initializes WGPU's primary backend tier first and only
-initializes secondary OpenGL if no primary candidate can satisfy admission. This
-avoids activating compatibility drivers that are irrelevant to the selected context.
-A non-empty `with_allowed_backends` restriction is applied before WGPU instance
-creation, so forbidden backend families are not initialized merely to reject them later.
-
-Within the active tier, RunenGPU chooses the best admitted preference rank. Equally
-preferred adapters are resolved by stable observed facts where possible;
-observationally identical native handles are interchangeable, so physical selection
-across runs is not promised. Numeric hardware vendor and device IDs are diagnostics,
-not preference scores.
-
-Applications that need an explicit backend can use
-`GpuContextDescriptor::with_backend_preference` or `with_allowed_backends`.
-An explicit `WGPU_BACKEND` value remains an exact operator-level backend-set
-override. An explicit RunenGPU preference that names OpenGL retains joint discovery
-so the preference is not silently weakened.
-Strict opt-in tie rejection uses
-`with_adapter_selection_policy(GpuAdapterSelectionPolicy::RequireUnambiguous)`
-and the process-local candidate retry contract. An explicit strict request may
-return `GpuContextRequestErrorCategory::AmbiguousAdapterSelection`.
-
-## Typed retained submission rejections
-
-`GpuContext::submit_prepared` reports failed G5 retained admission using the
-existing `GpuSubmissionRejectionKind::RetainedContinuityChanged`. The
-`GpuSubmissionRejectionReason::retained_continuity_evidence()` accessor returns
-an immutable `GpuRetainedSubmissionRejection` for this kind only, containing
-the exact first rejected `GpuWorkResourceId`, its context/device generation
-(`GpuContextAffinity`), and `GpuRetainedSubmissionRejectionCause`.
-The identifier is process-local and not a persistent state identifier. Other
-submission rejection kinds have no G5 evidence.
-
-`InFlightParticipation` means the retained storage identity was reserved by
-another accepted submission **when G5 checked admission**. G5 includes read-only
-access and required descriptor initial-content materialization, not just writes.
-This does **not** identify the predecessor submission, certify any other
-condition as valid, or promise future admission: reservation is checked *before*
-descriptor, lifecycle, coverage, and reconstruction constraints. A temporary
-conflict can therefore mask a subsequently detected permanent invalidity.
-Callers must preserve their own as-yet-unsubmitted source inputs, use existing
-nonblocking lifecycle observation, and **freshly prepare** against current state
-before another independent submission attempt. The rejected prepared ticket
-is not an automatic retry token.
-
-`DescriptorMismatch`, `LifecycleChanged`, `CoverageChanged`,
-`ReconstructionRequired`, `UnexpectedReconstruction`,
-`ReconstructionUnavailable` and `ReconstructionInputInsufficient` describe
-specific invalid or changed requests, not ordinary contention. Explicit content
-recovery and semantic source history belong to the application producer.
-`GpuContext::retained_resource_reconstruction_requirement` provides
-current-generation reconstruction obligations; `GpuBufferInitialization::Zeroed`
-does not restore lost semantic contents. Physical Accepted/Completed/Failed,
-readback, presentation and simulation-domain verification remain separate.
-
-The cause enum is non-exhaustive; unknown future causes must fail closed, not
-be classified as transient. Existing top-level rejection kinds, error
-equality-by-kind and submission ownership remain unchanged. This diagnostic
-does not introduce a scheduler, a reservation/continuation contract, automatic
-retry, or device/backend-specific queue authority.
-
-## Validation
-
-`cargo validate` is the single repository-owned validation command. It verifies
-the required authority files, standalone source/dependency boundary, dependency
-audit, locked workspace tests, the independent downstream package, strict Clippy,
-rustdoc with warnings denied, the declared MSRV, product identity and license
-consistency, Git whitespace, and unchanged repository state.
-
-See [TESTING.md](TESTING.md).
-
-The standalone entry points are the public items re-exported from
-[`runen_gpu`](src/lib.rs). A small independent consumer is maintained under
-[`conformance/downstream`](conformance/downstream), and public compute,
-render, runtime-binding, and native-host-surface examples live under
-[`examples`](examples).
+Run `cargo validate` for the repository-owned baseline: source/dependency
+boundaries, locked builds and tests, strict linting and documentation checks,
+independent downstream conformance, MSRV and license checks. Platform-specific
+native, browser and Metal proofs remain separate, as described in
+[TESTING.md](TESTING.md).
 
 ## Authority and policy
 
 - [Architecture](ARCHITECTURE.md)
 - [Roadmap](ROADMAP.md)
 - [Testing](TESTING.md)
-- [Bootstrap and provenance](BOOTSTRAP.md)
+- [Bootstrap and completed transfer provenance](BOOTSTRAP.md)
 - [Executor guidance](AGENTS.md)
 - [Organization contribution guidance](https://github.com/dornglut/.github/blob/main/CONTRIBUTING.md)
 - [Organization security policy](https://github.com/dornglut/.github/blob/main/SECURITY.md)
 - [Public license](LICENSE)
 - [Commercial-license guidance](LICENSING.md)
 
-## Contribution
+## Contribution and license
 
-Tracked-content contributions are currently `owner-only`. Issues, discussion,
-reviews, and reproducible reports may still be used through the repository's
-public channels. This posture remains until an accepted inbound mechanism
-preserves the rights needed for commercial relicensing.
+RunenGPU is the sole semantic implementation authority; Runenwerk owns only
+its downstream integration and pins an exact accepted RunenGPU revision.
+Tracked-content contributions are currently `owner-only` pending an accepted
+contribution mechanism that preserves commercial relicensing rights.
 
-## License
-
-RunenGPU is publicly represented under [GPL-3.0-only](LICENSE). A separately
-governed commercial licensing path is described in [LICENSING.md](LICENSING.md).
+RunenGPU is publicly licensed under [GPL-3.0-only](LICENSE). See
+[LICENSING.md](LICENSING.md) for the separately governed commercial path.

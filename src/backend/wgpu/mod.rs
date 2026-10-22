@@ -1,7 +1,7 @@
-//! Private WGPU containment for G4A context admission.
+//! Private WGPU context, realization, and execution implementation.
 //!
 //! The submodules own state, normalized adapter mapping, device requests, execution, surfaces, and
-//! bounded migration bridges. This root only composes those owners.
+//! resource and program realization. This root composes those owners.
 
 mod adapter_mapping;
 mod device_request;
