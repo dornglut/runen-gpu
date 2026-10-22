@@ -213,6 +213,15 @@ pub(crate) struct WgpuErrorAttributionGate {
 }
 
 impl WgpuErrorAttributionGate {
+    #[cfg(test)]
+    pub(crate) fn is_locked_for_test(&self) -> bool {
+        match self.mutex.try_lock() {
+            Ok(_) => false,
+            Err(std::sync::TryLockError::WouldBlock) => true,
+            Err(std::sync::TryLockError::Poisoned(_)) => panic!("test attribution gate poisoned"),
+        }
+    }
+
     pub(crate) fn acquire(&self) -> MutexGuard<'_, ()> {
         self.mutex
             .lock()
