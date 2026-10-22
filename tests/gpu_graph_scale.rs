@@ -352,7 +352,6 @@ fn measure_disjoint_fragmentation(node_count: usize, fragment_count: usize) -> V
     })
 }
 
-
 const SHARED_RESOURCE_CASES: [(usize, usize); 6] =
     [(80, 1), (80, 8), (80, 80), (800, 1), (800, 8), (800, 80)];
 
@@ -367,10 +366,8 @@ fn author_shared_resource_fanout(
     let destinations = (1..node_count)
         .map(|index| scale_buffer(&mut resources, Topology::DisjointClears, index))
         .collect::<Vec<_>>();
-    let export_key = GpuExportKey::new(format!(
-        "graph-scale.fanout.{node_count}.{fragment_count}"
-    ))
-    .unwrap();
+    let export_key =
+        GpuExportKey::new(format!("graph-scale.fanout.{node_count}.{fragment_count}")).unwrap();
     let shared_range = GpuBufferRange::whole(&shared).unwrap();
 
     let producer = GpuWorkFragment::build(
@@ -461,8 +458,7 @@ fn author_shared_resource_fanout(
 
 fn measure_shared_resource_fanout(node_count: usize, fragment_count: usize) -> Value {
     let author_started = Instant::now();
-    let (fragments, shared_resource) =
-        author_shared_resource_fanout(node_count, fragment_count);
+    let (fragments, shared_resource) = author_shared_resource_fanout(node_count, fragment_count);
     let author_ns = nanos(author_started);
     assert_eq!(fragments.len(), fragment_count);
     let declared_resource_count = fragments
@@ -476,8 +472,14 @@ fn measure_shared_resource_fanout(node_count: usize, fragment_count: usize) -> V
         .flat_map(GpuWorkFragment::nodes)
         .map(|node| node.accesses().len())
         .sum::<usize>();
-    let import_count = fragments.iter().map(|fragment| fragment.imports().len()).sum::<usize>();
-    let export_count = fragments.iter().map(|fragment| fragment.outputs().len()).sum::<usize>();
+    let import_count = fragments
+        .iter()
+        .map(|fragment| fragment.imports().len())
+        .sum::<usize>();
+    let export_count = fragments
+        .iter()
+        .map(|fragment| fragment.outputs().len())
+        .sum::<usize>();
     assert_eq!(declared_resource_count, node_count);
     assert_eq!(access_count, 2 * node_count - 1);
     assert_eq!(import_count, fragment_count - 1);
@@ -500,7 +502,7 @@ fn measure_shared_resource_fanout(node_count: usize, fragment_count: usize) -> V
         assert_eq!(prepared.dependencies().len(), node_count - 1);
         let writer = prepared.topological_order().first().unwrap();
         for dependency in prepared.dependencies() {
-            assert_eq!(dependency.before(), writer);
+            assert_eq!(dependency.before(), *writer);
             assert_eq!(dependency.reasons().len(), 1);
             assert!(matches!(
                 dependency.reasons().first(),
