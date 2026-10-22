@@ -966,6 +966,108 @@ mod tests {
     }
 
     #[test]
+    fn health_transition_during_blocked_dependency_collection_rejects_new_resource() {
+        use crate::*;
+        use std::num::{NonZeroU64, NonZeroUsize};
+        use std::time::{Duration, Instant};
+        let context = match pollster::block_on(GpuContext::request_with_realization_policies(
+            GpuContextDescriptor::new(GpuCapabilityProfile::ComputeBaseline.requirements()),
+            GpuRealizationPolicies::new(
+                GpuResourceRealizationPolicy::new(NonZeroUsize::MIN),
+                GpuProgramBindingRealizationPolicy::new(NonZeroUsize::new(4).unwrap()),
+            ),
+        )) {
+            Ok(context) => context,
+            Err(error)
+                if matches!(
+                    error.category(),
+                    GpuContextRequestErrorCategory::NoAdapterAvailable
+                        | GpuContextRequestErrorCategory::NoAdmissibleCandidate
+                        | GpuContextRequestErrorCategory::MandatoryFeatureMissing
+                ) =>
+            {
+                assert!(
+                    std::env::var_os("RUNEN_GPU_REQUIRE_GPU").is_none(),
+                    "GPU-required health transition unavailable: {error}"
+                );
+                eprintln!("health transition unavailable: {error}");
+                return;
+            }
+            Err(error) => panic!("unexpected context admission failure: {error}"),
+        };
+        let descriptor = GpuBufferDescriptor::ordinary_owned(
+            "blocked health pressure",
+            GpuResourceLifetime::Transient,
+            GpuReconstruction::SourceBacked,
+            64,
+            [GpuBufferUsage::Storage],
+            GpuBufferInitialization::Uninitialized,
+        )
+        .unwrap();
+        let mut allocator = GpuWorkResourceIdAllocator::new();
+        let buffer = allocator
+            .allocate_buffer_handle(descriptor.clone())
+            .unwrap();
+        let candidate = allocator.allocate_buffer_handle(descriptor).unwrap();
+        let key = GpuBindingKey::try_new(0, 0).unwrap();
+        let layout = GpuBindGroupLayoutDescriptor::new(
+            0,
+            [GpuBindingDeclaration::new(
+                key,
+                GpuShaderStages::one(GpuShaderStage::Compute),
+                GpuBindingKind::storage_buffer(GpuStorageBufferAccess::ReadWrite, false, None),
+                None,
+                "values",
+                GpuBindingProvenance::new("health transition", None).unwrap(),
+            )
+            .unwrap()],
+        )
+        .unwrap();
+        let layout = pollster::block_on(context.realize_bind_group_layout(&layout)).unwrap();
+        let value = GpuRuntimeBindingValue::new(
+            key,
+            [GpuRuntimeBindingResource::Buffer(
+                GpuRuntimeBufferBinding::new(buffer, 0, NonZeroU64::new(64).unwrap(), None),
+            )],
+        )
+        .unwrap();
+        drop(pollster::block_on(context.realize_bind_group(&layout, [value])).unwrap());
+        let state = &context.backend.program_binding_realization;
+        assert!(!state.error_attribution_gate.is_locked_for_test());
+        // Block exactly the dependent-registry acquisition while the worker owns
+        // the attribution gate. No sleep or assumed scheduler ordering is evidence.
+        let held_registry = state.registries.lock().unwrap();
+        let error = std::thread::scope(|scope| {
+            let worker = scope.spawn(|| context.realize_buffer(&candidate));
+            let deadline = Instant::now() + Duration::from_secs(5);
+            while !state.error_attribution_gate.is_locked_for_test() {
+                assert!(
+                    Instant::now() < deadline,
+                    "pressure worker never acquired attribution gate"
+                );
+                std::thread::yield_now();
+            }
+            state
+                .health
+                .mark_scoped_internal("injected loss during blocked dependent sweep");
+            drop(held_registry);
+            worker
+                .join()
+                .expect("pressure worker must return without deadlock")
+                .unwrap_err()
+        });
+        assert_eq!(
+            error.category(),
+            GpuResourceRealizationErrorCategory::ContextOrDeviceUnavailableOrLost
+        );
+        assert_eq!(
+            context.resource_realization_stats().buffers(),
+            1,
+            "no new resource or G4C1 collection may publish after the health transition"
+        );
+    }
+
+    #[test]
     fn sparse_pipeline_layout_preserves_group_indices_with_empty_lower_slots() {
         let declared_group_one = empty_layout(1);
         let descriptor = GpuPipelineLayoutDescriptor::new([declared_group_one.clone()])
