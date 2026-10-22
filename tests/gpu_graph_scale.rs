@@ -503,8 +503,8 @@ fn measure_shared_resource_fanout(node_count: usize, fragment_count: usize) -> V
             assert_eq!(dependency.before(), writer);
             assert_eq!(dependency.reasons().len(), 1);
             assert!(matches!(
-                dependency.reasons()[0],
-                GpuDependencyReason::ReadAfterWrite { resource, .. } if resource == shared_resource
+                dependency.reasons().first(),
+                Some(GpuDependencyReason::ReadAfterWrite { resource, .. }) if *resource == shared_resource
             ));
         }
         assert_eq!(
