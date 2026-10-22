@@ -189,7 +189,7 @@ impl WgpuSurfaceState {
             return Err(GpuSurfaceError::new(
                 GpuSurfaceErrorCategory::AdapterIncompatible,
                 None,
-                "the compatible backend surface has no complete normalized G7A presentation baseline",
+                "surface lacks a compatible format/color-space pair, presentation/alpha mode, or color-attachment usage",
             ));
         }
 
