@@ -254,6 +254,82 @@ mod tests {
     }
 
     #[test]
+    fn ordinary_owned_texture_and_view_cannot_be_prepared_for_present() {
+        use crate::{
+            GpuBackendFamily, GpuCapabilityFeature, GpuCapabilityRequirement,
+            GpuCapabilityRequirements, GpuContextDescriptor, GpuExecutionPolicy,
+            GpuRealizationPolicies, GpuReconstruction, GpuResourceLifetime, GpuResourceScope,
+            GpuTextureDescriptor, GpuTextureFormat, GpuTextureInitialization, GpuTextureUsage,
+            GpuTextureViewDescriptor,
+        };
+        use wgpu::{Backends, Instance, InstanceDescriptor, NoopBackendOptions};
+
+        let mut instance_descriptor = InstanceDescriptor::new_without_display_handle();
+        instance_descriptor.backends = Backends::NOOP;
+        instance_descriptor.backend_options.noop = NoopBackendOptions::enabled();
+        let instance = Instance::new(
+            super::super::super::device_request::enforce_runengpu_instance_flags(
+                instance_descriptor,
+            ),
+        );
+        let mut requirements = GpuCapabilityRequirements::new();
+        requirements
+            .insert(GpuCapabilityRequirement::Required(GpuCapabilityFeature::Copy))
+            .unwrap();
+        let descriptor = GpuContextDescriptor::new(requirements)
+            .with_allowed_backends([GpuBackendFamily::UnknownBackend])
+            .with_label("ordinary Present source rejection");
+        let context = pollster::block_on(
+            super::super::super::device_request::request_with_instance(
+                instance,
+                descriptor,
+                None,
+                GpuRealizationPolicies::default(),
+                GpuExecutionPolicy::default(),
+            ),
+        )
+        .expect("explicit noop adapter supports test-only resource classification");
+        assert_eq!(context.adapter_facts().backend(), GpuBackendFamily::UnknownBackend);
+
+        let mut resources = GpuResourceScope::new();
+        let texture = resources
+            .texture(
+                GpuTextureDescriptor::ordinary_owned_2d(
+                    "ordinary Present texture",
+                    GpuResourceLifetime::Transient,
+                    GpuReconstruction::SourceBacked,
+                    1,
+                    1,
+                    GpuTextureFormat::Rgba8Unorm,
+                    [GpuTextureUsage::ColorAttachment],
+                    GpuTextureInitialization::Uninitialized,
+                )
+                .unwrap(),
+            )
+            .unwrap();
+        let view = resources
+            .texture_view(
+                GpuTextureViewDescriptor::ordinary_full_owned(
+                    "ordinary Present view",
+                    &texture,
+                )
+                .unwrap(),
+            )
+            .unwrap();
+
+        assert!(texture.surface_lease().is_none());
+        assert!(view.surface_lease().is_none());
+        for source in [
+            GpuTextureAccessResource::Texture(texture),
+            GpuTextureAccessResource::TextureView(view),
+        ] {
+            let error = prepare_present_source(&context, &source).unwrap_err();
+            assert_eq!(error.kind(), GpuSubmissionPreparationErrorKind::UnsupportedOperation);
+            assert!(error.surface_error().is_none());
+        }
+    }
+
+    #[test]
     fn present_is_terminal_for_later_prepared_uses_of_the_same_surface_lease() {
         let surface = surface_use();
         let mut uses = Vec::new();
