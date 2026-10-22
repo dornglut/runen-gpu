@@ -22,7 +22,7 @@ pub const DEFAULT_MAX_RESOURCE_REALIZATION_RECORDS: NonZeroUsize =
 /// one context/device generation.
 ///
 /// The bound is shared by ready and in-flight program, bind-group-layout, pipeline-layout, and
-/// bind-group records. It is lookup authority only; it is neither a GPU-memory budget nor G5
+/// bind-group records. It is lookup authority only; it is neither a GPU-memory budget nor submission
 /// completion/retirement evidence.
 const DEFAULT_MAX_PROGRAM_BINDING_REALIZATION_RECORDS: NonZeroUsize =
     NonZeroUsize::new(16_384).expect("the default realization-record bound is nonzero");
@@ -54,9 +54,9 @@ impl Default for GpuResourceRealizationPolicy {
     }
 }
 
-/// Narrow operational policy for one context's G4C2 program and binding realization authority.
+/// Narrow operational policy for one context's program and binding realization state.
 ///
-/// One nonzero total bound is deliberately shared across every G4C2 realization kind. This keeps
+/// One nonzero total bound is deliberately shared across every program/binding realization kind. This keeps
 /// in-flight reservations visible to capacity accounting and prevents per-kind quotas from
 /// silently changing the authority contract.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -82,8 +82,8 @@ impl Default for GpuProgramBindingRealizationPolicy {
 
 /// Complete realization policy composition selected when admitting a context.
 ///
-/// This is the only explicit context-construction override path. It composes the existing G4C1
-/// resource-record bound with the G4C2 program/binding bound without changing adapter admission,
+/// This is the only explicit context-construction override path. It composes the
+/// resource-record bound with the program/binding-record bound without changing adapter admission,
 /// device selection, or retry identity.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct GpuRealizationPolicies {
@@ -181,7 +181,7 @@ impl GpuResourceRealizationStats {
     }
 }
 
-/// Point-in-time lookup-authority counts for one context/device generation's G4C2 records.
+/// Point-in-time lookup-authority counts for one context/device generation's program/binding records.
 ///
 /// `retained_records` includes ready records and active single-flight reservations. Per-kind
 /// observations describe ready records only and are never independent quotas.
@@ -424,7 +424,7 @@ impl fmt::Display for GpuResourceRealizationError {
 
 impl std::error::Error for GpuResourceRealizationError {}
 
-/// Stable semantic classes for G4C2 program, layout, and bind-group realization rejection.
+/// Stable semantic classes for program, layout, and bind-group realization rejection.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum GpuProgramBindingRealizationErrorCategory {
     ForeignContext,
@@ -512,14 +512,14 @@ impl GpuProgramBindingRealizationErrorCategory {
     }
 }
 
-/// Structured failure from G4C2 deterministic admission, single-flight lookup, or backend
+/// Structured failure from deterministic program/binding admission, single-flight lookup, or backend
 /// publication. Backend diagnostic text is bounded evidence only and never cache identity.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GpuProgramBindingRealizationError {
     category: GpuProgramBindingRealizationErrorCategory,
     // These diagnostics are bounded and immutable after construction. Store their existing
     // allocations as boxed slices so the public structured error stays small enough to carry
-    // through the async G4C2 realization result without imposing a large `Result` error value on
+    // through the async program/binding realization result without imposing a large `Result` error value on
     // every private owner helper.
     request: Option<Box<str>>,
     detail: Option<Box<str>>,

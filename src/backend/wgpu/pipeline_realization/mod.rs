@@ -1,4 +1,4 @@
-//! Context/device-generation-bound G4C3 pipeline realization.
+//! Context/device-generation-bound pipeline realization.
 
 mod compute;
 mod diagnostics;
@@ -32,7 +32,7 @@ const DEFAULT_MAX_PIPELINE_REALIZATION_RECORDS: NonZeroUsize =
     NonZeroUsize::new(16_384).expect("the default pipeline realization-record bound is nonzero");
 const G4C3_WGPU_PIPELINE_COMPATIBILITY_REVISION: u32 = 2;
 
-/// The sole private G4C3 owner for one admitted WGPU device generation.
+/// The sole private pipeline-realization owner for one admitted WGPU device generation.
 pub(crate) struct PipelineRealizationState {
     affinity: GpuContextAffinity,
     max_records: NonZeroUsize,
@@ -62,7 +62,7 @@ impl PipelineRealizationState {
 
     /// Validates one already-issued opaque compute-pipeline handle for the lexical execution
     /// bridge and lends only its private WGPU object to the supplied call. Pipeline lookup-cache
-    /// residency is deliberately not consulted: the retained G4C3 record is execution authority.
+    /// residency is deliberately not consulted: the retained pipeline record is execution authority.
     pub(crate) fn with_execution_compute_pipeline<R>(
         &self,
         pipeline: &GpuRealizedComputePipeline,

@@ -54,7 +54,7 @@ impl ComputePipelineRequestKey {
 }
 
 impl GpuContext {
-    /// Realizes one complete accepted G4B compute-pipeline request against exact G4C2
+    /// Realizes one complete accepted compute-pipeline request against exact program/binding
     /// program and pipeline-layout realizations.
     pub async fn realize_compute_pipeline(
         &self,

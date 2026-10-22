@@ -11,7 +11,6 @@ pub(crate) enum GpuTextureScalarClass {
 pub(crate) enum GpuTextureAspectClass {
     Color,
     Depth,
-    // These normalized states are intentionally staged before their public formats land.
     #[cfg_attr(not(test), allow(dead_code))]
     Stencil,
     #[cfg_attr(not(test), allow(dead_code))]

@@ -147,7 +147,7 @@ macro_rules! resource_record {
             pub(super) descriptor: Arc<$descriptor>,
             #[allow(
                 dead_code,
-                reason = "the later G4C1 consumer-migration unit adds the audited lexical borrows"
+                reason = "backend object may be kept alive without a direct field read"
             )]
             pub(in crate::backend::wgpu) object: $object,
         }
@@ -253,7 +253,7 @@ pub(crate) struct TextureViewRealizationRecord {
     pub(super) descriptor: Arc<GpuTextureViewDescriptor>,
     #[allow(
         dead_code,
-        reason = "the later G4C1 consumer-migration unit adds the audited lexical borrow"
+        reason = "texture-view object may be retained without a direct field read"
     )]
     pub(in crate::backend::wgpu) object: TextureView,
     // Fields drop in declaration order, so the backend view is released before its retained

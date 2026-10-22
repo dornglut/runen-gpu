@@ -6,7 +6,7 @@ use super::{
 
 /// Exact logical source/destination region for CPU/GPU transfer work.
 ///
-/// Texture regions retain their exact origin and extent even though the accepted G3 hazard envelope
+/// Texture regions retain their exact origin and extent even though the graph hazard model
 /// is conservatively normalized to texture subresources.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum GpuTransferRegion {
@@ -88,7 +88,7 @@ impl From<GpuTextureCopyRegion> for GpuTransferRegion {
     }
 }
 
-/// Immutable logical CPU-to-GPU transfer work. Physical staging and queue strategy remain G5B.
+/// Immutable logical CPU-to-GPU transfer work. Physical staging and queue strategy belong to private execution.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GpuUploadOperation {
     destination: GpuTransferRegion,
@@ -143,7 +143,7 @@ impl GpuUploadOperation {
     }
 }
 
-/// Logical GPU-to-CPU transfer request. Result storage/mapping/materialization remain G5B.
+/// Logical GPU-to-CPU transfer request. Result storage, mapping, and materialization belong to execution.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GpuReadbackOperation {
     source: GpuTransferRegion,

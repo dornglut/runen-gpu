@@ -21,32 +21,13 @@ editing.
 - Keep tracked-content contributions `owner-only` until an accepted inbound
   contribution mechanism preserves commercial relicensing rights.
 
-## ADR-0008 authority-transfer history
+## Source authority
 
-The accepted authority handoff followed this sequence:
-
-```text
-accepted Runenwerk implementation
-    -> sole semantic source authority
-unmerged runen-gpu extraction candidate
-    -> candidate only
-accepted runen-gpu successor on default branch
-    -> semantic authority switches
-Runenwerk predecessor
-    -> frozen and deletion-bound
-Runenwerk exact-revision cutover + predecessor deletion
-    -> completed downstream handoff
-```
-
-This sequence is complete. `dornglut/runen-gpu` is the sole RunenGPU semantic
-implementation authority. Runenwerk retains only downstream integration and an
-exact accepted RunenGPU dependency; the predecessor implementation/namespace was
-deleted by the accepted cutover. Treat the sequence above as historical
-provenance, not an active migration plan. Reversing the accepted authority handoff
-requires an explicit accepted ADR-0008 reversal.
-
-The historical framework template is one-time provenance, not synchronization or
-architecture authority.
+`dornglut/runen-gpu` owns the RunenGPU implementation. Runenwerk consumes an
+exact accepted revision and owns only downstream integration. The source transfer
+is complete; `BOOTSTRAP.md` records its provenance and Engineering ADR-0008
+governs any future authority reversal. The historical framework template is not
+an active dependency or synchronization source.
 
 ## Validation and evidence
 

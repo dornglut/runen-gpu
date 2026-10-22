@@ -31,15 +31,16 @@ remains unchanged after the checks.
 
 ## Proof portfolio
 
-The retained proof mapping is intentionally successor-local:
+The following proof owners are repository-local. Historical milestone codes in test
+names identify stable test targets, not current architectural owners:
 
-| Evidence | Successor proof |
+| Evidence | Verification |
 | --- | --- |
 | Public contract | API contract, capability, resource, program, submission, readback, surface, and lifecycle tests under `tests/` |
-| Typed G5 rejection evidence | Source-owned G5 rejection cases assert exact first failed resource/cause/context generation for reservation-first masking, descriptor/lifecycle/coverage invalidity, impossible or insufficient reconstruction, post-failure unknown contents and zeroed/read-only recovery. `gpu_g5_retained_rejection_native` is a public-only native GPU test proving read-only conflict, independent-resource admission and fresh post-terminal submission. This does not establish Runenwerk windowed boids acceptance. |
+| Retained submission rejection evidence | Source-owned retained-rejection cases assert exact first failed resource/cause/context generation for reservation-first masking, descriptor/lifecycle/coverage invalidity, impossible or insufficient reconstruction, post-failure unknown contents and zeroed/read-only recovery. `gpu_g5_retained_rejection_native` is a public-only native GPU test proving read-only conflict, independent-resource admission and fresh post-terminal submission. This does not establish Runenwerk windowed boids acceptance. |
 | Submission work-node correlation | `gpu_execution_lifecycle` proves exact opaque `GpuWorkNodeId` identity membership survives multi-fragment graph composition into the returned `GpuSubmission`, distinguishes foreign same-local-number nodes, survives submission cloning, and combines with terminal `Completed` status for successful occurrence evidence while failed submissions retain membership without becoming success evidence. |
 | Compute | `gpu_prefix_scan_native` proves exact 4097-element inclusive/exclusive results; `gpu_game_of_life_native` proves the fixed 160x90 final-grid oracle and exact 17-frame compute-to-render visual sequence |
-| Render/runtime | G5 transfer and G5R initial-content tests, indexed offscreen known-pattern output, generated indirect drawing, normalized indirect first-instance with zero-only regression plus capability-gated nonzero exact-readback execution, depth-clip control with a color-only clipped-vs-unclipped exact-readback oracle, transient-attachment color/MSAA-resolve/depth execution with conditional Stencil8 coverage, and G7A2 native surface presentation |
+| Render/runtime | Native transfer and initial-content tests, indexed offscreen known-pattern output, generated indirect drawing, normalized indirect first-instance with zero-only regression plus capability-gated nonzero exact-readback execution, depth-clip control with a color-only clipped-vs-unclipped exact-readback oracle, transient-attachment color/MSAA-resolve/depth execution with conditional Stencil8 coverage, and the `gpu_g7a2_native_surface` presentation test |
 | Characterization | The direct-WGPU cost portfolio and graph-preparation scale report remain explicitly direct-WGPU/CPU measurements, separate from the public API contract |
 | Fixed binding arrays | Generic Metal qualification is the retained capability-bearing public execution target and records per-resource-class outcomes on the correlated adapter; actual-browser WebGPU proves the native fixed-array features unsupported with zero normalized array limits and typed admission rejection. `gpu_fixed_binding_array_native` is ignored by default but explicitly invoked by retained Conformance: real Vulkan adapters run the full capability-gated suite, while the pinned llvmpipe/Lavapipe target records storage-buffer arrays as `UNQUALIFIED` after an observed driver-level device loss and continues the sampled-texture/sampler/storage-texture families where advertised. |
 | Compressed textures | The fourteen BC, ten ETC2/EAC, and twenty-eight ASTC LDR formats have exact public block and role semantics and share the public upload/copy/readback graph, including two array layers and terminal mips. ETC2/EAC retains decoded block sampling into an RGBA8 render target with exact readback for representative 8-byte and 16-byte color and EAC blocks. ASTC LDR proves all fourteen legal 2D block dimensions across both linear and sRGB variants with exact 16-byte physical blocks, exhaustive variable-block upload/copy/readback, terminal-edge mips, decoded 4x4/8x6/12x12 sampling, and a mid-gray linear-vs-sRGB transfer oracle. Actual-Chrome BrowserWebGpu and generic Metal must execute the complete public ASTC path when their correlated direct-WGPU adapters advertise ASTC; retained Vulkan/Lavapipe proves typed absence when the feature is unavailable. ASTC HDR and sliced-3D compression are not qualified by this slice. |
@@ -54,7 +55,7 @@ The retained proof mapping is intentionally successor-local:
 | Downstream | `conformance/downstream` uses only the public crate API for the 4097-element prefix scan |
 
 Native GPU assertions are run on Ubuntu 24.04 with Mesa Lavapipe and Xvfb in
-the successor-owned conformance workflow. Browser evidence is actual Chrome
+the repository-owned conformance workflow. Browser evidence is actual Chrome
 WebGPU execution, not only Wasm compilation. Browser presentation evidence additionally
 uses an Xvfb-backed SwiftShader/Vulkan compositor path; the workflow retains this
 environment explicitly because canvas acquisition without a valid presentation/compositor
@@ -69,7 +70,7 @@ to an immutable commit and delegates meaning to `cargo +stable validate`.
 
 The shared workflow proves the exact caller feature head before validation and
 provisions stable plus any Cargo-declared `rust-version` values needed by the
-checked-out repository. The successor-owned
+checked-out repository. The repository-owned
 `.github/workflows/runengpu-conformance.yml` adds the native Lavapipe,
 Wasm/browser, artifact, and independent-downstream proof jobs.
 

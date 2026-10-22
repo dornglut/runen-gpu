@@ -126,11 +126,11 @@ impl PipelineLayoutRealizationRecord {
     }
 }
 
-/// G4C1 resource records retained by a bind group so registry-only reclamation cannot invalidate
-/// the backend object dependencies it lends through the successor bridge.
+/// Physical resource records retained by a bind group so registry-only reclamation
+/// cannot invalidate the backend objects used by an executing command.
 #[allow(
     dead_code,
-    reason = "records retain backend dependencies; later G4C3/G5 terminals consume the bind group"
+    reason = "bind-group dependencies are retained for private execution"
 )]
 pub(super) enum BindGroupResourceDependency {
     Buffer(Arc<super::super::resource_realization::BufferRealizationRecord>),
@@ -138,7 +138,7 @@ pub(super) enum BindGroupResourceDependency {
     Sampler(Arc<super::super::resource_realization::SamplerRealizationRecord>),
 }
 
-/// One physical bind group and its exact G4C1/G4C2 dependencies. Per-use dynamic offsets are not
+/// One physical bind group and its exact resource/layout dependencies. Per-use dynamic offsets are not
 /// record state; they remain logical execution-use state above this physical object.
 pub(crate) struct BindGroupRealizationRecord {
     pub(super) affinity: GpuContextAffinity,
@@ -147,7 +147,7 @@ pub(crate) struct BindGroupRealizationRecord {
     pub(super) object: BindGroup,
     #[allow(
         dead_code,
-        reason = "retains exact G4C1 resource dependencies for authoritative record liveness"
+        reason = "retains exact resource dependencies for record liveness"
     )]
     pub(super) resources: Vec<BindGroupResourceDependency>,
 }

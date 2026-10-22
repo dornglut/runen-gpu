@@ -400,7 +400,7 @@ impl GpuAdmittedDeviceFacts {
         &self.admission_contract
     }
 
-    /// Immutable canonical admission evidence retained for future G4C realization.
+    /// Immutable candidate disposition facts established during context admission.
     pub fn candidate_dispositions(&self) -> &[GpuCandidateDisposition] {
         &self.candidate_dispositions
     }
