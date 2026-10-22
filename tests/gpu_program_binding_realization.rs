@@ -7,9 +7,9 @@ use runen_gpu::{
     GpuProgramBindingRealizationPolicy, GpuProgramContractCause, GpuProgramDescriptor,
     GpuProgramSourceIdentity, GpuProgramSourceKey, GpuProgramSourceOwnerId,
     GpuProgramSourceProvenance, GpuProgramSourceRegistry, GpuProgramSourceRevision,
-    GpuRealizationPolicies, GpuResourceRealizationErrorCategory,
-    GpuResourceRealizationPolicy, GpuReconstruction, GpuResourceCommon, GpuResourceLabel,
-    GpuResourceLifetime, GpuResourceProvenance, GpuRuntimeBindingResource, GpuRuntimeBindingValue,
+    GpuRealizationPolicies, GpuReconstruction, GpuResourceCommon, GpuResourceLabel,
+    GpuResourceLifetime, GpuResourceProvenance, GpuResourceRealizationErrorCategory,
+    GpuResourceRealizationPolicy, GpuRuntimeBindingResource, GpuRuntimeBindingValue,
     GpuRuntimeBufferBinding, GpuShaderStage, GpuShaderStages, GpuStorageBufferAccess,
     GpuWorkResourceIdAllocator,
 };
@@ -487,10 +487,10 @@ fn g4c1_pressure_can_precede_g4c2_lookup_only_group_reclamation() {
         }
         Err(error) => panic!("unexpected investigation context admission failure: {error}"),
     };
-    let layout = GpuBindGroupLayoutDescriptor::new(0, [storage_binding()])
-        .expect("valid storage layout");
-    let realized_layout = pollster::block_on(context.realize_bind_group_layout(&layout))
-        .expect("layout realization");
+    let layout =
+        GpuBindGroupLayoutDescriptor::new(0, [storage_binding()]).expect("valid storage layout");
+    let realized_layout =
+        pollster::block_on(context.realize_bind_group_layout(&layout)).expect("layout realization");
 
     // The four buffers are distinct transient logical objects, not reused/aliased IDs.
     // After each bind-group realization the caller releases *both* physical handles.
@@ -507,8 +507,8 @@ fn g4c1_pressure_can_precede_g4c2_lookup_only_group_reclamation() {
             GpuResourceProvenance::new(label, None, None),
         )
         .expect("transient resource common");
-        let usages = GpuBufferUsages::new(common.label(), [GpuBufferUsage::Storage])
-            .expect("storage usage");
+        let usages =
+            GpuBufferUsages::new(common.label(), [GpuBufferUsage::Storage]).expect("storage usage");
         let buffer = allocator
             .allocate_buffer_handle(
                 GpuBufferDescriptor::new(
@@ -521,9 +521,10 @@ fn g4c1_pressure_can_precede_g4c2_lookup_only_group_reclamation() {
             )
             .expect("unique logical buffer ID");
         let physical = context.realize_buffer(&buffer).expect("G4C1 realization");
-        let group =
-            pollster::block_on(context.realize_bind_group(&realized_layout, [binding_value(buffer)]))
-                .expect("G4C2 binding realization");
+        let group = pollster::block_on(
+            context.realize_bind_group(&realized_layout, [binding_value(buffer)]),
+        )
+        .expect("G4C2 binding realization");
         drop(group);
         drop(physical);
     }
