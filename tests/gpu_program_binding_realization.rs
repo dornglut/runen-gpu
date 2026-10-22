@@ -535,7 +535,8 @@ fn g4c1_pressure_can_precede_g4c2_lookup_only_group_reclamation() {
     assert_eq!(g4c2.bind_groups(), 4);
     assert_eq!(g4c2.bind_group_layouts(), 1);
     assert_eq!(g4c2.retained_records(), 5);
-    assert!(g4c2.retained_records() < context.program_binding_realization_policy().max_records().get());
+    let g4c2_limit = context.program_binding_realization_policy().max_records().get();
+    assert!(g4c2.retained_records() < g4c2_limit);
     assert_eq!(g4c2.in_flight_records(), 0);
     assert_eq!(context.execution_stats().in_flight_submissions(), 0);
 
