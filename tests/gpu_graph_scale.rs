@@ -552,6 +552,141 @@ fn measure_shared_resource_fanout(node_count: usize, fragment_count: usize) -> V
     })
 }
 
+
+const NODE_LOOKUP_CASES: [(usize, usize); 6] =
+    [(80, 1), (80, 8), (80, 80), (800, 1), (800, 8), (800, 80)];
+const NODE_LOOKUP_REPEATS: usize = 32;
+
+#[derive(Clone, Copy)]
+enum NodeLookupStrategy {
+    Linear,
+    BTreeIndex,
+    HashIndex,
+}
+
+impl NodeLookupStrategy {
+    const fn key(self) -> &'static str {
+        match self {
+            Self::Linear => "linear-find",
+            Self::BTreeIndex => "btree-index-build-and-find",
+            Self::HashIndex => "hash-index-build-and-find",
+        }
+    }
+}
+
+fn run_node_lookup_pass(graph: &GpuPreparedWorkGraph, strategy: NodeLookupStrategy) -> usize {
+    let nodes = graph.nodes();
+    let order = graph.topological_order();
+    let mut found_count = 0;
+    match strategy {
+        NodeLookupStrategy::Linear => {
+            for id in order {
+                let found = nodes
+                    .iter()
+                    .find(|node| node.id() == *id)
+                    .expect("prepared topological identity must exist");
+                assert_eq!(found.id(), *id);
+                std::hint::black_box(found.node().accesses().len());
+                found_count += 1;
+            }
+        }
+        NodeLookupStrategy::BTreeIndex => {
+            let index = nodes
+                .iter()
+                .map(|node| (node.id(), node))
+                .collect::<std::collections::BTreeMap<_, _>>();
+            assert_eq!(index.len(), nodes.len());
+            for id in order {
+                let found = index
+                    .get(id)
+                    .expect("indexed prepared topological identity must exist");
+                assert_eq!(found.id(), *id);
+                std::hint::black_box(found.node().accesses().len());
+                found_count += 1;
+            }
+        }
+        NodeLookupStrategy::HashIndex => {
+            let index = nodes
+                .iter()
+                .map(|node| (node.id(), node))
+                .collect::<std::collections::HashMap<_, _>>();
+            assert_eq!(index.len(), nodes.len());
+            for id in order {
+                let found = index
+                    .get(id)
+                    .expect("indexed prepared topological identity must exist");
+                assert_eq!(found.id(), *id);
+                std::hint::black_box(found.node().accesses().len());
+                found_count += 1;
+            }
+        }
+    }
+    found_count
+}
+
+fn measure_node_lookup(node_count: usize, fragment_count: usize) -> Value {
+    // Graph authoring, hazard inference, and topological sorting are intentionally
+    // outside this lookup-only timing window.
+    let fragments = author_disjoint_fragments(node_count, fragment_count);
+    let prepared = GpuPreparedWorkGraph::prepare(
+        label(format!("lookup {node_count} nodes, {fragment_count} fragments")),
+        fragments,
+    )
+    .unwrap();
+    assert_eq!(prepared.nodes().len(), node_count);
+    assert_eq!(prepared.topological_order().len(), node_count);
+    assert_eq!(prepared.dependencies().len(), 0);
+    assert_eq!(
+        prepared
+            .nodes()
+            .iter()
+            .map(GpuPreparedWorkNode::id)
+            .collect::<std::collections::BTreeSet<_>>()
+            .len(),
+        node_count
+    );
+
+    let mut measurements = Vec::new();
+    for strategy in [
+        NodeLookupStrategy::Linear,
+        NodeLookupStrategy::BTreeIndex,
+        NodeLookupStrategy::HashIndex,
+    ] {
+        let mut samples = Vec::with_capacity(MEASURED_SAMPLES);
+        for sample in 0..(WARMUP_SAMPLES + MEASURED_SAMPLES) {
+            let started = Instant::now();
+            for _ in 0..NODE_LOOKUP_REPEATS {
+                assert_eq!(run_node_lookup_pass(&prepared, strategy), node_count);
+            }
+            let elapsed = nanos(started);
+            if sample >= WARMUP_SAMPLES {
+                samples.push(elapsed);
+            }
+        }
+        let (min_ns, median_ns, max_ns) = summarize(&samples);
+        measurements.push(json!({
+            "strategy": strategy.key(),
+            "samples_ns": samples,
+            "min_ns": min_ns,
+            "median_ns": median_ns,
+            "max_ns": max_ns,
+            "median_per_graph_pass_ns": median_ns as f64 / NODE_LOOKUP_REPEATS as f64,
+            "successful_node_lookups_per_sample": node_count * NODE_LOOKUP_REPEATS,
+        }));
+    }
+    json!({
+        "topology": "disjoint-clears",
+        "node_count": node_count,
+        "fragment_count": fragment_count,
+        "dependency_count": 0,
+        "topological_order_count": node_count,
+        "inner_repetitions": NODE_LOOKUP_REPEATS,
+        "warmup_samples": WARMUP_SAMPLES,
+        "measured_samples": MEASURED_SAMPLES,
+        "measurements": measurements,
+    })
+}
+
 fn scaling_ratio(cases: &[CaseEvidence], topology: Topology) -> f64 {
     let smallest = cases
         .iter()
@@ -603,6 +738,11 @@ fn graph_preparation_scale_characterization_records_structural_and_timing_eviden
         .map(|(nodes, fragments)| measure_shared_resource_fanout(nodes, fragments))
         .collect::<Vec<_>>();
 
+    let node_lookup_cases = NODE_LOOKUP_CASES
+        .into_iter()
+        .map(|(nodes, fragments)| measure_node_lookup(nodes, fragments))
+        .collect::<Vec<_>>();
+
     let report = json!({
         "schema_version": REPORT_SCHEMA_VERSION,
         "requirement": "G6-S01",
@@ -645,6 +785,8 @@ fn graph_preparation_scale_characterization_records_structural_and_timing_eviden
         "cases": cases.into_iter().map(|case| case.json).collect::<Vec<_>>(),
         "fragmentation_cases": fragmentation_cases,
         "shared_resource_cases": shared_resource_cases,
+        "node_lookup_cases": node_lookup_cases,
+        "node_lookup_policy": "test-profile CPU-only lookup comparison; linear search versus transient BTreeMap/HashMap including index construction on each pass, no physical WGPU plan, shader or resource realization; non-gating",
         "shared_resource_policy": "fixed total nodes: one writer and N-1 read/copy consumers; typed export/import when fragmented, one RAW dependency per consumer; GPU physical preparation not measured; non-gating",
         "fragmentation_policy": "fixed total nodes and unique resources; fragment count alone varies; no typed shared resources, no physical execution preparation; measured time is non-gating",
     });
