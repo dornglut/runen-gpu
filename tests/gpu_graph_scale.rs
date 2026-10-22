@@ -352,6 +352,206 @@ fn measure_disjoint_fragmentation(node_count: usize, fragment_count: usize) -> V
     })
 }
 
+const SHARED_RESOURCE_CASES: [(usize, usize); 6] =
+    [(80, 1), (80, 8), (80, 80), (800, 1), (800, 8), (800, 80)];
+
+fn author_shared_resource_fanout(
+    node_count: usize,
+    fragment_count: usize,
+) -> (Vec<GpuWorkFragment>, GpuWorkResourceId) {
+    assert!(node_count >= fragment_count);
+    assert!(fragment_count > 0);
+    let mut resources = GpuResourceScope::new();
+    let shared = scale_buffer(&mut resources, Topology::SerialCopyChain, 0);
+    let destinations = (1..node_count)
+        .map(|index| scale_buffer(&mut resources, Topology::DisjointClears, index))
+        .collect::<Vec<_>>();
+    let export_key =
+        GpuExportKey::new(format!("graph-scale.fanout.{node_count}.{fragment_count}")).unwrap();
+    let shared_range = GpuBufferRange::whole(&shared).unwrap();
+
+    let producer = GpuWorkFragment::build(
+        format!("graph scale fanout producer {node_count}"),
+        |work| {
+            work.operation(
+                "initialize fanout source",
+                GpuClearOperation::buffer_zero(GpuBufferRegion::whole(&shared).unwrap()).unwrap(),
+            )?;
+            if fragment_count == 1 {
+                for (index, destination) in destinations.iter().enumerate() {
+                    work.operation(
+                        format!("fanout read {index:04}"),
+                        GpuCopyOperation::buffer_to_buffer(
+                            GpuBufferRegion::whole(&shared).unwrap(),
+                            GpuBufferRegion::whole(destination).unwrap(),
+                        )
+                        .unwrap(),
+                    )?;
+                }
+            } else {
+                let output_provenance =
+                    GpuResourceProvenance::new(label("fanout producer output"), None, None);
+                work.add_output(
+                    GpuWorkOutput::new(
+                        GpuExportRelationship::new(
+                            shared.clone().into(),
+                            export_key.clone(),
+                            GpuResourceAccessIntent::Write,
+                            output_provenance,
+                        ),
+                        GpuInitialCoverage::buffer(
+                            &shared,
+                            [GpuBufferCoverage::dense(shared_range)],
+                        )
+                        .unwrap(),
+                    )
+                    .unwrap(),
+                )?;
+            }
+            Ok(())
+        },
+    )
+    .unwrap();
+
+    let mut fragments = vec![producer];
+    if fragment_count > 1 {
+        let consumer_count = fragment_count - 1;
+        let reader_count = node_count - 1;
+        for consumer in 0..consumer_count {
+            let start = consumer * reader_count / consumer_count;
+            let end = (consumer + 1) * reader_count / consumer_count;
+            assert!(start < end);
+            fragments.push(
+                GpuWorkFragment::build(
+                    format!("graph scale fanout consumer {consumer:04}"),
+                    |work| {
+                        work.declare_resource(shared.clone().into())?;
+                        work.add_import(GpuWorkImport::new(
+                            shared.clone().into(),
+                            export_key.clone(),
+                            GpuResourceAccessIntent::Read,
+                            GpuResourceProvenance::new(
+                                label(format!("fanout consumer {consumer:04} import")),
+                                None,
+                                None,
+                            ),
+                        ))?;
+                        for (offset, destination) in destinations[start..end].iter().enumerate() {
+                            work.operation(
+                                format!("fanout read {:04}", start + offset),
+                                GpuCopyOperation::buffer_to_buffer(
+                                    GpuBufferRegion::whole(&shared).unwrap(),
+                                    GpuBufferRegion::whole(destination).unwrap(),
+                                )
+                                .unwrap(),
+                            )?;
+                        }
+                        Ok(())
+                    },
+                )
+                .unwrap(),
+            );
+        }
+    }
+    (fragments, shared.diagnostic_identity())
+}
+
+fn measure_shared_resource_fanout(node_count: usize, fragment_count: usize) -> Value {
+    let author_started = Instant::now();
+    let (fragments, shared_resource) = author_shared_resource_fanout(node_count, fragment_count);
+    let author_ns = nanos(author_started);
+    assert_eq!(fragments.len(), fragment_count);
+    let declared_resource_count = fragments
+        .iter()
+        .flat_map(GpuWorkFragment::resources)
+        .map(GpuResourceRef::diagnostic_identity)
+        .collect::<std::collections::BTreeSet<_>>()
+        .len();
+    let access_count = fragments
+        .iter()
+        .flat_map(GpuWorkFragment::nodes)
+        .map(|node| node.accesses().len())
+        .sum::<usize>();
+    let import_count = fragments
+        .iter()
+        .map(|fragment| fragment.imports().len())
+        .sum::<usize>();
+    let export_count = fragments
+        .iter()
+        .map(|fragment| fragment.outputs().len())
+        .sum::<usize>();
+    assert_eq!(declared_resource_count, node_count);
+    assert_eq!(access_count, 2 * node_count - 1);
+    assert_eq!(import_count, fragment_count - 1);
+    assert_eq!(export_count, usize::from(fragment_count > 1));
+
+    let graph_label = label(format!(
+        "graph scale typed fanout {node_count} nodes in {fragment_count} fragments"
+    ));
+    let mut observed_order: Option<Vec<_>> = None;
+    let mut samples = Vec::with_capacity(MEASURED_SAMPLES);
+    for sample in 0..(WARMUP_SAMPLES + MEASURED_SAMPLES) {
+        let candidate = fragments.clone();
+        let current_label = graph_label.clone();
+        let started = Instant::now();
+        let prepared = GpuPreparedWorkGraph::prepare(current_label, candidate).unwrap();
+        let elapsed = nanos(started);
+
+        assert_eq!(prepared.nodes().len(), node_count);
+        assert_eq!(prepared.topological_order().len(), node_count);
+        assert_eq!(prepared.dependencies().len(), node_count - 1);
+        let writer = prepared.topological_order().first().unwrap();
+        for dependency in prepared.dependencies() {
+            assert_eq!(dependency.before(), *writer);
+            assert_eq!(dependency.reasons().len(), 1);
+            assert!(matches!(
+                dependency.reasons().first(),
+                Some(GpuDependencyReason::ReadAfterWrite { resource, .. }) if *resource == shared_resource
+            ));
+        }
+        assert_eq!(
+            prepared
+                .topological_order()
+                .iter()
+                .collect::<std::collections::BTreeSet<_>>()
+                .len(),
+            node_count
+        );
+        match &observed_order {
+            Some(previous) => assert_eq!(prepared.topological_order(), previous.as_slice()),
+            None => observed_order = Some(prepared.topological_order().to_vec()),
+        }
+        if sample >= WARMUP_SAMPLES {
+            samples.push(elapsed);
+        }
+    }
+
+    let (min_ns, median_ns, max_ns) = summarize(&samples);
+    json!({
+        "topology": "typed-shared-fanout",
+        "node_count": node_count,
+        "fragment_count": fragment_count,
+        "resource_count": declared_resource_count,
+        "access_count": access_count,
+        "dependency_count": node_count - 1,
+        "import_count": import_count,
+        "export_count": export_count,
+        "topological_order_count": node_count,
+        "order_stable_across_samples": true,
+        "all_edges_are_shared_source_read_after_write": true,
+        "authoring_ns": author_ns,
+        "warmup_samples": WARMUP_SAMPLES,
+        "measured_samples": MEASURED_SAMPLES,
+        "prepare_including_validation_ns": {
+            "samples": samples,
+            "min": min_ns,
+            "median": median_ns,
+            "max": max_ns,
+            "median_per_node": median_ns as f64 / node_count as f64,
+        }
+    })
+}
+
 fn scaling_ratio(cases: &[CaseEvidence], topology: Topology) -> f64 {
     let smallest = cases
         .iter()
@@ -398,6 +598,11 @@ fn graph_preparation_scale_characterization_records_structural_and_timing_eviden
         .map(|(nodes, fragments)| measure_disjoint_fragmentation(nodes, fragments))
         .collect::<Vec<_>>();
 
+    let shared_resource_cases = SHARED_RESOURCE_CASES
+        .into_iter()
+        .map(|(nodes, fragments)| measure_shared_resource_fanout(nodes, fragments))
+        .collect::<Vec<_>>();
+
     let report = json!({
         "schema_version": REPORT_SCHEMA_VERSION,
         "requirement": "G6-S01",
@@ -439,6 +644,8 @@ fn graph_preparation_scale_characterization_records_structural_and_timing_eviden
         },
         "cases": cases.into_iter().map(|case| case.json).collect::<Vec<_>>(),
         "fragmentation_cases": fragmentation_cases,
+        "shared_resource_cases": shared_resource_cases,
+        "shared_resource_policy": "fixed total nodes: one writer and N-1 read/copy consumers; typed export/import when fragmented, one RAW dependency per consumer; GPU physical preparation not measured; non-gating",
         "fragmentation_policy": "fixed total nodes and unique resources; fragment count alone varies; no typed shared resources, no physical execution preparation; measured time is non-gating",
     });
 
