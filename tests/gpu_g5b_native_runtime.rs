@@ -149,20 +149,145 @@ fn checked_least_common_multiple(left: u64, right: u64) -> Option<u64> {
 }
 
 fn native_context() -> GpuContext {
-    let descriptor =
-        GpuContextDescriptor::new(GpuCapabilityProfile::ComputeBaseline.requirements())
-            .with_fallback_policy(GpuSoftwareFallbackPolicy::Require)
-            .with_allowed_backends([GpuBackendFamily::Vulkan])
-            .with_label("G5B native headless compute proof");
-    let context = pollster::block_on(GpuContext::request(descriptor))
-        .expect("native conformance environment must provide a Vulkan fallback adapter");
+    request_native_context(
+        native_context_descriptor(),
+        GpuRealizationPolicies::default(),
+    )
+}
+
+fn native_context_descriptor() -> GpuContextDescriptor {
+    GpuContextDescriptor::new(GpuCapabilityProfile::ComputeBaseline.requirements())
+        .with_fallback_policy(GpuSoftwareFallbackPolicy::Require)
+        .with_allowed_backends([GpuBackendFamily::Vulkan])
+        .with_label("G5B native headless compute proof")
+}
+
+fn request_native_context(
+    descriptor: GpuContextDescriptor,
+    realization_policies: GpuRealizationPolicies,
+) -> GpuContext {
+    let context = pollster::block_on(GpuContext::request_with_realization_policies(
+        descriptor,
+        realization_policies,
+    ))
+    .expect("native conformance environment must provide a Vulkan fallback adapter");
     assert_eq!(context.adapter_facts().backend(), GpuBackendFamily::Vulkan);
     assert_eq!(
         context.adapter_facts().fallback(),
         GpuFallbackStatus::ConfirmedFallback,
         "native conformance must execute through the explicitly required fallback path"
     );
+    eprintln!(
+        "VULKAN_PRESSURE_ADAPTER backend={:?} fallback={:?} name={:?}",
+        context.adapter_facts().backend(),
+        context.adapter_facts().fallback(),
+        context.adapter_facts().diagnostic_name()
+    );
     context
+}
+
+fn sampled_texture_view_sampler(
+    allocator: &mut GpuWorkResourceIdAllocator,
+    name: &str,
+) -> (GpuTextureHandle, GpuTextureViewHandle, GpuSamplerHandle) {
+    let resource_label = label(name);
+    let texture = allocator
+        .allocate_texture_handle(
+            GpuTextureDescriptor::new(
+                common(name),
+                GpuTextureDimension::D2,
+                GpuTextureExtent::new(&resource_label, GpuTextureDimension::D2, 2, 2, 1).unwrap(),
+                1,
+                1,
+                GpuTextureFormat::Rgba8Unorm,
+                GpuTextureUsages::new(&resource_label, [GpuTextureUsage::Sampled]).unwrap(),
+                GpuTextureInitialization::Uninitialized,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+    let view = allocator
+        .allocate_texture_view_handle(
+            GpuTextureViewDescriptor::new(
+                common(&format!("{name} view")),
+                &texture,
+                None,
+                GpuTextureViewDimension::D2,
+                GpuTextureSubresourceRange::whole(&texture).unwrap(),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+    let sampler = allocator
+        .allocate_sampler_handle(
+            GpuSamplerDescriptor::new(
+                common(&format!("{name} sampler")),
+                GpuAddressMode::ClampToEdge,
+                GpuAddressMode::ClampToEdge,
+                GpuAddressMode::ClampToEdge,
+                GpuSamplerFilterState::new(
+                    GpuFilterMode::Linear,
+                    GpuFilterMode::Linear,
+                    GpuFilterMode::Linear,
+                    1,
+                )
+                .unwrap(),
+                0.0,
+                16.0,
+                None,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+    (texture, view, sampler)
+}
+
+fn sampled_texture_sampler_layout() -> GpuBindGroupLayoutDescriptor {
+    let provenance = GpuBindingProvenance::new("g4c1-pressure-vulkan-proof", None).unwrap();
+    let texture = GpuBindingDeclaration::new(
+        GpuBindingKey::try_new(0, 0).unwrap(),
+        GpuShaderStages::one(GpuShaderStage::Compute),
+        GpuBindingKind::sampled_texture(
+            GpuTextureSampleClass::FloatFilterable,
+            GpuTextureViewDimension::D2,
+            false,
+        )
+        .unwrap(),
+        None,
+        "source_texture",
+        provenance.clone(),
+    )
+    .unwrap();
+    let sampler = GpuBindingDeclaration::new(
+        GpuBindingKey::try_new(0, 1).unwrap(),
+        GpuShaderStages::one(GpuShaderStage::Compute),
+        GpuBindingKind::sampler(GpuSamplerClass::Filtering),
+        None,
+        "source_sampler",
+        provenance,
+    )
+    .unwrap();
+    GpuBindGroupLayoutDescriptor::new(0, [texture, sampler]).unwrap()
+}
+
+fn sampled_texture_sampler_values(
+    view: GpuTextureViewHandle,
+    sampler: GpuSamplerHandle,
+) -> [GpuRuntimeBindingValue; 2] {
+    [
+        GpuRuntimeBindingValue::new(
+            GpuBindingKey::try_new(0, 0).unwrap(),
+            [GpuRuntimeBindingResource::TextureView(
+                GpuRuntimeTextureViewBinding::new(view),
+            )],
+        )
+        .unwrap(),
+        GpuRuntimeBindingValue::new(
+            GpuBindingKey::try_new(0, 1).unwrap(),
+            [GpuRuntimeBindingResource::Sampler(sampler)],
+        )
+        .unwrap(),
+    ]
 }
 
 fn dynamic_compute_graph(
@@ -346,6 +471,123 @@ fn native_headless_compute_executes_shader_and_reuses_dynamic_bind_group() {
     assert_eq!(stats.upload_bytes_in_flight(), 0);
     assert_eq!(stats.readback_bytes_in_flight(), 0);
     assert_eq!(stats.pending_readbacks(), 0);
+}
+
+#[test]
+#[ignore = "requires a real Vulkan fallback adapter; executed by RunenGPU Native Conformance CI"]
+fn native_g4c1_pressure_reclaims_registry_only_texture_sampler_groups() {
+    let policies = GpuRealizationPolicies::new(
+        GpuResourceRealizationPolicy::new(NonZeroUsize::new(12).unwrap()),
+        GpuProgramBindingRealizationPolicy::new(NonZeroUsize::new(6).unwrap()),
+    );
+    let context = request_native_context(
+        native_context_descriptor()
+            .require_format_role(GpuTextureFormat::Rgba8Unorm, GpuFormatRole::Sampled),
+        policies,
+    );
+    let layout = sampled_texture_sampler_layout();
+    let realized_layout = pollster::block_on(context.realize_bind_group_layout(&layout)).unwrap();
+    let mut allocator = GpuWorkResourceIdAllocator::new();
+
+    for frame in 0..4 {
+        let (texture, view, sampler) =
+            sampled_texture_view_sampler(&mut allocator, &format!("lookup-only-{frame}"));
+        let group = pollster::block_on(context.realize_bind_group(
+            &realized_layout,
+            sampled_texture_sampler_values(view, sampler),
+        ))
+        .expect("mixed texture-view/sampler bind group must realize");
+        drop(group);
+        drop(texture);
+    }
+
+    let g4c1 = context.resource_realization_stats();
+    let g4c2 = context.program_binding_realization_stats();
+    assert_eq!(g4c1.textures(), 4);
+    assert_eq!(g4c1.texture_views(), 4);
+    assert_eq!(g4c1.samplers(), 4);
+    assert_eq!(g4c1.retained_records(), 12);
+    assert_eq!(g4c2.bind_groups(), 4);
+    assert_eq!(g4c2.bind_group_layouts(), 1);
+    assert_eq!(g4c2.retained_records(), 5);
+    assert!(g4c2.retained_records() < g4c2.max_records().get());
+    assert_eq!(g4c2.in_flight_records(), 0);
+    assert_eq!(context.execution_stats().in_flight_submissions(), 0);
+
+    let (candidate, _, _) = sampled_texture_view_sampler(&mut allocator, "pressure-candidate");
+    context
+        .realize_texture(&candidate)
+        .expect("G4C1 pressure must reclaim registry-only mixed binding dependencies");
+    let after = context.resource_realization_stats();
+    assert_eq!(after.retained_records(), 1);
+    assert_eq!(after.textures(), 1);
+    assert_eq!(context.program_binding_realization_stats().bind_groups(), 0);
+    assert_eq!(
+        context
+            .program_binding_realization_stats()
+            .bind_group_layouts(),
+        1,
+        "the externally retained layout remains independent of lookup-only groups"
+    );
+}
+
+#[test]
+#[ignore = "requires a real Vulkan fallback adapter; executed by RunenGPU Native Conformance CI"]
+fn native_g4c1_pressure_preserves_caller_held_mixed_bind_group_then_recovers() {
+    let policies = GpuRealizationPolicies::new(
+        GpuResourceRealizationPolicy::new(NonZeroUsize::new(3).unwrap()),
+        GpuProgramBindingRealizationPolicy::new(NonZeroUsize::new(2).unwrap()),
+    );
+    let context = request_native_context(
+        native_context_descriptor()
+            .require_format_role(GpuTextureFormat::Rgba8Unorm, GpuFormatRole::Sampled),
+        policies,
+    );
+    let layout = sampled_texture_sampler_layout();
+    let realized_layout = pollster::block_on(context.realize_bind_group_layout(&layout)).unwrap();
+    let mut allocator = GpuWorkResourceIdAllocator::new();
+    let (texture, view, sampler) =
+        sampled_texture_view_sampler(&mut allocator, "caller-held-mixed-group");
+    let values = sampled_texture_sampler_values(view.clone(), sampler.clone());
+    let group = pollster::block_on(context.realize_bind_group(&realized_layout, values.clone()))
+        .expect("mixed texture-view/sampler bind group must realize");
+    drop(texture);
+
+    let before = context.resource_realization_stats();
+    assert_eq!(before.textures(), 1);
+    assert_eq!(before.texture_views(), 1);
+    assert_eq!(before.samplers(), 1);
+    assert_eq!(before.retained_records(), 3);
+    assert_eq!(context.program_binding_realization_stats().bind_groups(), 1);
+    assert_eq!(context.execution_stats().in_flight_submissions(), 0);
+
+    let (candidate, _, _) = sampled_texture_view_sampler(&mut allocator, "held-group-candidate");
+    let rejected = context
+        .realize_texture(&candidate)
+        .expect_err("external group ownership must protect its G4C1 view, parent and sampler");
+    assert_eq!(
+        rejected.category(),
+        GpuResourceRealizationErrorCategory::RegistryCapacityExceeded
+    );
+    let repeated = pollster::block_on(context.realize_bind_group(&realized_layout, values))
+        .expect("the caller-held group remains usable after pressure refusal");
+    assert!(group.is_same_record(&repeated));
+    assert_eq!(context.resource_realization_stats().retained_records(), 3);
+    assert_eq!(context.program_binding_realization_stats().bind_groups(), 1);
+
+    drop(repeated);
+    drop(group);
+    drop(view);
+    drop(sampler);
+    context
+        .realize_texture(&candidate)
+        .expect("released mixed group dependencies become reclaimable on fresh pressure");
+    let after = context.resource_realization_stats();
+    assert_eq!(after.retained_records(), 1);
+    assert_eq!(after.textures(), 1);
+    assert_eq!(after.texture_views(), 0);
+    assert_eq!(after.samplers(), 0);
+    assert_eq!(context.program_binding_realization_stats().bind_groups(), 0);
 }
 
 fn native_copy_context() -> GpuContext {

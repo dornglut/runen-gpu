@@ -516,24 +516,20 @@ mod tests {
         allocator.allocate().unwrap()
     }
 
-    #[test]
-    fn pressure_coordination_preserves_identity_checks_after_a_competing_publication() {
+    fn pressure_context_or_skip() -> Option<GpuContext> {
         use crate::{
-            GpuBufferDescriptor, GpuBufferInitialization, GpuBufferUsage, GpuBufferUsages,
             GpuCapabilityProfile, GpuContextDescriptor, GpuContextRequestErrorCategory,
-            GpuMemoryIntent, GpuRealizationPolicies, GpuReconstruction, GpuResourceCommon,
-            GpuResourceLabel, GpuResourceLifetime, GpuResourceProvenance,
-            GpuWorkResourceIdAllocator,
+            GpuRealizationPolicies,
         };
         use std::num::NonZeroUsize;
-        let context = match pollster::block_on(GpuContext::request_with_realization_policies(
+        match pollster::block_on(GpuContext::request_with_realization_policies(
             GpuContextDescriptor::new(GpuCapabilityProfile::ComputeBaseline.requirements()),
             GpuRealizationPolicies::new(
                 GpuResourceRealizationPolicy::new(NonZeroUsize::MIN),
                 Default::default(),
             ),
         )) {
-            Ok(context) => context,
+            Ok(context) => Some(context),
             Err(error)
                 if matches!(
                     error.category(),
@@ -547,9 +543,68 @@ mod tests {
                     "GPU-required identity race regression unavailable: {error}"
                 );
                 eprintln!("identity race regression unavailable: {error}");
-                return;
+                None
             }
             Err(error) => panic!("unexpected context admission failure: {error}"),
+        }
+    }
+
+    #[test]
+    fn terminal_health_faults_reject_resource_pressure_without_reclaiming_records() {
+        use crate::{
+            GpuBufferDescriptor, GpuBufferInitialization, GpuBufferUsage, GpuReconstruction,
+            GpuResourceLifetime, GpuWorkResourceIdAllocator,
+        };
+        let Some(context) = pressure_context_or_skip() else {
+            return;
+        };
+        let descriptor = GpuBufferDescriptor::ordinary_owned(
+            "health pressure buffer",
+            GpuResourceLifetime::Transient,
+            GpuReconstruction::SourceBacked,
+            64,
+            [GpuBufferUsage::Storage],
+            GpuBufferInitialization::Uninitialized,
+        )
+        .unwrap();
+        let mut allocator = GpuWorkResourceIdAllocator::new();
+        let original = allocator
+            .allocate_buffer_handle(descriptor.clone())
+            .unwrap();
+        let candidate = allocator.allocate_buffer_handle(descriptor).unwrap();
+        drop(context.realize_buffer(&original).unwrap());
+        let state = &context.backend.resource_realization;
+        state.health.mark_uncaptured(wgpu::Error::OutOfMemory {
+            source: backend_source(),
+        });
+        let error = context.realize_buffer(&candidate).unwrap_err();
+        assert_eq!(
+            error.category(),
+            GpuResourceRealizationErrorCategory::BackendResourceExhaustion
+        );
+        assert_eq!(context.resource_realization_stats().retained_records(), 1);
+        // Inject the existing terminal device-health owner, not an OS/device reset.
+        // Even a potentially reclaimable full registry must not make a lost context usable.
+        state
+            .health
+            .mark_scoped_internal("injected device unavailable under resource pressure");
+        let error = context.realize_buffer(&candidate).unwrap_err();
+        assert_eq!(
+            error.category(),
+            GpuResourceRealizationErrorCategory::ContextOrDeviceUnavailableOrLost
+        );
+        assert_eq!(context.resource_realization_stats().retained_records(), 1);
+    }
+
+    #[test]
+    fn pressure_coordination_preserves_identity_checks_after_a_competing_publication() {
+        use crate::{
+            GpuBufferDescriptor, GpuBufferInitialization, GpuBufferUsage, GpuBufferUsages,
+            GpuMemoryIntent, GpuReconstruction, GpuResourceCommon, GpuResourceLabel,
+            GpuResourceLifetime, GpuResourceProvenance, GpuWorkResourceIdAllocator,
+        };
+        let Some(context) = pressure_context_or_skip() else {
+            return;
         };
         let label = GpuResourceLabel::new("competing publication").unwrap();
         let common = GpuResourceCommon::owned(

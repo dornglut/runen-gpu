@@ -641,10 +641,10 @@ mod tests {
     }
 
     #[test]
-    fn owner_abandonment_wakes_waiters_releases_capacity_and_allows_retry() {
+    fn dependent_sweep_preserves_pending_group_owner_waiter_and_abandonment() {
         let registries = Arc::new(Mutex::new(ProgramBindingRegistries::default()));
-        let key = BindGroupLayoutRequestKey::new(affinity(), empty_layout(0));
-        let owner = match ProgramBindingRegistries::reserve_bind_group_layout(
+        let key = BindGroupRequestKey::new(affinity(), empty_layout(0), Vec::new());
+        let owner = match ProgramBindingRegistries::reserve_bind_group(
             &registries,
             policy(1),
             key.clone(),
@@ -655,7 +655,7 @@ mod tests {
             Reservation::Owner(owner) => owner,
             Reservation::Ready(_) | Reservation::Waiter(_) => panic!("first caller owns"),
         };
-        let attempt = match ProgramBindingRegistries::reserve_bind_group_layout(
+        let attempt = match ProgramBindingRegistries::reserve_bind_group(
             &registries,
             policy(1),
             key.clone(),
@@ -666,6 +666,12 @@ mod tests {
             Reservation::Waiter(attempt) => attempt,
             Reservation::Ready(_) | Reservation::Owner(_) => panic!("equal caller waits"),
         };
+        {
+            let mut all = registries.lock().expect("test registry lock");
+            all.collect_lookup_only_bind_groups();
+            assert_eq!(all.stats(policy(1)).in_flight_records(), 1);
+            assert_eq!(all.stats(policy(1)).bind_groups(), 0);
+        }
         let counter = Arc::new(WakeCounter(AtomicUsize::new(0)));
         let waker = Waker::from(Arc::clone(&counter));
         let mut context = Context::from_waker(&waker);
@@ -692,7 +698,7 @@ mod tests {
             "abandoned owners must return their capacity slot"
         );
         assert!(matches!(
-            ProgramBindingRegistries::reserve_bind_group_layout(
+            ProgramBindingRegistries::reserve_bind_group(
                 &registries,
                 policy(1),
                 key,

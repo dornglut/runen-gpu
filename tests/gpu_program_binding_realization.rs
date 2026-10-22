@@ -663,6 +663,15 @@ fn caller_retained_bind_group_protects_g4c1_dependency_during_registry_pressure(
 
 #[test]
 fn prepared_and_accepted_compute_keep_dependencies_until_terminal_readback() {
+    assert_compute_pressure_lifecycle(false);
+}
+
+#[test]
+fn shutdown_drains_pressure_protected_compute_and_releases_terminal_dependencies() {
+    assert_compute_pressure_lifecycle(true);
+}
+
+fn assert_compute_pressure_lifecycle(shutdown: bool) {
     use runen_gpu::*;
     let _serialization = GPU_REALIZATION_TEST_LOCK
         .lock()
@@ -739,6 +748,12 @@ fn prepared_and_accepted_compute_keep_dependencies_until_terminal_readback() {
     );
 
     let submission = context.submit_prepared(prepared).unwrap();
+    if shutdown {
+        assert!(matches!(
+            context.begin_shutdown(),
+            GpuExecutionLifecycleState::ShuttingDown | GpuExecutionLifecycleState::Closed
+        ));
+    }
     // GPU completion may race this observation. A successful collection is legal
     // only after the actual G5 terminal callback has released the physical plan.
     let status_before_pressure = submission.status();
@@ -764,6 +779,13 @@ fn prepared_and_accepted_compute_keep_dependencies_until_terminal_readback() {
     assert_eq!(bytes.as_bytes(), bytemuck::cast_slice(&expected));
     assert_eq!(submission.status(), GpuSubmissionStatus::Completed);
     assert_eq!(context.execution_stats().in_flight_submissions(), 0);
+    if shutdown {
+        context.progress();
+        assert_eq!(
+            context.execution_lifecycle_state(),
+            GpuExecutionLifecycleState::Closed
+        );
+    }
     let recovered = context.realize_buffer(&candidate).expect(
         "terminal work must release dependencies despite retaining its submission/readback handles",
     );
