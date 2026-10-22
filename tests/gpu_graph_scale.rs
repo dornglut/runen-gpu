@@ -245,7 +245,6 @@ fn measure_case(topology: Topology, node_count: usize) -> CaseEvidence {
     }
 }
 
-
 const FRAGMENTATION_CASES: [(usize, usize); 6] = [
     (80, 1),
     (80, 8),
@@ -305,7 +304,7 @@ fn measure_disjoint_fragmentation(node_count: usize, fragment_count: usize) -> V
     let graph_label = label(format!(
         "graph scale disjoint {node_count} nodes in {fragment_count} fragments"
     ));
-    let mut observed_order = None;
+    let mut observed_order: Option<Vec<_>> = None;
     let mut samples = Vec::with_capacity(MEASURED_SAMPLES);
 
     for index in 0..(WARMUP_SAMPLES + MEASURED_SAMPLES) {
@@ -329,7 +328,7 @@ fn measure_disjoint_fragmentation(node_count: usize, fragment_count: usize) -> V
             node_count
         );
         match &observed_order {
-            Some(previous) => assert_eq!(prepared.topological_order(), previous),
+            Some(previous) => assert_eq!(prepared.topological_order(), previous.as_slice()),
             None => observed_order = Some(prepared.topological_order().to_vec()),
         }
         if index >= WARMUP_SAMPLES {
