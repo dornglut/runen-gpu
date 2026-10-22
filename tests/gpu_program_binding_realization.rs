@@ -7,7 +7,8 @@ use runen_gpu::{
     GpuProgramBindingRealizationPolicy, GpuProgramContractCause, GpuProgramDescriptor,
     GpuProgramSourceIdentity, GpuProgramSourceKey, GpuProgramSourceOwnerId,
     GpuProgramSourceProvenance, GpuProgramSourceRegistry, GpuProgramSourceRevision,
-    GpuRealizationPolicies, GpuReconstruction, GpuResourceCommon, GpuResourceLabel,
+    GpuRealizationPolicies, GpuResourceRealizationErrorCategory,
+    GpuResourceRealizationPolicy, GpuReconstruction, GpuResourceCommon, GpuResourceLabel,
     GpuResourceLifetime, GpuResourceProvenance, GpuRuntimeBindingResource, GpuRuntimeBindingValue,
     GpuRuntimeBufferBinding, GpuShaderStage, GpuShaderStages, GpuStorageBufferAccess,
     GpuWorkResourceIdAllocator,
@@ -449,4 +450,129 @@ fn program_admission_failures_publish_nothing_and_live_handles_bound_registry_re
     assert_eq!(stats.bind_group_layouts(), 0);
     assert_eq!(stats.pipeline_layouts(), 0);
     assert_eq!(stats.bind_groups(), 0);
+}
+// Investigation #174. Characterization only: a *currently observed* inter-registry
+// pressure-order defect. No production reclamation or public API is changed here.
+// Do not treat a passing characterization as long-running Runenwerk conformance.
+#[test]
+fn g4c1_pressure_can_precede_g4c2_lookup_only_group_reclamation() {
+    let _serialization = GPU_REALIZATION_TEST_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let descriptor =
+        GpuContextDescriptor::new(GpuCapabilityProfile::ComputeBaseline.requirements())
+            .with_label("G4C1/G4C2 independent-pressure investigation");
+    let context = match pollster::block_on(GpuContext::request_with_realization_policies(
+        descriptor,
+        GpuRealizationPolicies::new(
+            GpuResourceRealizationPolicy::new(NonZeroUsize::new(4).unwrap()),
+            GpuProgramBindingRealizationPolicy::new(NonZeroUsize::new(5).unwrap()),
+        ),
+    )) {
+        Ok(context) => context,
+        Err(error)
+            if matches!(
+                error.category(),
+                GpuContextRequestErrorCategory::NoAdapterAvailable
+                    | GpuContextRequestErrorCategory::NoAdmissibleCandidate
+                    | GpuContextRequestErrorCategory::MandatoryFeatureMissing
+            ) =>
+        {
+            if std::env::var_os("RUNEN_GPU_REQUIRE_GPU").is_some() {
+                panic!("GPU-required cross-registry experiment could not run: {error}");
+            }
+            eprintln!("G4C1/G4C2 cross-registry experiment unavailable: {error}");
+            return;
+        }
+        Err(error) => panic!("unexpected investigation context admission failure: {error}"),
+    };
+    let layout = GpuBindGroupLayoutDescriptor::new(0, [storage_binding()])
+        .expect("valid storage layout");
+    let realized_layout = pollster::block_on(context.realize_bind_group_layout(&layout))
+        .expect("layout realization");
+
+    // The four buffers are distinct transient logical objects, not reused/aliased IDs.
+    // After each bind-group realization the caller releases *both* physical handles.
+    // No G5 submission has been prepared or accepted.
+    let mut allocator = GpuWorkResourceIdAllocator::new();
+    for frame in 0..4 {
+        let name = format!("cross-registry-transient-{frame}");
+        let label = GpuResourceLabel::new(&name).expect("valid label");
+        let common = GpuResourceCommon::owned(
+            label.clone(),
+            GpuResourceLifetime::Transient,
+            GpuMemoryIntent::Device,
+            GpuReconstruction::SourceBacked,
+            GpuResourceProvenance::new(label, None, None),
+        )
+        .expect("transient resource common");
+        let usages = GpuBufferUsages::new(
+            common.label(),
+            [GpuBufferUsage::Storage],
+        )
+        .expect("storage usage");
+        let buffer = allocator
+            .allocate_buffer_handle(
+                GpuBufferDescriptor::new(
+                    common,
+                    64,
+                    usages,
+                    GpuBufferInitialization::Uninitialized,
+                )
+                .expect("transient buffer descriptor"),
+            )
+            .expect("unique logical buffer ID");
+        let physical = context.realize_buffer(&buffer).expect("G4C1 realization");
+        let group = pollster::block_on(
+            context.realize_bind_group(&realized_layout, [binding_value(buffer)]),
+        )
+        .expect("G4C2 binding realization");
+        drop(group);
+        drop(physical);
+    }
+    let g4c1 = context.resource_realization_stats();
+    let g4c2 = context.program_binding_realization_stats();
+    assert_eq!(g4c1.retained_records(), 4);
+    assert_eq!(g4c1.buffers(), 4);
+    assert_eq!(g4c2.bind_groups(), 4);
+    assert_eq!(g4c2.bind_group_layouts(), 1);
+    assert_eq!(g4c2.retained_records(), 5);
+    assert_eq!(g4c2.in_flight_records(), 0);
+    assert_eq!(context.execution_stats().in_flight_submissions(), 0);
+
+    // Trigger G4C1 pressure while all G4C2 bind groups have only their
+    // *registry's* strong reference. G4C2 itself has not been pressured.
+    let candidate = storage_buffer("cross-registry-candidate");
+    let rejected = context
+        .realize_buffer(&candidate)
+        .expect_err("characterize G4C1-first pressure on the uncorrected pinned runtime");
+    assert_eq!(
+        rejected.category(),
+        GpuResourceRealizationErrorCategory::RegistryCapacityExceeded
+    );
+
+    // Force G4C2's *existing own-pressure* sweep with an unrelated layout.
+    // No program, bind-group, or submission is still externally held.
+    let fresh_layout = GpuBindGroupLayoutDescriptor::new(
+        1,
+        std::iter::empty::<GpuBindingDeclaration>(),
+    )
+    .expect("second valid group layout");
+    let _new_layout = pollster::block_on(context.realize_bind_group_layout(&fresh_layout))
+        .expect("G4C2 pressure removes lookup-only bind groups");
+    assert_eq!(context.program_binding_realization_stats().bind_groups(), 0);
+    let recovered = context
+        .realize_buffer(&candidate)
+        .expect("G4C1 resources become collectible after G4C2 sweep");
+    assert_eq!(recovered.affinity(), context.affinity());
+    let after = context.resource_realization_stats();
+    assert_eq!(after.retained_records(), 1);
+    assert_eq!(after.buffers(), 1);
+    eprintln!(
+        "CROSS_REGISTRY_PROOF g4c1_before={} g4c2_bind_groups_before={} g4c1_after={} g4c2_bind_groups_after={}",
+        g4c1.retained_records(),
+        g4c2.bind_groups(),
+        after.retained_records(),
+        context.program_binding_realization_stats().bind_groups(),
+    );
 }
