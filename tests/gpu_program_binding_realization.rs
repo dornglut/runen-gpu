@@ -452,22 +452,18 @@ fn program_admission_failures_publish_nothing_and_live_handles_bound_registry_re
     assert_eq!(stats.bind_groups(), 0);
 }
 
-// Investigation #174. Characterization only: a *currently observed* inter-registry
-// pressure-order defect. No production reclamation or public API is changed here.
-// Do not treat a passing characterization as long-running Runenwerk conformance.
-#[test]
-fn g4c1_pressure_can_precede_g4c2_lookup_only_group_reclamation() {
-    let _serialization = GPU_REALIZATION_TEST_LOCK
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
+fn cross_registry_context_or_skip(
+    resource_limit: usize,
+    binding_limit: usize,
+) -> Option<GpuContext> {
     let descriptor =
         GpuContextDescriptor::new(GpuCapabilityProfile::ComputeBaseline.requirements())
             .with_label("G4C1/G4C2 independent-pressure investigation");
     let context = match pollster::block_on(GpuContext::request_with_realization_policies(
         descriptor,
         GpuRealizationPolicies::new(
-            GpuResourceRealizationPolicy::new(NonZeroUsize::new(4).unwrap()),
-            GpuProgramBindingRealizationPolicy::new(NonZeroUsize::new(6).unwrap()),
+            GpuResourceRealizationPolicy::new(NonZeroUsize::new(resource_limit).unwrap()),
+            GpuProgramBindingRealizationPolicy::new(NonZeroUsize::new(binding_limit).unwrap()),
         ),
     )) {
         Ok(context) => context,
@@ -483,9 +479,29 @@ fn g4c1_pressure_can_precede_g4c2_lookup_only_group_reclamation() {
                 panic!("GPU-required cross-registry experiment could not run: {error}");
             }
             eprintln!("G4C1/G4C2 cross-registry experiment unavailable: {error}");
-            return;
+            return None;
         }
         Err(error) => panic!("unexpected investigation context admission failure: {error}"),
+    };
+    eprintln!(
+        "CROSS_REGISTRY_ADAPTER backend={:?} name={:?} software={:?}",
+        context.adapter_facts().backend(),
+        context.adapter_facts().diagnostic_name(),
+        context.adapter_facts().software(),
+    );
+    Some(context)
+}
+
+// Investigation #174. Characterization only: a *currently observed* inter-registry
+// pressure-order defect. No production reclamation or public API is changed here.
+// Do not treat a passing characterization as long-running Runenwerk conformance.
+#[test]
+fn g4c1_pressure_can_precede_g4c2_lookup_only_group_reclamation() {
+    let _serialization = GPU_REALIZATION_TEST_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let Some(context) = cross_registry_context_or_skip(4, 6) else {
+        return;
     };
     let layout =
         GpuBindGroupLayoutDescriptor::new(0, [storage_binding()]).expect("valid storage layout");
@@ -585,5 +601,74 @@ fn g4c1_pressure_can_precede_g4c2_lookup_only_group_reclamation() {
         g4c2.bind_groups(),
         after.retained_records(),
         context.program_binding_realization_stats().bind_groups(),
+    );
+}
+
+// The retained group is the only external physical owner: the direct buffer handle is dropped.
+// This control must keep rejecting G4C1 pressure until that group itself is released.
+#[test]
+fn caller_retained_bind_group_protects_g4c1_dependency_during_registry_pressure() {
+    let _serialization = GPU_REALIZATION_TEST_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let Some(context) = cross_registry_context_or_skip(1, 2) else {
+        return;
+    };
+    let layout =
+        GpuBindGroupLayoutDescriptor::new(0, [storage_binding()]).expect("valid storage layout");
+    let realized_layout =
+        pollster::block_on(context.realize_bind_group_layout(&layout)).expect("layout realization");
+    let buffer = storage_buffer("caller-retained group dependency");
+    let physical = context.realize_buffer(&buffer).expect("G4C1 realization");
+    let group = pollster::block_on(
+        context.realize_bind_group(&realized_layout, [binding_value(buffer.clone())]),
+    )
+    .expect("G4C2 binding realization");
+    drop(physical);
+    assert_eq!(context.resource_realization_stats().buffers(), 1);
+    assert_eq!(
+        context
+            .program_binding_realization_stats()
+            .retained_records(),
+        2
+    );
+    assert_eq!(context.execution_stats().in_flight_submissions(), 0);
+
+    let replacement_layout =
+        GpuBindGroupLayoutDescriptor::new(1, std::iter::empty::<GpuBindingDeclaration>())
+            .expect("independent layout");
+    let rejected = pollster::block_on(context.realize_bind_group_layout(&replacement_layout))
+        .expect_err("G4C2 pressure must preserve the caller-held group and its layout");
+    assert_eq!(
+        rejected.category(),
+        GpuProgramBindingRealizationErrorCategory::RegistryCapacityExceeded
+    );
+    let candidate = storage_buffer("caller-retained group capacity candidate");
+    let rejected = context
+        .realize_buffer(&candidate)
+        .expect_err("the group alone must protect its G4C1 dependency");
+    assert_eq!(
+        rejected.category(),
+        GpuResourceRealizationErrorCategory::RegistryCapacityExceeded
+    );
+    let repeated_group =
+        pollster::block_on(context.realize_bind_group(&realized_layout, [binding_value(buffer)]))
+            .expect("the live group remains usable after both pressure attempts");
+    assert!(group.is_same_record(&repeated_group));
+    assert_eq!(context.program_binding_realization_stats().bind_groups(), 1);
+    assert_eq!(context.resource_realization_stats().buffers(), 1);
+
+    drop(repeated_group);
+    drop(group);
+    let _replacement = pollster::block_on(context.realize_bind_group_layout(&replacement_layout))
+        .expect("released group becomes collectible at G4C2 pressure");
+    assert_eq!(context.program_binding_realization_stats().bind_groups(), 0);
+    let recovered = context
+        .realize_buffer(&candidate)
+        .expect("G4C1 dependency becomes collectible only after group release and sweep");
+    assert_eq!(recovered.affinity(), context.affinity());
+    assert_eq!(context.resource_realization_stats().retained_records(), 1);
+    eprintln!(
+        "CROSS_REGISTRY_LIVE_GROUP_PROOF protected_buffers=1 released_groups=0 recovered_buffers=1"
     );
 }
