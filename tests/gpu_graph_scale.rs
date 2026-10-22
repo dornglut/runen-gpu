@@ -552,7 +552,6 @@ fn measure_shared_resource_fanout(node_count: usize, fragment_count: usize) -> V
     })
 }
 
-
 const NODE_LOOKUP_CASES: [(usize, usize); 6] =
     [(80, 1), (80, 8), (80, 80), (800, 1), (800, 8), (800, 80)];
 const NODE_LOOKUP_REPEATS: usize = 32;
@@ -629,7 +628,9 @@ fn measure_node_lookup(node_count: usize, fragment_count: usize) -> Value {
     // outside this lookup-only timing window.
     let fragments = author_disjoint_fragments(node_count, fragment_count);
     let prepared = GpuPreparedWorkGraph::prepare(
-        label(format!("lookup {node_count} nodes, {fragment_count} fragments")),
+        label(format!(
+            "lookup {node_count} nodes, {fragment_count} fragments"
+        )),
         fragments,
     )
     .unwrap();
