@@ -311,7 +311,7 @@ impl GpuResourceRealizationErrorCategory {
                 "stop using this context and let the owning product choose recovery"
             }
             Self::ExecutionAuthorityViolation => {
-                "use only the audited lexical current-render execution terminal"
+                "use realizations only within the owning context's execution scope"
             }
         }
     }
@@ -506,7 +506,7 @@ impl GpuProgramBindingRealizationErrorCategory {
                 "stop using this context and let the owning product choose recovery"
             }
             Self::ExecutionAuthorityViolation => {
-                "use only an audited lexical current-render execution terminal"
+                "use realizations only within the owning context's execution scope"
             }
         }
     }

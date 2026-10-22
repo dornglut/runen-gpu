@@ -25,7 +25,7 @@ impl WgpuSurfaceLeaseResource {
     }
 }
 
-/// Short private ownership interval used by G5 submission execution.
+/// Short private ownership interval used by GPU submission execution.
 ///
 /// The surface mutex prevents reconfiguration/acquisition/abandon release from mutating physical
 /// surface-image ownership while accepted work is encoded and submitted. `pinned_owners` retains
@@ -39,9 +39,9 @@ pub(crate) struct WgpuSurfaceLeaseGuard<'a> {
 }
 
 impl WgpuSurfaceState {
-    /// Validates one surface-acquired logical resource against the sole G7 physical lease owner.
+    /// Validates one surface-acquired logical resource against its physical lease owner.
     ///
-    /// This is intentionally separate from G4C1 realization: surface-acquired resources are
+    /// This is separate from ordinary resource realization: surface-acquired resources are
     /// transient presentation leases and never become ordinary resource-registry records.
     pub(crate) fn validate_execution_lease(
         &self,
@@ -113,7 +113,7 @@ impl WgpuSurfaceLeaseGuard<'_> {
         ensure_lease_health(self.health, lease)
     }
 
-    /// Resolves an already-pinned surface texture without entering G4C1 realization.
+    /// Resolves an already-pinned surface texture without ordinary resource realization.
     pub(crate) fn texture(
         &self,
         lease: &GpuSurfaceResourceLease,
@@ -129,7 +129,7 @@ impl WgpuSurfaceLeaseGuard<'_> {
         Ok(&active.texture.texture)
     }
 
-    /// Resolves the explicit G7A default view for an already-pinned surface lease.
+    /// Creates the explicit default view for an already-pinned surface lease.
     pub(crate) fn create_default_view(
         &self,
         lease: &GpuSurfaceResourceLease,
@@ -224,7 +224,7 @@ fn validate_lease<'a>(
         lease_error(
             GpuSurfaceLeaseErrorCategory::UnknownSurface,
             lease,
-            "surface identity is absent from this context-local G7 owner",
+            "surface identity is not registered with this GPU context",
         )
     })?;
     if record.generation != lease.surface().generation() {

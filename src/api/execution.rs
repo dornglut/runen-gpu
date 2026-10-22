@@ -622,7 +622,7 @@ impl GpuSubmissionRejectionReason {
         debug_assert_ne!(
             kind,
             GpuSubmissionRejectionKind::RetainedContinuityChanged,
-            "G5 rejections require owner-captured typed continuity evidence"
+            "retained-continuity rejections require owner-captured typed evidence"
         );
         Self {
             kind,

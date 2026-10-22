@@ -84,7 +84,7 @@ impl GpuContext {
             return Err(GpuPipelineRealizationError::new(
                 GpuPipelineRealizationErrorCategory::UnknownProgramOrLayoutRealization,
                 compute_request_name(descriptor),
-                "the supplied program handle is not the authoritative G4C2 record for this request",
+                "the supplied program handle does not match this context's realized program for this request",
             ));
         }
         let canonical_layout = self
@@ -95,7 +95,7 @@ impl GpuContext {
             return Err(GpuPipelineRealizationError::new(
                 GpuPipelineRealizationErrorCategory::UnknownProgramOrLayoutRealization,
                 compute_request_name(descriptor),
-                "the supplied pipeline-layout handle is not the authoritative G4C2 record for this request",
+                "the supplied pipeline-layout handle does not match this context's realized layout for this request",
             ));
         }
 

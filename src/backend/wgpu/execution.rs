@@ -2868,7 +2868,7 @@ fn encode_submit_and_register(
             let guard = surface_guard.as_deref_mut().ok_or_else(|| {
                 GpuSubmissionFailure::new(
                     GpuSubmissionFailureKind::InternalInvariant,
-                    "prepared Present reached physical submission without the validated G7 lease guard",
+                    "prepared Present reached physical submission without its validated surface execution lease",
                 )
             })?;
             guard
