@@ -245,14 +245,8 @@ fn measure_case(topology: Topology, node_count: usize) -> CaseEvidence {
     }
 }
 
-const FRAGMENTATION_CASES: [(usize, usize); 6] = [
-    (80, 1),
-    (80, 8),
-    (80, 80),
-    (800, 1),
-    (800, 8),
-    (800, 80),
-];
+const FRAGMENTATION_CASES: [(usize, usize); 6] =
+    [(80, 1), (80, 8), (80, 80), (800, 1), (800, 8), (800, 80)];
 
 fn author_disjoint_fragments(node_count: usize, fragment_count: usize) -> Vec<GpuWorkFragment> {
     assert!(fragment_count > 0);
@@ -271,10 +265,8 @@ fn author_disjoint_fragments(node_count: usize, fragment_count: usize) -> Vec<Gp
                     for (index, buffer) in buffers.iter().enumerate() {
                         work.operation(
                             format!("clear independent {:04}", first_node + index),
-                            GpuClearOperation::buffer_zero(
-                                GpuBufferRegion::whole(buffer).unwrap(),
-                            )
-                            .unwrap(),
+                            GpuClearOperation::buffer_zero(GpuBufferRegion::whole(buffer).unwrap())
+                                .unwrap(),
                         )?;
                     }
                     Ok(())
