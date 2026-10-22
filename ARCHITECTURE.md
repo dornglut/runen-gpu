@@ -45,7 +45,8 @@ the framework does not schedule or retry application work.
 RunenGPU has one product package: `runen-gpu` / `runen_gpu`. `xtask` is
 tooling, not a second product. The independent
 [`conformance/downstream`](conformance/downstream) program uses only the
-public crate path dependency to verify the exact 4097-element prefix scan.
+public crate path dependency to verify the exact 4097-element inclusive and
+exclusive prefix-scan results.
 There are no compatibility, forwarding, mirror or template-synchronization
 paths.
 

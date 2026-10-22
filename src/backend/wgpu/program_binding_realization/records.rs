@@ -138,8 +138,8 @@ pub(super) enum BindGroupResourceDependency {
     Sampler(Arc<super::super::resource_realization::SamplerRealizationRecord>),
 }
 
-/// One physical bind group and its exact resource/layout dependencies. Per-use dynamic offsets are not
-/// record state; they remain logical execution-use state above this physical object.
+/// One physical bind group and its exact resource/layout dependencies. Per-use
+/// dynamic offsets remain execution-use state, not physical record state.
 pub(crate) struct BindGroupRealizationRecord {
     pub(super) affinity: GpuContextAffinity,
     pub(super) layout: Arc<BindGroupLayoutRealizationRecord>,

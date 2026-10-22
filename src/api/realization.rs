@@ -22,8 +22,8 @@ pub const DEFAULT_MAX_RESOURCE_REALIZATION_RECORDS: NonZeroUsize =
 /// one context/device generation.
 ///
 /// The bound is shared by ready and in-flight program, bind-group-layout, pipeline-layout, and
-/// bind-group records. It is lookup authority only; it is neither a GPU-memory budget nor submission
-/// completion/retirement evidence.
+/// bind-group records. It is lookup authority only, not a GPU-memory budget or
+/// submission completion/retirement evidence.
 const DEFAULT_MAX_PROGRAM_BINDING_REALIZATION_RECORDS: NonZeroUsize =
     NonZeroUsize::new(16_384).expect("the default realization-record bound is nonzero");
 
@@ -56,7 +56,7 @@ impl Default for GpuResourceRealizationPolicy {
 
 /// Narrow operational policy for one context's program and binding realization state.
 ///
-/// One nonzero total bound is deliberately shared across every program/binding realization kind. This keeps
+/// One nonzero bound is shared across all program/binding realization kinds. It keeps
 /// in-flight reservations visible to capacity accounting and prevents per-kind quotas from
 /// silently changing the authority contract.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -83,8 +83,8 @@ impl Default for GpuProgramBindingRealizationPolicy {
 /// Complete realization policy composition selected when admitting a context.
 ///
 /// This is the only explicit context-construction override path. It composes the
-/// resource-record bound with the program/binding-record bound without changing adapter admission,
-/// device selection, or retry identity.
+/// resource-record and program/binding-record bounds without changing adapter
+/// admission, device selection, or retry identity.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct GpuRealizationPolicies {
     resource: GpuResourceRealizationPolicy,
@@ -181,7 +181,7 @@ impl GpuResourceRealizationStats {
     }
 }
 
-/// Point-in-time lookup-authority counts for one context/device generation's program/binding records.
+/// Lookup-authority counts for one context/device generation's program/binding records.
 ///
 /// `retained_records` includes ready records and active single-flight reservations. Per-kind
 /// observations describe ready records only and are never independent quotas.
@@ -512,14 +512,14 @@ impl GpuProgramBindingRealizationErrorCategory {
     }
 }
 
-/// Structured failure from deterministic program/binding admission, single-flight lookup, or backend
-/// publication. Backend diagnostic text is bounded evidence only and never cache identity.
+/// Structured failure from program/binding admission, single-flight lookup, or
+/// backend publication. Backend diagnostic text is bounded evidence only and never cache identity.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GpuProgramBindingRealizationError {
     category: GpuProgramBindingRealizationErrorCategory,
     // These diagnostics are bounded and immutable after construction. Store their existing
     // allocations as boxed slices so the public structured error stays small enough to carry
-    // through the async program/binding realization result without imposing a large `Result` error value on
+    // through async realization without imposing a large `Result` error value on
     // every private owner helper.
     request: Option<Box<str>>,
     detail: Option<Box<str>>,

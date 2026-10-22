@@ -29,7 +29,7 @@ pub(super) const fn map_texture_aspect(aspect: GpuTextureAspect) -> wgpu::Textur
     lowering::map_texture_aspect(aspect)
 }
 
-/// The sole authoritative owner of resource-realization lookup state for one context/device generation.
+/// Owns resource-realization lookup state for one context/device generation.
 pub(crate) struct ResourceRealizationState {
     affinity: GpuContextAffinity,
     policy: GpuResourceRealizationPolicy,
@@ -85,8 +85,7 @@ impl ResourceRealizationState {
         })
     }
 
-    /// Acquires the shared WGPU attribution gate before resource realization takes its registry
-    /// mutex. The execution bridge takes those locks in the same order while a raw operation loan
+    /// Acquires the shared WGPU attribution gate before locking the resource registry. The execution bridge takes those locks in the same order while a raw operation loan
     /// is live, so reversing them would permit a cross-thread gate/registry deadlock.
     fn attributed_registries(
         &self,
@@ -98,8 +97,8 @@ impl ResourceRealizationState {
         let gate = self.error_attribution_gate.acquire();
         let mut registries = self.registries(resource)?;
         if !registries.has_capacity(self.policy) {
-            // Lookup-only bind groups can hold resources after all caller/submission owners
-            // have released them, even while program/binding realization remains below its own capacity.
+            // Lookup-only bind groups can hold resources after caller/submission
+            // references disappear, even with program/binding record capacity available.
             // Never nest resource and program/binding registry locks or reacquire the device
             // attribution gate. One dependent sweep is sufficient; the caller's
             // authoritative recheck still rejects genuinely live capacity. Do not
@@ -120,7 +119,7 @@ impl ResourceRealizationState {
         create: impl FnOnce() -> Object,
     ) -> Result<Object, GpuResourceRealizationError> {
         self.ensure_available(resource)?;
-        // Backend resource creation can synchronously trigger an uncaptured WGPU callback. The caller
+        // Backend creation can synchronously trigger an uncaptured WGPU callback. The caller
         // retains the one shared gate from creation through authoritative publication.
         let created = create();
         self.ensure_available(resource)?;

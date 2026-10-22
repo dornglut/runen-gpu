@@ -88,7 +88,8 @@ impl From<GpuTextureCopyRegion> for GpuTransferRegion {
     }
 }
 
-/// Immutable logical CPU-to-GPU transfer work. Physical staging and queue strategy belong to private execution.
+/// Immutable logical CPU-to-GPU transfer work. Physical staging and queue
+/// strategy belong to private execution.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GpuUploadOperation {
     destination: GpuTransferRegion,
@@ -143,7 +144,8 @@ impl GpuUploadOperation {
     }
 }
 
-/// Logical GPU-to-CPU transfer request. Result storage, mapping, and materialization belong to execution.
+/// Logical GPU-to-CPU transfer request. Result storage, mapping, and
+/// materialization belong to execution.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GpuReadbackOperation {
     source: GpuTransferRegion,
