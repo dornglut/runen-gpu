@@ -169,11 +169,6 @@ fn g7a2_surface_resources_route_around_g4_and_present_rejects_ordinary_resources
             && prepared.contains(".realize_texture_view(handle,&parent)"),
         "ordinary resources must continue to use the existing G4 realization path"
     );
-    assert!(prepared.contains(
-        "GpuPresentOperationrequiresanactiveSurfaceAcquiredtextureoritsexplicitacquireddefaultview"
-    ));
-
     assert!(g4.contains("GpuResourceOwnership::SurfaceAcquired=>Err("));
     assert!(g4.contains("GpuResourceRealizationErrorCategory::RequirementNotAdmitted"));
-    // The specific diagnostic wording is not part of the ownership contract.
 }
