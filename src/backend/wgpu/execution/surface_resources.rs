@@ -274,22 +274,26 @@ mod tests {
         );
         let mut requirements = GpuCapabilityRequirements::new();
         requirements
-            .insert(GpuCapabilityRequirement::Required(GpuCapabilityFeature::Copy))
+            .insert(GpuCapabilityRequirement::Required(
+                GpuCapabilityFeature::Copy,
+            ))
             .unwrap();
         let descriptor = GpuContextDescriptor::new(requirements)
             .with_allowed_backends([GpuBackendFamily::UnknownBackend])
             .with_label("ordinary Present source rejection");
-        let context = pollster::block_on(
-            super::super::super::device_request::request_with_instance(
+        let context =
+            pollster::block_on(super::super::super::device_request::request_with_instance(
                 instance,
                 descriptor,
                 None,
                 GpuRealizationPolicies::default(),
                 GpuExecutionPolicy::default(),
-            ),
-        )
-        .expect("explicit noop adapter supports test-only resource classification");
-        assert_eq!(context.adapter_facts().backend(), GpuBackendFamily::UnknownBackend);
+            ))
+            .expect("explicit noop adapter supports test-only resource classification");
+        assert_eq!(
+            context.adapter_facts().backend(),
+            GpuBackendFamily::UnknownBackend
+        );
 
         let mut resources = GpuResourceScope::new();
         let texture = resources
@@ -309,11 +313,8 @@ mod tests {
             .unwrap();
         let view = resources
             .texture_view(
-                GpuTextureViewDescriptor::ordinary_full_owned(
-                    "ordinary Present view",
-                    &texture,
-                )
-                .unwrap(),
+                GpuTextureViewDescriptor::ordinary_full_owned("ordinary Present view", &texture)
+                    .unwrap(),
             )
             .unwrap();
 
@@ -324,7 +325,10 @@ mod tests {
             GpuTextureAccessResource::TextureView(view),
         ] {
             let error = prepare_present_source(&context, &source).unwrap_err();
-            assert_eq!(error.kind(), GpuSubmissionPreparationErrorKind::UnsupportedOperation);
+            assert_eq!(
+                error.kind(),
+                GpuSubmissionPreparationErrorKind::UnsupportedOperation
+            );
             assert!(error.surface_error().is_none());
         }
     }
