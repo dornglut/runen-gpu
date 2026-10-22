@@ -71,6 +71,15 @@ impl ProgramBindingRealizationState {
             .stats(self.policy)
     }
 
+    /// Releases registry-only G4C1 dependencies without acquiring the attribution gate.
+    /// The G4C1 caller already owns that gate and must release its registry lock first.
+    pub(super) fn collect_lookup_only_bind_groups(&self) {
+        self.registries
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .collect_lookup_only_bind_groups();
+    }
+
     fn ensure_available(
         &self,
         request: impl Into<String>,

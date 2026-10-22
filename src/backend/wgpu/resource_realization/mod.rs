@@ -91,11 +91,24 @@ impl ResourceRealizationState {
     fn attributed_registries(
         &self,
         resource: GpuWorkResourceId,
+        bindings: &super::program_binding_realization::ProgramBindingRealizationState,
     ) -> Result<(MutexGuard<'_, ()>, MutexGuard<'_, ResourceRegistries>), GpuResourceRealizationError>
     {
         self.ensure_available(resource)?;
         let gate = self.error_attribution_gate.acquire();
-        let registries = self.registries(resource)?;
+        let mut registries = self.registries(resource)?;
+        if !registries.has_capacity(self.policy) {
+            // Lookup-only bind groups can hold resources after all caller/G5 owners
+            // have released them, even while G4C2 remains below its own capacity.
+            // Never nest the G4C1 and G4C2 registry locks or reacquire the device
+            // attribution gate. One dependent sweep is sufficient; the caller's
+            // authoritative recheck still rejects genuinely live capacity. Do not
+            // collect G4C1 here: the constructor's second lookup and kind checks
+            // must see any identity published while this caller waited for the gate.
+            drop(registries);
+            bindings.collect_lookup_only_bind_groups();
+            registries = self.registries(resource)?;
+        }
         self.ensure_available(resource)?;
         Ok((gate, registries))
     }
@@ -162,7 +175,7 @@ impl GpuContext {
         let (attribution_gate, mut registries) = self
             .backend
             .resource_realization
-            .attributed_registries(identity)?;
+            .attributed_registries(identity, &self.backend.program_binding_realization)?;
         if let Some(record) = registries.buffers.lookup(identity, &descriptor)? {
             return Ok(GpuRealizedBuffer::from_record(record));
         }
@@ -212,7 +225,7 @@ impl GpuContext {
         let (attribution_gate, mut registries) = self
             .backend
             .resource_realization
-            .attributed_registries(identity)?;
+            .attributed_registries(identity, &self.backend.program_binding_realization)?;
         if let Some(record) = registries.textures.lookup(identity, &descriptor)? {
             return Ok(GpuRealizedTexture::from_record(record));
         }
@@ -288,7 +301,7 @@ impl GpuContext {
         let (attribution_gate, mut registries) = self
             .backend
             .resource_realization
-            .attributed_registries(identity)?;
+            .attributed_registries(identity, &self.backend.program_binding_realization)?;
 
         let authoritative_parent = registries
             .textures
@@ -367,7 +380,7 @@ impl GpuContext {
         let (attribution_gate, mut registries) = self
             .backend
             .resource_realization
-            .attributed_registries(identity)?;
+            .attributed_registries(identity, &self.backend.program_binding_realization)?;
         if let Some(record) = registries.samplers.lookup(identity, &descriptor)? {
             return Ok(GpuRealizedSampler::from_record(record));
         }
@@ -429,7 +442,7 @@ impl GpuContext {
         let (attribution_gate, mut registries) = self
             .backend
             .resource_realization
-            .attributed_registries(identity)?;
+            .attributed_registries(identity, &self.backend.program_binding_realization)?;
         if let Some(record) = registries.query_sets.lookup(identity, &descriptor)? {
             return Ok(GpuRealizedQuerySet::from_record(record));
         }
@@ -501,6 +514,96 @@ mod tests {
     fn test_resource() -> GpuWorkResourceId {
         let mut allocator = crate::GpuWorkResourceIdAllocator::new();
         allocator.allocate().unwrap()
+    }
+
+    #[test]
+    fn pressure_coordination_preserves_identity_checks_after_a_competing_publication() {
+        use crate::{
+            GpuBufferDescriptor, GpuBufferInitialization, GpuBufferUsage, GpuBufferUsages,
+            GpuCapabilityProfile, GpuContextDescriptor, GpuContextRequestErrorCategory,
+            GpuMemoryIntent, GpuRealizationPolicies, GpuReconstruction, GpuResourceCommon,
+            GpuResourceLabel, GpuResourceLifetime, GpuResourceProvenance,
+            GpuWorkResourceIdAllocator,
+        };
+        use std::num::NonZeroUsize;
+        let context = match pollster::block_on(GpuContext::request_with_realization_policies(
+            GpuContextDescriptor::new(GpuCapabilityProfile::ComputeBaseline.requirements()),
+            GpuRealizationPolicies::new(
+                GpuResourceRealizationPolicy::new(NonZeroUsize::MIN),
+                Default::default(),
+            ),
+        )) {
+            Ok(context) => context,
+            Err(error)
+                if matches!(
+                    error.category(),
+                    GpuContextRequestErrorCategory::NoAdapterAvailable
+                        | GpuContextRequestErrorCategory::NoAdmissibleCandidate
+                        | GpuContextRequestErrorCategory::MandatoryFeatureMissing
+                ) =>
+            {
+                assert!(
+                    std::env::var_os("RUNEN_GPU_REQUIRE_GPU").is_none(),
+                    "GPU-required identity race regression unavailable: {error}"
+                );
+                eprintln!("identity race regression unavailable: {error}");
+                return;
+            }
+            Err(error) => panic!("unexpected context admission failure: {error}"),
+        };
+        let label = GpuResourceLabel::new("competing publication").unwrap();
+        let common = GpuResourceCommon::owned(
+            label.clone(),
+            GpuResourceLifetime::Transient,
+            GpuMemoryIntent::Device,
+            GpuReconstruction::SourceBacked,
+            GpuResourceProvenance::new(label, None, None),
+        )
+        .unwrap();
+        let usages = GpuBufferUsages::new(common.label(), [GpuBufferUsage::Storage]).unwrap();
+        let descriptor = GpuBufferDescriptor::new(
+            common.clone(),
+            64,
+            usages.clone(),
+            GpuBufferInitialization::Uninitialized,
+        )
+        .unwrap();
+        let conflicting_descriptor =
+            GpuBufferDescriptor::new(common, 128, usages, GpuBufferInitialization::Uninitialized)
+                .unwrap();
+        let handle = GpuWorkResourceIdAllocator::new()
+            .allocate_buffer_handle(descriptor)
+            .unwrap();
+        drop(context.realize_buffer(&handle).unwrap());
+
+        // Model a competing constructor publishing and dropping its handle after
+        // this caller's optimistic miss, before it acquires the attribution gate.
+        // The full record is now lookup-only, but second-pass identity validation
+        // must still see it before ordinary G4C1 capacity collection can run.
+        let (_gate, registries) = context
+            .backend
+            .resource_realization
+            .attributed_registries(
+                handle.diagnostic_identity(),
+                &context.backend.program_binding_realization,
+            )
+            .unwrap();
+        let mismatch = registries
+            .buffers
+            .lookup(handle.diagnostic_identity(), &conflicting_descriptor)
+            .err()
+            .expect("a competing descriptor must remain observable");
+        assert_eq!(
+            mismatch.category(),
+            GpuResourceRealizationErrorCategory::DescriptorChangedForIdentity
+        );
+        let wrong_kind = registries
+            .reject_other_kind(ResourceKind::Texture, handle.diagnostic_identity())
+            .unwrap_err();
+        assert_eq!(
+            wrong_kind.category(),
+            GpuResourceRealizationErrorCategory::ResourceKindMismatch
+        );
     }
 
     #[test]

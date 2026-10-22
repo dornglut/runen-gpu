@@ -8,12 +8,16 @@ use runen_gpu::{
     GpuProgramSourceIdentity, GpuProgramSourceKey, GpuProgramSourceOwnerId,
     GpuProgramSourceProvenance, GpuProgramSourceRegistry, GpuProgramSourceRevision,
     GpuRealizationPolicies, GpuReconstruction, GpuResourceCommon, GpuResourceLabel,
-    GpuResourceLifetime, GpuResourceProvenance, GpuRuntimeBindingResource, GpuRuntimeBindingValue,
+    GpuResourceLifetime, GpuResourceProvenance, GpuResourceRealizationErrorCategory,
+    GpuResourceRealizationPolicy, GpuRuntimeBindingResource, GpuRuntimeBindingValue,
     GpuRuntimeBufferBinding, GpuShaderStage, GpuShaderStages, GpuStorageBufferAccess,
     GpuWorkResourceIdAllocator,
 };
 use std::num::{NonZeroU64, NonZeroUsize};
 use std::sync::Mutex;
+
+#[path = "support/readback_wait.rs"]
+mod readback_wait;
 
 // Adapter-backed WGPU tests create separate devices and exercise scoped error publication.
 // Serialize this binary's cases so their environment setup cannot contend with the behavior each
@@ -449,4 +453,561 @@ fn program_admission_failures_publish_nothing_and_live_handles_bound_registry_re
     assert_eq!(stats.bind_group_layouts(), 0);
     assert_eq!(stats.pipeline_layouts(), 0);
     assert_eq!(stats.bind_groups(), 0);
+}
+
+fn cross_registry_context_or_skip(
+    resource_limit: usize,
+    binding_limit: usize,
+) -> Option<GpuContext> {
+    let descriptor =
+        GpuContextDescriptor::new(GpuCapabilityProfile::ComputeBaseline.requirements())
+            .with_label("G4C1/G4C2 independent-pressure investigation");
+    cross_registry_context_with_descriptor_or_skip(descriptor, resource_limit, binding_limit)
+}
+
+fn cross_registry_context_with_descriptor_or_skip(
+    descriptor: GpuContextDescriptor,
+    resource_limit: usize,
+    binding_limit: usize,
+) -> Option<GpuContext> {
+    let context = match pollster::block_on(GpuContext::request_with_realization_policies(
+        descriptor,
+        GpuRealizationPolicies::new(
+            GpuResourceRealizationPolicy::new(NonZeroUsize::new(resource_limit).unwrap()),
+            GpuProgramBindingRealizationPolicy::new(NonZeroUsize::new(binding_limit).unwrap()),
+        ),
+    )) {
+        Ok(context) => context,
+        Err(error)
+            if matches!(
+                error.category(),
+                GpuContextRequestErrorCategory::NoAdapterAvailable
+                    | GpuContextRequestErrorCategory::NoAdmissibleCandidate
+                    | GpuContextRequestErrorCategory::MandatoryFeatureMissing
+            ) =>
+        {
+            if std::env::var_os("RUNEN_GPU_REQUIRE_GPU").is_some() {
+                panic!("GPU-required cross-registry experiment could not run: {error}");
+            }
+            eprintln!("G4C1/G4C2 cross-registry experiment unavailable: {error}");
+            return None;
+        }
+        Err(error) => panic!("unexpected investigation context admission failure: {error}"),
+    };
+    eprintln!(
+        "CROSS_REGISTRY_ADAPTER backend={:?} name={:?} software={:?}",
+        context.adapter_facts().backend(),
+        context.adapter_facts().diagnostic_name(),
+        context.adapter_facts().software(),
+    );
+    Some(context)
+}
+
+// Regression #176: resource pressure reclaims abandoned bind groups below G4C2 capacity.
+#[test]
+fn g4c1_pressure_reclaims_lookup_only_groups_below_g4c2_capacity() {
+    let _serialization = GPU_REALIZATION_TEST_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let Some(context) = cross_registry_context_or_skip(4, 6) else {
+        return;
+    };
+    let layout =
+        GpuBindGroupLayoutDescriptor::new(0, [storage_binding()]).expect("valid storage layout");
+    let realized_layout =
+        pollster::block_on(context.realize_bind_group_layout(&layout)).expect("layout realization");
+
+    // The four buffers are distinct transient logical objects, not reused/aliased IDs.
+    // After each bind-group realization the caller releases *both* physical handles.
+    // No G5 submission has been prepared or accepted.
+    let mut allocator = GpuWorkResourceIdAllocator::new();
+    for frame in 0..4 {
+        let name = format!("cross-registry-transient-{frame}");
+        let label = GpuResourceLabel::new(&name).expect("valid label");
+        let common = GpuResourceCommon::owned(
+            label.clone(),
+            GpuResourceLifetime::Transient,
+            GpuMemoryIntent::Device,
+            GpuReconstruction::SourceBacked,
+            GpuResourceProvenance::new(label, None, None),
+        )
+        .expect("transient resource common");
+        let usages =
+            GpuBufferUsages::new(common.label(), [GpuBufferUsage::Storage]).expect("storage usage");
+        let buffer = allocator
+            .allocate_buffer_handle(
+                GpuBufferDescriptor::new(
+                    common,
+                    64,
+                    usages,
+                    GpuBufferInitialization::Uninitialized,
+                )
+                .expect("transient buffer descriptor"),
+            )
+            .expect("unique logical buffer ID");
+        let physical = context.realize_buffer(&buffer).expect("G4C1 realization");
+        let group = pollster::block_on(
+            context.realize_bind_group(&realized_layout, [binding_value(buffer)]),
+        )
+        .expect("G4C2 binding realization");
+        drop(group);
+        drop(physical);
+    }
+    let g4c1 = context.resource_realization_stats();
+    let g4c2 = context.program_binding_realization_stats();
+    assert_eq!(g4c1.retained_records(), 4);
+    assert_eq!(g4c1.buffers(), 4);
+    assert_eq!(g4c2.bind_groups(), 4);
+    assert_eq!(g4c2.bind_group_layouts(), 1);
+    assert_eq!(g4c2.retained_records(), 5);
+    let g4c2_limit = context
+        .program_binding_realization_policy()
+        .max_records()
+        .get();
+    assert!(g4c2.retained_records() < g4c2_limit);
+    assert_eq!(g4c2.in_flight_records(), 0);
+    assert_eq!(context.execution_stats().in_flight_submissions(), 0);
+
+    // G4C2 is below its own cap. G4C1 pressure must release only registry-owned
+    // dependent groups and then admit the resource without a G4C2 realization.
+    let candidate = storage_buffer("cross-registry-candidate");
+    let recovered = context
+        .realize_buffer(&candidate)
+        .expect("G4C1 pressure must reclaim abandoned G4C2 dependencies");
+    assert_eq!(context.program_binding_realization_stats().bind_groups(), 0);
+    assert_eq!(
+        context
+            .program_binding_realization_stats()
+            .bind_group_layouts(),
+        1
+    );
+    assert_eq!(recovered.affinity(), context.affinity());
+    let after = context.resource_realization_stats();
+    assert_eq!(after.retained_records(), 1);
+    assert_eq!(after.buffers(), 1);
+    eprintln!(
+        "CROSS_REGISTRY_PROOF g4c1_before={} g4c2_bind_groups_before={} g4c1_after={} g4c2_bind_groups_after={}",
+        g4c1.retained_records(),
+        g4c2.bind_groups(),
+        after.retained_records(),
+        context.program_binding_realization_stats().bind_groups(),
+    );
+}
+
+// The retained group is the only external physical owner: the direct buffer handle is dropped.
+// This control must keep rejecting G4C1 pressure until that group itself is released.
+#[test]
+fn caller_retained_bind_group_protects_g4c1_dependency_during_registry_pressure() {
+    let _serialization = GPU_REALIZATION_TEST_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let Some(context) = cross_registry_context_or_skip(1, 2) else {
+        return;
+    };
+    let layout =
+        GpuBindGroupLayoutDescriptor::new(0, [storage_binding()]).expect("valid storage layout");
+    let realized_layout =
+        pollster::block_on(context.realize_bind_group_layout(&layout)).expect("layout realization");
+    let buffer = storage_buffer("caller-retained group dependency");
+    let physical = context.realize_buffer(&buffer).expect("G4C1 realization");
+    let group = pollster::block_on(
+        context.realize_bind_group(&realized_layout, [binding_value(buffer.clone())]),
+    )
+    .expect("G4C2 binding realization");
+    drop(physical);
+    assert_eq!(context.resource_realization_stats().buffers(), 1);
+    assert_eq!(
+        context
+            .program_binding_realization_stats()
+            .retained_records(),
+        2
+    );
+    assert_eq!(context.execution_stats().in_flight_submissions(), 0);
+
+    let replacement_layout =
+        GpuBindGroupLayoutDescriptor::new(1, std::iter::empty::<GpuBindingDeclaration>())
+            .expect("independent layout");
+    let rejected = pollster::block_on(context.realize_bind_group_layout(&replacement_layout))
+        .expect_err("G4C2 pressure must preserve the caller-held group and its layout");
+    assert_eq!(
+        rejected.category(),
+        GpuProgramBindingRealizationErrorCategory::RegistryCapacityExceeded
+    );
+    let candidate = storage_buffer("caller-retained group capacity candidate");
+    let rejected = context
+        .realize_buffer(&candidate)
+        .expect_err("the group alone must protect its G4C1 dependency");
+    assert_eq!(
+        rejected.category(),
+        GpuResourceRealizationErrorCategory::RegistryCapacityExceeded
+    );
+    let repeated_group =
+        pollster::block_on(context.realize_bind_group(&realized_layout, [binding_value(buffer)]))
+            .expect("the live group remains usable after both pressure attempts");
+    assert!(group.is_same_record(&repeated_group));
+    assert_eq!(context.program_binding_realization_stats().bind_groups(), 1);
+    assert_eq!(context.resource_realization_stats().buffers(), 1);
+
+    drop(repeated_group);
+    drop(group);
+    let recovered = context
+        .realize_buffer(&candidate)
+        .expect("G4C1 pressure reclaims dependencies only after the caller releases the group");
+    assert_eq!(context.program_binding_realization_stats().bind_groups(), 0);
+    assert_eq!(recovered.affinity(), context.affinity());
+    assert_eq!(context.resource_realization_stats().retained_records(), 1);
+    eprintln!(
+        "CROSS_REGISTRY_LIVE_GROUP_PROOF protected_buffers=1 released_groups=0 recovered_buffers=1"
+    );
+}
+
+#[test]
+fn prepared_and_accepted_compute_keep_dependencies_until_terminal_readback() {
+    use runen_gpu::*;
+    let _serialization = GPU_REALIZATION_TEST_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let Some(context) = cross_registry_context_or_skip(1, 16) else {
+        return;
+    };
+    let mut scope = GpuResourceScope::new();
+    let data = PreparedGpuData::<TransferData>::ordinary_pod_transfer(
+        "pressure compute initial values",
+        &[1_u32; 16],
+    )
+    .unwrap();
+    let buffer = scope
+        .buffer(
+            GpuBufferDescriptor::ordinary_owned(
+                "pressure compute values",
+                GpuResourceLifetime::Transient,
+                GpuReconstruction::SourceBacked,
+                64,
+                [
+                    GpuBufferUsage::Storage,
+                    GpuBufferUsage::CopySource,
+                    GpuBufferUsage::CopyDestination,
+                ],
+                GpuBufferInitialization::Prepared(data),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+    let pipeline = GpuComputePipelineDescriptor::new(
+        compute_program("pressure.compute", COMPUTE_WGSL),
+        GpuEntryPointName::new("cs_main").unwrap(),
+        GpuPipelineConfiguration::default(),
+    )
+    .unwrap();
+    let bindings =
+        GpuRuntimeBindingSet::new(pipeline.layout().clone(), [binding_value(buffer.clone())])
+            .unwrap();
+    let compute = GpuComputeOperation::new(
+        pipeline,
+        bindings,
+        GpuDispatchIntent::direct(GpuDispatchSize::new(1, 1, 1)),
+    )
+    .unwrap();
+    let readback_id = GpuReadbackId::allocate().unwrap();
+    let readback = GpuReadbackOperation::new(
+        GpuBufferRegion::new(&buffer, GpuBufferRange::whole(&buffer).unwrap())
+            .unwrap()
+            .into(),
+        readback_id,
+    )
+    .unwrap();
+    let fragment = GpuWorkFragment::build("pressure compute", |builder| {
+        builder.compute("increment under pressure", compute)?;
+        builder.operation("read increment", readback)?;
+        Ok(())
+    })
+    .unwrap();
+    let graph = GpuPreparedWorkGraph::prepare(
+        GpuResourceLabel::new("pressure compute graph").unwrap(),
+        [fragment],
+    )
+    .unwrap();
+    let prepared = pollster::block_on(context.prepare_submission(graph)).unwrap();
+    assert_eq!(context.program_binding_realization_stats().bind_groups(), 1);
+    let candidate = storage_buffer("pressure while G5 owns compute resources");
+    let rejected = context
+        .realize_buffer(&candidate)
+        .expect_err("prepared work must retain its bind-group dependency");
+    assert_eq!(
+        rejected.category(),
+        GpuResourceRealizationErrorCategory::RegistryCapacityExceeded
+    );
+
+    let submission = context.submit_prepared(prepared).unwrap();
+    // GPU completion may race this observation. A successful collection is legal
+    // only after the actual G5 terminal callback has released the physical plan.
+    let status_before_pressure = submission.status();
+    match context.realize_buffer(&candidate) {
+        Ok(realized) => {
+            assert_eq!(submission.status(), GpuSubmissionStatus::Completed);
+            drop(realized);
+        }
+        Err(error) => assert_eq!(
+            error.category(),
+            GpuResourceRealizationErrorCategory::RegistryCapacityExceeded
+        ),
+    }
+    eprintln!("CROSS_REGISTRY_G5_ACCEPTED_OBSERVATION status={status_before_pressure:?}");
+    let bytes = pollster::block_on(readback_wait::wait_for_readback(
+        &context,
+        &submission,
+        readback_id,
+        "pressure protected compute",
+    ));
+    let mut expected = [1_u32; 16];
+    expected[0] = 2;
+    assert_eq!(bytes.as_bytes(), bytemuck::cast_slice(&expected));
+    assert_eq!(submission.status(), GpuSubmissionStatus::Completed);
+    assert_eq!(context.execution_stats().in_flight_submissions(), 0);
+    let recovered = context.realize_buffer(&candidate).expect(
+        "terminal work must release dependencies despite retaining its submission/readback handles",
+    );
+    assert_eq!(recovered.affinity(), context.affinity());
+    assert_eq!(context.resource_realization_stats().retained_records(), 1);
+    assert_eq!(context.program_binding_realization_stats().bind_groups(), 0);
+    eprintln!(
+        "CROSS_REGISTRY_G5_PROOF prepared_protected=true readback_exact=true terminal_reclaimed=true"
+    );
+}
+
+#[test]
+fn repeated_transient_binding_realization_remains_within_unchanged_limits() {
+    let _serialization = GPU_REALIZATION_TEST_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let Some(context) = cross_registry_context_or_skip(4, 6) else {
+        return;
+    };
+    let layout = GpuBindGroupLayoutDescriptor::new(0, [storage_binding()]).unwrap();
+    let realized_layout = pollster::block_on(context.realize_bind_group_layout(&layout)).unwrap();
+    for ordinal in 0..1024 {
+        let buffer = storage_buffer(&format!("bounded realization {ordinal}"));
+        let group = pollster::block_on(
+            context.realize_bind_group(&realized_layout, [binding_value(buffer)]),
+        )
+        .expect("abandoned dependencies must not accumulate into permanent refusal");
+        drop(group);
+        assert!(context.resource_realization_stats().retained_records() <= 4);
+        assert!(
+            context
+                .program_binding_realization_stats()
+                .retained_records()
+                <= 6
+        );
+    }
+    assert_eq!(context.execution_stats().in_flight_submissions(), 0);
+    eprintln!("CROSS_REGISTRY_REPETITION_PROOF iterations=1024 resource_limit=4 binding_limit=6");
+}
+
+#[test]
+fn concurrent_binding_realizations_remain_valid_during_resource_pressure() {
+    let _serialization = GPU_REALIZATION_TEST_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let Some(context) = cross_registry_context_or_skip(8, 16) else {
+        return;
+    };
+    let layout = GpuBindGroupLayoutDescriptor::new(0, [storage_binding()]).unwrap();
+    let realized_layout = pollster::block_on(context.realize_bind_group_layout(&layout)).unwrap();
+    std::thread::scope(|scope| {
+        let workers = (0..4)
+            .map(|worker| {
+                let context = &context;
+                let layout = &realized_layout;
+                scope.spawn(move || {
+                    for ordinal in 0..128 {
+                        let buffer =
+                            storage_buffer(&format!("pressure worker {worker} item {ordinal}"));
+                        let group = pollster::block_on(
+                            context.realize_bind_group(layout, [binding_value(buffer.clone())]),
+                        )
+                        .expect("live cohort fits unchanged limits");
+                        let repeated = pollster::block_on(
+                            context.realize_bind_group(layout, [binding_value(buffer)]),
+                        )
+                        .expect("held group must survive concurrent sweeps");
+                        assert!(group.is_same_record(&repeated));
+                    }
+                })
+            })
+            .collect::<Vec<_>>();
+        for worker in workers {
+            worker
+                .join()
+                .expect("pressure worker must finish without deadlock/panic");
+        }
+    });
+    assert!(context.resource_realization_stats().retained_records() <= 8);
+    assert!(
+        context
+            .program_binding_realization_stats()
+            .retained_records()
+            <= 16
+    );
+    assert_eq!(
+        context
+            .program_binding_realization_stats()
+            .in_flight_records(),
+        0
+    );
+}
+
+#[test]
+fn mixed_binding_cleanup_reclaims_views_before_parent_textures_and_preserves_live_views() {
+    use runen_gpu::*;
+    let _serialization = GPU_REALIZATION_TEST_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    for keep_view in [false, true] {
+        let descriptor =
+            GpuContextDescriptor::new(GpuCapabilityProfile::ComputeBaseline.requirements())
+                .require_format_role(GpuTextureFormat::Rgba8Unorm, GpuFormatRole::Sampled);
+        let Some(context) = cross_registry_context_with_descriptor_or_skip(descriptor, 4, 16)
+        else {
+            return;
+        };
+        let mut scope = GpuResourceScope::new();
+        let texture_common = owned_common("pressure sampled texture");
+        let extent =
+            GpuTextureExtent::new(texture_common.label(), GpuTextureDimension::D2, 1, 1, 1)
+                .unwrap();
+        let usages =
+            GpuTextureUsages::new(texture_common.label(), [GpuTextureUsage::Sampled]).unwrap();
+        let texture = scope
+            .texture(
+                GpuTextureDescriptor::new(
+                    texture_common,
+                    GpuTextureDimension::D2,
+                    extent,
+                    1,
+                    1,
+                    GpuTextureFormat::Rgba8Unorm,
+                    usages,
+                    GpuTextureInitialization::Uninitialized,
+                )
+                .unwrap(),
+            )
+            .unwrap();
+        let view = scope
+            .texture_view(
+                GpuTextureViewDescriptor::new(
+                    owned_common("pressure sampled view"),
+                    &texture,
+                    None,
+                    GpuTextureViewDimension::D2,
+                    GpuTextureSubresourceRange::whole(&texture).unwrap(),
+                )
+                .unwrap(),
+            )
+            .unwrap();
+        let sampler = scope
+            .sampler(
+                GpuSamplerDescriptor::new(
+                    owned_common("pressure sampler"),
+                    GpuAddressMode::ClampToEdge,
+                    GpuAddressMode::ClampToEdge,
+                    GpuAddressMode::ClampToEdge,
+                    GpuSamplerFilterState::new(
+                        GpuFilterMode::Linear,
+                        GpuFilterMode::Linear,
+                        GpuFilterMode::Linear,
+                        1,
+                    )
+                    .unwrap(),
+                    0.0,
+                    16.0,
+                    None,
+                )
+                .unwrap(),
+            )
+            .unwrap();
+        let buffer = storage_buffer("pressure mixed buffer");
+        let source = admitted_source(
+            "pressure.mixed",
+            r#"
+@group(0) @binding(0) var source: texture_2d<f32>;
+@group(0) @binding(1) var linear_sampler: sampler;
+@group(0) @binding(2) var<storage, read_write> output: array<f32, 4>;
+@compute @workgroup_size(1) fn cs_main() {
+    output[0] = textureSampleLevel(source, linear_sampler, vec2<f32>(0.5), 0.0).r;
+}"#,
+        );
+        let program = GpuProgramDescriptor::new(
+            source,
+            [GpuEntryPointName::new("cs_main").unwrap()],
+            [
+                GpuBindingLayoutRefinement::new(GpuBindingKey::try_new(0, 0).unwrap())
+                    .with_texture_sample_class(GpuTextureSampleClass::FloatFilterable),
+                GpuBindingLayoutRefinement::new(GpuBindingKey::try_new(0, 1).unwrap())
+                    .with_sampler_class(GpuSamplerClass::Filtering),
+            ],
+        )
+        .unwrap();
+        let pipeline = GpuComputePipelineDescriptor::new(
+            program,
+            GpuEntryPointName::new("cs_main").unwrap(),
+            GpuPipelineConfiguration::default(),
+        )
+        .unwrap();
+        let layout = pipeline.layout().groups().next().unwrap();
+        let layout = pollster::block_on(context.realize_bind_group_layout(layout)).unwrap();
+        let group = pollster::block_on(
+            context.realize_bind_group(
+                &layout,
+                [
+                    GpuRuntimeBindingValue::new(
+                        GpuBindingKey::try_new(0, 0).unwrap(),
+                        [GpuRuntimeBindingResource::TextureView(
+                            GpuRuntimeTextureViewBinding::new(view.clone()),
+                        )],
+                    )
+                    .unwrap(),
+                    GpuRuntimeBindingValue::new(
+                        GpuBindingKey::try_new(0, 1).unwrap(),
+                        [GpuRuntimeBindingResource::Sampler(sampler)],
+                    )
+                    .unwrap(),
+                    GpuRuntimeBindingValue::whole_buffer(0, 2, &buffer),
+                ],
+            ),
+        )
+        .unwrap();
+        let protected_view = if keep_view {
+            let parent = context.realize_texture(&texture).unwrap();
+            Some(context.realize_texture_view(&view, &parent).unwrap())
+        } else {
+            None
+        };
+        assert_eq!(context.resource_realization_stats().retained_records(), 4);
+        drop(group);
+        let candidate = storage_buffer("mixed cleanup candidate");
+        let recovered = context.realize_buffer(&candidate).unwrap();
+        let stats = context.resource_realization_stats();
+        assert_eq!(stats.textures(), usize::from(keep_view));
+        assert_eq!(stats.texture_views(), usize::from(keep_view));
+        assert_eq!(stats.samplers(), 0);
+        assert_eq!(stats.buffers(), 1);
+        assert_eq!(context.program_binding_realization_stats().bind_groups(), 0);
+        drop(recovered);
+        drop(protected_view);
+        // At most four more misses reach pressure regardless of the last cohort size.
+        for ordinal in 0..4 {
+            drop(
+                context
+                    .realize_buffer(&storage_buffer(&format!(
+                        "released view pressure {ordinal}"
+                    )))
+                    .unwrap(),
+            );
+        }
+        let after = context.resource_realization_stats();
+        assert_eq!(after.textures(), 0);
+        assert_eq!(after.texture_views(), 0);
+        assert_eq!(after.samplers(), 0);
+    }
 }

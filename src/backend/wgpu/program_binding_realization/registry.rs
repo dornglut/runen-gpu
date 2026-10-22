@@ -147,6 +147,12 @@ impl ProgramBindingRegistries {
         self.programs.collect_lookup_only();
     }
 
+    pub(super) fn collect_lookup_only_bind_groups(&mut self) {
+        // Only ready bind groups retain G4C1 resources. Preserve all in-flight
+        // reservations and every group borrowed by a caller or prepared/accepted work.
+        self.bind_groups.collect_lookup_only();
+    }
+
     fn ensure_capacity(
         &mut self,
         policy: GpuProgramBindingRealizationPolicy,

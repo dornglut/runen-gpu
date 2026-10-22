@@ -167,17 +167,21 @@ where
         }
     }
 
+    pub(super) fn has_capacity(&self, policy: GpuResourceRealizationPolicy) -> bool {
+        self.total_records() < policy.max_records().get()
+    }
+
     pub(super) fn ensure_capacity(
         &mut self,
         identity: GpuWorkResourceId,
         policy: GpuResourceRealizationPolicy,
     ) -> Result<(), GpuResourceRealizationError> {
-        if self.total_records() < policy.max_records().get() {
+        if self.has_capacity(policy) {
             return Ok(());
         }
 
         self.collect_lookup_only();
-        if self.total_records() < policy.max_records().get() {
+        if self.has_capacity(policy) {
             Ok(())
         } else {
             Err(GpuResourceRealizationError::capacity(
