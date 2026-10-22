@@ -451,6 +451,7 @@ fn program_admission_failures_publish_nothing_and_live_handles_bound_registry_re
     assert_eq!(stats.pipeline_layouts(), 0);
     assert_eq!(stats.bind_groups(), 0);
 }
+
 // Investigation #174. Characterization only: a *currently observed* inter-registry
 // pressure-order defect. No production reclamation or public API is changed here.
 // Do not treat a passing characterization as long-running Runenwerk conformance.
@@ -506,11 +507,8 @@ fn g4c1_pressure_can_precede_g4c2_lookup_only_group_reclamation() {
             GpuResourceProvenance::new(label, None, None),
         )
         .expect("transient resource common");
-        let usages = GpuBufferUsages::new(
-            common.label(),
-            [GpuBufferUsage::Storage],
-        )
-        .expect("storage usage");
+        let usages = GpuBufferUsages::new(common.label(), [GpuBufferUsage::Storage])
+            .expect("storage usage");
         let buffer = allocator
             .allocate_buffer_handle(
                 GpuBufferDescriptor::new(
@@ -523,10 +521,9 @@ fn g4c1_pressure_can_precede_g4c2_lookup_only_group_reclamation() {
             )
             .expect("unique logical buffer ID");
         let physical = context.realize_buffer(&buffer).expect("G4C1 realization");
-        let group = pollster::block_on(
-            context.realize_bind_group(&realized_layout, [binding_value(buffer)]),
-        )
-        .expect("G4C2 binding realization");
+        let group =
+            pollster::block_on(context.realize_bind_group(&realized_layout, [binding_value(buffer)]))
+                .expect("G4C2 binding realization");
         drop(group);
         drop(physical);
     }
@@ -553,11 +550,9 @@ fn g4c1_pressure_can_precede_g4c2_lookup_only_group_reclamation() {
 
     // Force G4C2's *existing own-pressure* sweep with an unrelated layout.
     // No program, bind-group, or submission is still externally held.
-    let fresh_layout = GpuBindGroupLayoutDescriptor::new(
-        1,
-        std::iter::empty::<GpuBindingDeclaration>(),
-    )
-    .expect("second valid group layout");
+    let fresh_layout =
+        GpuBindGroupLayoutDescriptor::new(1, std::iter::empty::<GpuBindingDeclaration>())
+            .expect("second valid group layout");
     let _new_layout = pollster::block_on(context.realize_bind_group_layout(&fresh_layout))
         .expect("G4C2 pressure removes lookup-only bind groups");
     assert_eq!(context.program_binding_realization_stats().bind_groups(), 0);
