@@ -467,7 +467,7 @@ fn g4c1_pressure_can_precede_g4c2_lookup_only_group_reclamation() {
         descriptor,
         GpuRealizationPolicies::new(
             GpuResourceRealizationPolicy::new(NonZeroUsize::new(4).unwrap()),
-            GpuProgramBindingRealizationPolicy::new(NonZeroUsize::new(5).unwrap()),
+            GpuProgramBindingRealizationPolicy::new(NonZeroUsize::new(6).unwrap()),
         ),
     )) {
         Ok(context) => context,
@@ -535,6 +535,7 @@ fn g4c1_pressure_can_precede_g4c2_lookup_only_group_reclamation() {
     assert_eq!(g4c2.bind_groups(), 4);
     assert_eq!(g4c2.bind_group_layouts(), 1);
     assert_eq!(g4c2.retained_records(), 5);
+    assert!(g4c2.retained_records() < context.program_binding_realization_policy().max_records().get());
     assert_eq!(g4c2.in_flight_records(), 0);
     assert_eq!(context.execution_stats().in_flight_submissions(), 0);
 
@@ -549,11 +550,21 @@ fn g4c1_pressure_can_precede_g4c2_lookup_only_group_reclamation() {
         GpuResourceRealizationErrorCategory::RegistryCapacityExceeded
     );
 
-    // Force G4C2's *existing own-pressure* sweep with an unrelated layout.
+    // Another G4C2 record can still be created below its own bound, without
+    // collecting any of the four ready bind groups that kept G4C1 occupied.
+    let intermediate_layout =
+        GpuBindGroupLayoutDescriptor::new(1, std::iter::empty::<GpuBindingDeclaration>())
+            .expect("independent layout");
+    let _intermediate = pollster::block_on(context.realize_bind_group_layout(&intermediate_layout))
+        .expect("G4C2 below-capacity realization must succeed");
+    assert_eq!(context.program_binding_realization_stats().bind_groups(), 4);
+
+    // The following request finally pressures G4C2. Its existing sweep drops
+    // lookup-only groups, allowing the separate subsequent G4C1 pressure pass.
     // No program, bind-group, or submission is still externally held.
     let fresh_layout =
-        GpuBindGroupLayoutDescriptor::new(1, std::iter::empty::<GpuBindingDeclaration>())
-            .expect("second valid group layout");
+        GpuBindGroupLayoutDescriptor::new(2, std::iter::empty::<GpuBindingDeclaration>())
+            .expect("pressure-triggering group layout");
     let _new_layout = pollster::block_on(context.realize_bind_group_layout(&fresh_layout))
         .expect("G4C2 pressure removes lookup-only bind groups");
     assert_eq!(context.program_binding_realization_stats().bind_groups(), 0);
