@@ -6,7 +6,7 @@ use core::fmt;
 use std::num::NonZeroUsize;
 use std::sync::Arc;
 
-/// Stable semantic classes for G4C3 compute/render pipeline realization rejection.
+/// Stable semantic classes for compute/render pipeline realization rejection.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum GpuPipelineRealizationErrorCategory {
     ForeignContext,
@@ -37,13 +37,13 @@ impl GpuPipelineRealizationErrorCategory {
                 "use program and pipeline-layout realizations retained by this GPU context"
             }
             Self::PipelineDescriptorInvalid => {
-                "use one complete accepted G4B compute or render pipeline descriptor"
+                "use one complete validated compute or render pipeline descriptor"
             }
             Self::EntryPointStageMismatch => {
                 "select entry points declared for the pipeline's required shader stages"
             }
             Self::ProgramInterfaceMismatch => {
-                "make the descriptor program and pipeline layout agree with the accepted G4C2 realizations"
+                "make the descriptor program and pipeline layout agree with the realizations owned by this context"
             }
             Self::PipelineStageIoMismatch => {
                 "make explicit vertex/color pipeline state agree with the selected program entry-point signatures"
@@ -70,13 +70,13 @@ impl GpuPipelineRealizationErrorCategory {
                 "stop using this context and let the owning product choose recovery"
             }
             Self::ExecutionAuthorityViolation => {
-                "use only the audited lexical current-render execution terminal"
+                "execute work through the owning GPU context's submission path"
             }
         }
     }
 }
 
-/// Structured failure from deterministic G4C3 compatibility, authoritative lookup, or backend
+/// Structured failure from deterministic pipeline compatibility, authoritative lookup, or backend
 /// pipeline publication. Backend text is bounded diagnostic evidence only and never identity.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GpuPipelineRealizationError {

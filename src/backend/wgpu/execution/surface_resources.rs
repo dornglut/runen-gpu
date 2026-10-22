@@ -223,7 +223,7 @@ pub(super) fn prepare_present_source(
 fn missing_surface_guard() -> GpuSubmissionFailure {
     GpuSubmissionFailure::new(
         GpuSubmissionFailureKind::InternalInvariant,
-        "surface-acquired execution resource reached encoding without the validated G7 lease guard",
+        "surface-acquired execution resource reached encoding without its validated surface execution lease",
     )
 }
 
