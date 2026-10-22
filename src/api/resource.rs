@@ -172,6 +172,12 @@ impl GpuResourceCommon {
 
     /// Describes externally owned resource state without adding owned bytes.
     ///
+    /// This creates logical metadata only; it does not import an external GPU
+    /// resource. The current public API cannot supply a physical import source,
+    /// so ordinary realization rejects `Imported` ownership with
+    /// `GpuResourceRealizationErrorCategory::ImportSourceUnavailable`. A concrete
+    /// backend-neutral import-source contract remains planned, not implemented.
+    ///
     /// ```
     /// use runen_gpu::*;
     /// let label = GpuResourceLabel::new("imported history")?;
@@ -200,7 +206,7 @@ impl GpuResourceCommon {
 
     #[allow(
         dead_code,
-        reason = "surface-acquired construction is reserved for the G7 adapter"
+        reason = "surface-acquired resources are constructed by the surface lease owner"
     )]
     pub(crate) fn surface_acquired(
         label: GpuResourceLabel,
