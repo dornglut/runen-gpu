@@ -245,6 +245,113 @@ fn measure_case(topology: Topology, node_count: usize) -> CaseEvidence {
     }
 }
 
+const FRAGMENTATION_CASES: [(usize, usize); 6] =
+    [(80, 1), (80, 8), (80, 80), (800, 1), (800, 8), (800, 80)];
+
+fn author_disjoint_fragments(node_count: usize, fragment_count: usize) -> Vec<GpuWorkFragment> {
+    assert!(fragment_count > 0);
+    assert_eq!(node_count % fragment_count, 0);
+    let nodes_per_fragment = node_count / fragment_count;
+    (0..fragment_count)
+        .map(|fragment_index| {
+            let mut resources = GpuResourceScope::new();
+            let first_node = fragment_index * nodes_per_fragment;
+            let buffers = (first_node..(first_node + nodes_per_fragment))
+                .map(|index| scale_buffer(&mut resources, Topology::DisjointClears, index))
+                .collect::<Vec<_>>();
+            GpuWorkFragment::build(
+                format!("graph scale disjoint fragment {fragment_index:04}"),
+                |work| {
+                    for (index, buffer) in buffers.iter().enumerate() {
+                        work.operation(
+                            format!("clear independent {:04}", first_node + index),
+                            GpuClearOperation::buffer_zero(GpuBufferRegion::whole(buffer).unwrap())
+                                .unwrap(),
+                        )?;
+                    }
+                    Ok(())
+                },
+            )
+            .unwrap()
+        })
+        .collect()
+}
+
+fn measure_disjoint_fragmentation(node_count: usize, fragment_count: usize) -> Value {
+    let author_started = Instant::now();
+    let fragments = author_disjoint_fragments(node_count, fragment_count);
+    let author_ns = nanos(author_started);
+    let resource_count = fragments
+        .iter()
+        .map(|fragment| fragment.resources().len())
+        .sum::<usize>();
+    let access_count = fragments
+        .iter()
+        .flat_map(|fragment| fragment.nodes())
+        .map(|node| node.accesses().len())
+        .sum::<usize>();
+    assert_eq!(resource_count, node_count);
+    assert_eq!(access_count, node_count);
+
+    let graph_label = label(format!(
+        "graph scale disjoint {node_count} nodes in {fragment_count} fragments"
+    ));
+    let mut observed_order: Option<Vec<_>> = None;
+    let mut samples = Vec::with_capacity(MEASURED_SAMPLES);
+
+    for index in 0..(WARMUP_SAMPLES + MEASURED_SAMPLES) {
+        // Clone and label preparation are excluded just as in the retained
+        // single-fragment comparison. The complete graph preparation is timed.
+        let candidate = fragments.clone();
+        let current_label = graph_label.clone();
+        let started = Instant::now();
+        let prepared = GpuPreparedWorkGraph::prepare(current_label, candidate).unwrap();
+        let elapsed = nanos(started);
+
+        assert_eq!(prepared.nodes().len(), node_count);
+        assert_eq!(prepared.topological_order().len(), node_count);
+        assert_eq!(prepared.dependencies().len(), 0);
+        assert_eq!(
+            prepared
+                .topological_order()
+                .iter()
+                .collect::<std::collections::BTreeSet<_>>()
+                .len(),
+            node_count
+        );
+        match &observed_order {
+            Some(previous) => assert_eq!(prepared.topological_order(), previous.as_slice()),
+            None => observed_order = Some(prepared.topological_order().to_vec()),
+        }
+        if index >= WARMUP_SAMPLES {
+            samples.push(elapsed);
+        }
+    }
+
+    let (min_ns, median_ns, max_ns) = summarize(&samples);
+    json!({
+        "topology": "disjoint-clears",
+        "node_count": node_count,
+        "fragment_count": fragment_count,
+        "nodes_per_fragment": node_count / fragment_count,
+        "resource_count": resource_count,
+        "access_count": access_count,
+        "dependency_count": 0,
+        "topological_order_count": node_count,
+        "order_stable_across_samples": true,
+        "authoring_ns": author_ns,
+        "warmup_samples": WARMUP_SAMPLES,
+        "measured_samples": MEASURED_SAMPLES,
+        "prepare_including_validation_ns": {
+            "samples": samples,
+            "min": min_ns,
+            "median": median_ns,
+            "max": max_ns,
+            "median_per_node": median_ns as f64 / node_count as f64,
+        }
+    })
+}
+
 fn scaling_ratio(cases: &[CaseEvidence], topology: Topology) -> f64 {
     let smallest = cases
         .iter()
@@ -286,6 +393,11 @@ fn graph_preparation_scale_characterization_records_structural_and_timing_eviden
     assert!(serial_ratio.is_finite());
     assert!(independent_ratio.is_finite());
 
+    let fragmentation_cases = FRAGMENTATION_CASES
+        .into_iter()
+        .map(|(nodes, fragments)| measure_disjoint_fragmentation(nodes, fragments))
+        .collect::<Vec<_>>();
+
     let report = json!({
         "schema_version": REPORT_SCHEMA_VERSION,
         "requirement": "G6-S01",
@@ -326,6 +438,8 @@ fn graph_preparation_scale_characterization_records_structural_and_timing_eviden
             }
         },
         "cases": cases.into_iter().map(|case| case.json).collect::<Vec<_>>(),
+        "fragmentation_cases": fragmentation_cases,
+        "fragmentation_policy": "fixed total nodes and unique resources; fragment count alone varies; no typed shared resources, no physical execution preparation; measured time is non-gating",
     });
 
     let path = artifact_path();
