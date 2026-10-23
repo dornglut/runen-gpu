@@ -552,7 +552,6 @@ fn measure_shared_resource_fanout(node_count: usize, fragment_count: usize) -> V
     })
 }
 
-
 const DENSE_WAW_NODES: usize = 104;
 const DENSE_WAW_SHARED_COUNTS: [usize; 3] = [0, 68, DENSE_WAW_NODES];
 
@@ -561,8 +560,8 @@ fn author_dense_clear_case(
 ) -> (GpuWorkFragment, Option<GpuWorkResourceId>, usize) {
     assert!(shared_nodes <= DENSE_WAW_NODES);
     let mut resources = GpuResourceScope::new();
-    let shared = (shared_nodes > 0)
-        .then(|| scale_buffer(&mut resources, Topology::DisjointClears, 0));
+    let shared =
+        (shared_nodes > 0).then(|| scale_buffer(&mut resources, Topology::DisjointClears, 0));
     let independent = (shared_nodes..DENSE_WAW_NODES)
         .map(|index| scale_buffer(&mut resources, Topology::DisjointClears, index + 1))
         .collect::<Vec<_>>();
@@ -652,7 +651,7 @@ fn measure_dense_waw(shared_nodes: usize) -> Value {
     let author_ns = nanos(author_started);
     assert_eq!(fragment.resources().len(), resource_count);
     let graph_label = label(format!("dense WAW {shared_nodes} / {DENSE_WAW_NODES}"));
-    let mut observed_order = None;
+    let mut observed_order: Option<Vec<_>> = None;
     let mut samples = Vec::with_capacity(MEASURED_SAMPLES);
     for sample in 0..(WARMUP_SAMPLES + MEASURED_SAMPLES) {
         // Exclude cloning/authoring. Keep ALL canonical graph validation in
