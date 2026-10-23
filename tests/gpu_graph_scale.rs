@@ -552,6 +552,149 @@ fn measure_shared_resource_fanout(node_count: usize, fragment_count: usize) -> V
     })
 }
 
+const DENSE_WAW_NODES: usize = 104;
+const DENSE_WAW_SHARED_COUNTS: [usize; 3] = [0, 68, DENSE_WAW_NODES];
+
+fn author_dense_clear_case(
+    shared_nodes: usize,
+) -> (GpuWorkFragment, Option<GpuWorkResourceId>, usize) {
+    assert!(shared_nodes <= DENSE_WAW_NODES);
+    let mut resources = GpuResourceScope::new();
+    let shared =
+        (shared_nodes > 0).then(|| scale_buffer(&mut resources, Topology::DisjointClears, 0));
+    let independent = (shared_nodes..DENSE_WAW_NODES)
+        .map(|index| scale_buffer(&mut resources, Topology::DisjointClears, index + 1))
+        .collect::<Vec<_>>();
+    let resource_count = independent.len() + usize::from(shared.is_some());
+    let shared_resource = shared.as_ref().map(GpuBufferHandle::diagnostic_identity);
+    let fragment = GpuWorkFragment::build(
+        format!("graph scale dense WAW {shared_nodes} of {DENSE_WAW_NODES}"),
+        |work| {
+            for index in 0..DENSE_WAW_NODES {
+                let buffer = if index < shared_nodes {
+                    shared.as_ref().expect("shared group exists")
+                } else {
+                    &independent[index - shared_nodes]
+                };
+                work.operation(
+                    format!("clear WAW comparison {index:04}"),
+                    GpuClearOperation::buffer_zero(GpuBufferRegion::whole(buffer).unwrap())
+                        .unwrap(),
+                )?;
+            }
+            Ok(())
+        },
+    )
+    .unwrap();
+    (fragment, shared_resource, resource_count)
+}
+
+fn assert_dense_waw_structure(
+    prepared: &GpuPreparedWorkGraph,
+    shared_nodes: usize,
+    shared_resource: Option<GpuWorkResourceId>,
+    expected_resources: usize,
+) {
+    let expected_edges = shared_nodes * shared_nodes.saturating_sub(1) / 2;
+    assert_eq!(prepared.nodes().len(), DENSE_WAW_NODES);
+    assert_eq!(prepared.topological_order().len(), DENSE_WAW_NODES);
+    assert_eq!(prepared.dependencies().len(), expected_edges);
+    assert_eq!(
+        prepared
+            .nodes()
+            .iter()
+            .map(|node| node.node().accesses().len())
+            .sum::<usize>(),
+        DENSE_WAW_NODES
+    );
+    // Every edge must join distinct nodes in the shared write group and
+    // preserve its exact buffer region, with no explicit/synthetic reasons.
+    let shared_node_ids = prepared
+        .nodes()
+        .iter()
+        .take(shared_nodes)
+        .map(|node| node.id())
+        .collect::<Vec<_>>();
+    let mut observed_pairs = std::collections::BTreeSet::new();
+    for dependency in prepared.dependencies() {
+        let before = shared_node_ids
+            .iter()
+            .position(|node| *node == dependency.before())
+            .expect("all WAW edges must begin in the shared group");
+        let after = shared_node_ids
+            .iter()
+            .position(|node| *node == dependency.after())
+            .expect("all WAW edges must end in the shared group");
+        assert!(before < after, "WAW hazards must follow authored order");
+        assert!(observed_pairs.insert((before, after)), "duplicate pair");
+        assert_eq!(dependency.reasons().len(), 1);
+        assert!(matches!(
+            dependency.reasons().first(),
+            Some(GpuDependencyReason::WriteAfterWrite {
+                resource,
+                region: GpuDependencyRegion::Buffer(region),
+            }) if Some(*resource) == shared_resource
+                && region.offset() == 0
+                && region.end() == BUFFER_BYTES
+        ));
+    }
+    assert_eq!(observed_pairs.len(), expected_edges);
+    assert_eq!(
+        expected_resources,
+        DENSE_WAW_NODES - shared_nodes + usize::from(shared_nodes > 0)
+    );
+}
+
+fn measure_dense_waw(shared_nodes: usize) -> Value {
+    let author_started = Instant::now();
+    let (fragment, shared_resource, resource_count) = author_dense_clear_case(shared_nodes);
+    let author_ns = nanos(author_started);
+    assert_eq!(fragment.resources().len(), resource_count);
+    let graph_label = label(format!("dense WAW {shared_nodes} / {DENSE_WAW_NODES}"));
+    let mut observed_order: Option<Vec<_>> = None;
+    let mut samples = Vec::with_capacity(MEASURED_SAMPLES);
+    for sample in 0..(WARMUP_SAMPLES + MEASURED_SAMPLES) {
+        // Exclude cloning/authoring. Keep ALL canonical graph validation in
+        // the time window; this is not an isolated hazard-function timer.
+        let candidate = fragment.clone();
+        let current_label = graph_label.clone();
+        let started = Instant::now();
+        let prepared = GpuPreparedWorkGraph::prepare(current_label, [candidate]).unwrap();
+        let elapsed = nanos(started);
+        assert_dense_waw_structure(&prepared, shared_nodes, shared_resource, resource_count);
+        match &observed_order {
+            Some(previous) => assert_eq!(prepared.topological_order(), previous.as_slice()),
+            None => observed_order = Some(prepared.topological_order().to_vec()),
+        }
+        if sample >= WARMUP_SAMPLES {
+            samples.push(elapsed);
+        }
+    }
+    let (min, median, max) = summarize(&samples);
+    json!({
+        "topology": "single-fragment-dense-waw-buffer-clear",
+        "fragment_count": 1,
+        "node_count": DENSE_WAW_NODES,
+        "shared_write_nodes": shared_nodes,
+        "resource_count": resource_count,
+        "access_count": DENSE_WAW_NODES,
+        "dependency_count": shared_nodes * shared_nodes.saturating_sub(1) / 2,
+        "topological_order_count": DENSE_WAW_NODES,
+        "all_edges_are_exact_typed_waw": true,
+        "order_stable_across_samples": true,
+        "authoring_ns": author_ns,
+        "warmup_samples": WARMUP_SAMPLES,
+        "measured_samples": MEASURED_SAMPLES,
+        "prepare_including_validation_ns": {
+            "samples": samples,
+            "min": min,
+            "median": median,
+            "max": max,
+            "median_per_node": median as f64 / DENSE_WAW_NODES as f64
+        }
+    })
+}
+
 const NODE_LOOKUP_CASES: [(usize, usize); 6] =
     [(80, 1), (80, 8), (80, 80), (800, 1), (800, 8), (800, 80)];
 const NODE_LOOKUP_REPEATS: usize = 32;
@@ -739,6 +882,11 @@ fn graph_preparation_scale_characterization_records_structural_and_timing_eviden
         .map(|(nodes, fragments)| measure_shared_resource_fanout(nodes, fragments))
         .collect::<Vec<_>>();
 
+    let dense_waw_cases = DENSE_WAW_SHARED_COUNTS
+        .into_iter()
+        .map(measure_dense_waw)
+        .collect::<Vec<_>>();
+
     let node_lookup_cases = NODE_LOOKUP_CASES
         .into_iter()
         .map(|(nodes, fragments)| measure_node_lookup(nodes, fragments))
@@ -786,6 +934,8 @@ fn graph_preparation_scale_characterization_records_structural_and_timing_eviden
         "cases": cases.into_iter().map(|case| case.json).collect::<Vec<_>>(),
         "fragmentation_cases": fragmentation_cases,
         "shared_resource_cases": shared_resource_cases,
+        "dense_waw_cases": dense_waw_cases,
+        "dense_waw_policy": "fixed 104 nodes and 104 accesses: 0, 68 or 104 clears share one buffer, creating 0, 2278 or 5356 typed WAW edges; synthetic single-fragment validation-only workload, not a Boids replay or hazard-only stage timer; non-gating",
         "node_lookup_cases": node_lookup_cases,
         "node_lookup_policy": "test-profile CPU-only lookup comparison; linear search versus transient BTreeMap/HashMap including index construction on each pass, no physical WGPU plan, shader or resource realization; non-gating",
         "shared_resource_policy": "fixed total nodes: one writer and N-1 read/copy consumers; typed export/import when fragmented, one RAW dependency per consumer; GPU physical preparation not measured; non-gating",
