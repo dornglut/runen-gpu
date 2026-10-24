@@ -212,6 +212,247 @@ jobs:
           path: ${{ runner.temp }}/runengpu-proof-artifacts/game-of-life
           if-no-files-found: error
 
+      - name: Run streaming retained-state example and exact oracle
+        env:
+          RUST_BACKTRACE: '1'
+          RUNEN_GPU_STREAMING_REQUIRE_GPU: '1'
+        run: |
+          set -euo pipefail
+          cargo +stable test --example gpu_streaming_background --locked -- --nocapture
+          cargo +stable test --example gpu_streaming_background --locked -- --ignored --nocapture --test-threads=1
+          root="${RUNNER_TEMP}/runengpu-streaming-background"
+          mkdir -p "${root}"
+          cargo +stable run --example gpu_streaming_background --locked -- \
+            --mode serial --source generated --width 64 --height 64 --frames 8 \
+            --output-dir "${root}/serial" > "${root}/serial.jsonl"
+          cargo +stable run --example gpu_streaming_background --locked -- \
+            --mode batch --batch 4 --source generated --width 64 --height 64 --frames 8 \
+            --output-dir "${root}/batch" > "${root}/batch.jsonl"
+          cargo +stable run --example gpu_streaming_background --locked -- \
+            --mode cpu --source generated --width 64 --height 64 --frames 8 \
+            > "${root}/cpu.jsonl"
+          for k in 1 2; do
+            cargo +stable run --example gpu_streaming_background --locked -- \
+              --mode batch --batch "${k}" --source generated --width 64 --height 64 --frames 8 \
+              --output-dir "${root}/batch${k}" > "${root}/batch${k}.jsonl"
+          done
+          # Two larger exact-CPU-oracle controls on the declared Vulkan adapter.
+          # These are source-replay correctness envelopes, not real-time FPS claims.
+          cargo +stable run --example gpu_streaming_background --locked -- \
+            --mode serial --source generated --width 640 --height 360 --frames 8 \
+            > "${root}/scale-640-serial.jsonl"
+          cargo +stable run --example gpu_streaming_background --locked -- \
+            --mode batch --batch 4 --source generated --width 640 --height 360 --frames 8 \
+            > "${root}/scale-640-batch.jsonl"
+          cargo +stable run --example gpu_streaming_background --locked -- \
+            --mode batch --batch 2 --source generated --width 1280 --height 720 --frames 4 \
+            > "${root}/scale-1280-batch.jsonl"
+          # Source waits for GPU initialization; every later frame is GENERATED
+          # only after the previous frame was accepted. This establishes *arrival
+          # causality*, not still-in-flight GPU overlap or a camera FPS target.
+          python3 - "${root}/stdin.jsonl" <<'PY'
+          import os
+          import struct
+          import subprocess
+          import sys
+          import time
+
+          output = open(sys.argv[1], "wb")
+          command = ["cargo", "+stable", "run", "--example", "gpu_streaming_background",
+                     "--locked", "--", "--source", "stdin", "--mode", "serial",
+                     "--width", "16", "--height", "16", "--frames", "4",
+                     "--producer-signals"]
+          process = subprocess.Popen(command, stdin=subprocess.PIPE,
+                                     stdout=output, stderr=subprocess.PIPE)
+          def expect(token):
+              while True:
+                  line = process.stderr.readline()
+                  if not line:
+                      raise RuntimeError(f"producer handshake missing {token!r}; exit={process.poll()}")
+                  if token in line:
+                      return
+
+          try:
+              expect(b"RUNEN_GPU_172_READY")
+              for i in range(4):
+                  packet = struct.pack("<QI", time.time_ns() // 1000, 2 if i % 2 == 0 else 4)
+                  process.stdin.write(packet + os.urandom(16 * 16))
+                  process.stdin.flush()
+                  expect(f"RUNEN_GPU_172_ACCEPTED {i + 1}".encode())
+              process.stdin.close()
+              if process.wait(timeout=30) != 0:
+                  raise RuntimeError("stdin GPU proof failed")
+          finally:
+              if process.poll() is None:
+                  process.kill()
+                  process.wait()
+              output.close()
+          PY
+          python3 - "${root}/stdin.jsonl" <<'PY'
+          import json
+          import sys
+
+          with open(sys.argv[1], encoding="utf-8") as file:
+              report = [json.loads(line) for line in file if line.strip()]
+          assert len(report) == 5, report
+          assert [item["frame_id"] for item in report[:-1]] == [1, 2, 3, 4]
+          assert all(item["source"] == "external_stdin" and
+                     item["exact_cpu_match"] is True for item in report[:-1])
+          assert report[-1]["mode"] == "serial"
+          assert report[-1]["frames_exactly_verified"] == 4
+          assert report[-1]["final_background_exact_cpu_match"] is True
+          assert all(report[i]["received_us"] > report[i - 1]["accepted_us"]
+                     for i in range(1, 4)), "later frames must arrive after earlier GPU acceptance"
+          PY
+
+          # Keep stdin OPEN after the first frame, and prove a caller-bounded
+          # partial batch produces a verified mask without K frames or EOF.
+          python3 - "${root}/stdin_bounded.jsonl" <<'PY'
+          import json
+          import os
+          import select
+          import struct
+          import subprocess
+          import sys
+          import time
+
+          command = ["cargo", "+stable", "run", "--example", "gpu_streaming_background",
+                     "--locked", "--", "--source", "stdin", "--mode", "batch",
+                     "--batch", "4", "--batch-wait-ms", "10",
+                     "--width", "16", "--height", "16", "--frames", "4"]
+          process = subprocess.Popen(command, stdin=subprocess.PIPE,
+                                     stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+          def packet(i):
+              return struct.pack("<QI", time.time_ns() // 1000, 2 if i % 2 == 0 else 4) + os.urandom(256)
+          try:
+              process.stdin.write(packet(0))
+              process.stdin.flush()
+              readable, _, _ = select.select([process.stdout], [], [], 10)
+              assert readable, "first partial batch must finish with stdin still open"
+              first = process.stdout.readline()
+              assert first, "partial batch did not emit a verified mask"
+              event = json.loads(first)
+              assert event["frame_id"] == 1 and event["exact_cpu_match"] is True
+              assert process.poll() is None, "proof must still be running with open input"
+              for i in range(1, 4):
+                  process.stdin.write(packet(i))
+              process.stdin.flush()
+              process.stdin.close()
+              process.stdin = None
+              remaining, stderr = process.communicate(timeout=30)
+              assert process.returncode == 0, stderr.decode(errors="replace")
+              with open(sys.argv[1], "wb") as output:
+                  output.write(first + remaining)
+          finally:
+              if process.poll() is None:
+                  process.kill()
+                  process.wait()
+          PY
+          # Negative tests use an actual still-open pipe: the old error path
+          # joined the blocked reader and could hang forever after GPU timeout.
+          # All error exits must fail closed without printing run_complete.
+          python3 - "${root}" <<'PY'
+          import json
+          import pathlib
+          import struct
+          import subprocess
+          import sys
+          import time
+
+          root = pathlib.Path(sys.argv[1])
+          command = ["cargo", "+stable", "run", "--example", "gpu_streaming_background",
+                     "--locked", "--", "--source", "stdin", "--mode", "serial",
+                     "--width", "16", "--height", "16", "--frames", "4",
+                     "--timeout-ms", "1200"]
+          packet = struct.pack("<QI", time.time_ns() // 1000, 2) + bytes(256)
+
+          # Keep stdin open after one valid packet. The application, not the
+          # producer, must enforce the configured session limit.
+          p = subprocess.Popen(command, stdin=subprocess.PIPE,
+                               stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+          try:
+              p.stdin.write(packet)
+              p.stdin.flush()
+              # communicate() implicitly closes stdin, so use wait() here.
+              assert p.wait(timeout=10) != 0
+              output = p.stdout.read()
+              error = p.stderr.read()
+              assert b"proof timed out" in error, error
+              assert b"run_complete" not in output
+              assert b"gpu_verified" in output, "first frame must have been processed"
+              (root / "stdin_timeout.stderr.txt").write_bytes(error)
+          finally:
+              if p.poll() is None:
+                  p.kill()
+                  p.wait()
+              p.stdin.close()
+
+          for name, packet_bytes, fragment in (
+              ("bad_q", struct.pack("<QI", 0, 3) + bytes(256), b"q must be 2 or 4"),
+              ("partial_packet", bytes(15), b"failed to fill whole buffer"),
+          ):
+              result = subprocess.run(command, input=packet_bytes,
+                                      capture_output=True, timeout=20, check=False)
+              assert result.returncode != 0, name
+              assert fragment in result.stderr, (name, result.stderr)
+              assert b"run_complete" not in result.stdout, name
+              (root / f"stdin_{name}.stderr.txt").write_bytes(result.stderr)
+          PY
+          for variant in serial batch batch1 batch2; do
+            test -s "${root}/${variant}.jsonl"
+            test "$(find "${root}/${variant}" -maxdepth 1 -type f -name 'mask_*.pgm' | wc -l)" -eq 8
+            find "${root}/${variant}" -maxdepth 1 -type f -name 'mask_*.pgm' -exec test -s {} \;
+          done
+          python3 - "${root}" <<'PY'
+          import json
+          import pathlib
+          import sys
+
+          root = pathlib.Path(sys.argv[1])
+          records = {}
+          for variant in ("cpu", "serial", "batch", "batch1", "batch2", "stdin"):
+              reports = [json.loads(row) for row in
+                         (root / f"{variant}.jsonl").read_text().splitlines()]
+              assert reports[-1]["kind"] == "run_complete"
+              assert reports[-1]["frames_exactly_verified"] == (4 if variant == "stdin" else 8)
+              assert reports[-1]["benchmark_scope"] == "diagnostic_only"
+              assert reports[-1]["receipt_to_verified"]["n"] == reports[-1]["frames_exactly_verified"]
+              records[variant] = reports
+          assert records["stdin"][-1]["received_after_prior_accept"] == 3
+          bounded = [json.loads(row) for row in
+                     (root / "stdin_bounded.jsonl").read_text().splitlines()]
+          assert [item["frame_id"] for item in bounded[:-1]] == [1, 2, 3, 4]
+          assert bounded[-1]["frames_exactly_verified"] == 4
+          assert bounded[-1]["accepted_batches"] >= 2, "first partial batch must not wait for EOF"
+          assert bounded[-1]["final_background_exact_cpu_match"] is True
+          for name, size, frames, batches in (
+              ("scale-640-serial", [640, 360], 8, 8),
+              ("scale-640-batch", [640, 360], 8, 2),
+              ("scale-1280-batch", [1280, 720], 4, 2),
+          ):
+              scale = [json.loads(row) for row in
+                       (root / f"{name}.jsonl").read_text().splitlines()]
+              assert len(scale) == frames + 1
+              assert all(item["exact_cpu_match"] is True for item in scale[:-1])
+              final = scale[-1]
+              assert final["dimensions"] == size
+              assert final["accepted_batches"] == batches
+              assert final["frames_exactly_verified"] == frames
+              assert final["final_background_exact_cpu_match"] is True
+          for variant in ("batch", "batch1", "batch2"):
+              for frame in range(1, 9):
+                  reference = root / "serial" / f"mask_{frame:06d}.pgm"
+                  candidate = root / variant / f"mask_{frame:06d}.pgm"
+                  assert candidate.read_bytes() == reference.read_bytes()
+          PY
+
+      - name: Retain streaming example proof artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: runengpu-streaming-background-${{ steps.revision.outputs.expected_revision }}
+          path: ${{ runner.temp }}/runengpu-streaming-background
+          if-no-files-found: error
+
       - name: Run native G5 transfer, G5R initial-content, and R32Float proofs
         env:
           RUST_BACKTRACE: '1'
