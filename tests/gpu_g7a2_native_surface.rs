@@ -226,8 +226,25 @@ fn run_surface_proof(window: Arc<Window>) {
 /// Real G7 mutex race, not a mock: whichever operation acquires the surface
 /// lock first wins. A successfully acquired lease remains alive until both
 /// invocations return, so the conditional detach must refuse without mutation.
-fn run_conditional_detach_race(window: Arc<Window>) {
+fn run_conditional_detach_race(window: Arc<Window>, surviving_window: Arc<Window>) {
     let (context, surface, _) = configured_surface(window);
+    let config = context
+        .surface_configuration(surface)
+        .expect("primary physical surface configuration must remain observable")
+        .expect("primary physical surface must be configured");
+    let surviving = context
+        .attach_surface(surviving_window)
+        .expect("a second native surface must attach to the same G7 context");
+    let caps = context
+        .surface_capabilities(surviving)
+        .expect("second physical surface capabilities must be available");
+    assert!(caps.supports_format(config.format()));
+    assert!(caps.supports_pair(config.format(), config.color_space()));
+    assert!(caps.supports_present_mode(config.present_mode()));
+    assert!(caps.supports_alpha_mode(config.alpha_mode()));
+    let surviving = context
+        .configure_surface(surviving, config)
+        .expect("second native surface must configure without replacing the first");
     let started = Barrier::new(3);
     let completed = Barrier::new(3);
     let (acquisition, retirement) = std::thread::scope(|scope| {
@@ -286,6 +303,26 @@ fn run_conditional_detach_race(window: Arc<Window>) {
         context.acquire_surface_image(surface),
         Err(error) if error.category() == GpuSurfaceAcquireErrorCategory::UnknownSurface
     ));
+
+    // The other physically attached surface and the original G7 context must
+    // continue to submit and terminally Present after primary retirement.
+    let image = context
+        .acquire_surface_image(surviving)
+        .expect("surviving secondary must remain physically acquirable");
+    let prepared = pollster::block_on(context.prepare_submission(clear_and_present_graph(&image)))
+        .expect("surviving secondary must prepare an actual G5 Present");
+    let submitted = context
+        .submit_prepared(prepared)
+        .expect("surviving secondary must submit on the original GPU context");
+    progress_to_completion(&context, &submitted);
+    let next = context
+        .acquire_surface_image(surviving)
+        .expect("terminal Present must free surviving secondary for another acquisition");
+    next.abandon();
+    assert_eq!(
+        context.detach_surface_if_unleased(surviving),
+        Ok(GpuSurfaceConditionalDetachOutcome::Detached)
+    );
 }
 
 #[derive(Default)]
@@ -308,8 +345,17 @@ impl ApplicationHandler for NativeSurfaceProof {
                 )
                 .expect("Xvfb must provide one native window"),
         );
+        let surviving_window = Arc::new(
+            event_loop
+                .create_window(
+                    Window::default_attributes()
+                        .with_title("RunenGPU G7A2 surviving secondary")
+                        .with_inner_size(PhysicalSize::new(WIDTH, HEIGHT)),
+                )
+                .expect("Xvfb must create a second native window"),
+        );
         run_surface_proof(Arc::clone(&window));
-        run_conditional_detach_race(window);
+        run_conditional_detach_race(window, surviving_window);
         event_loop.exit();
     }
 
