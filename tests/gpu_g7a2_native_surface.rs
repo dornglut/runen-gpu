@@ -252,7 +252,9 @@ fn run_conditional_detach_race(
         Err(error) if error.category() == GpuSurfaceErrorCategory::ForeignContext
     ));
     assert!(
-        foreign_context.surface_capabilities(foreign_surface).is_ok(),
+        foreign_context
+            .surface_capabilities(foreign_surface)
+            .is_ok(),
         "foreign-handle rejection must not disturb its rightful owner"
     );
     assert_eq!(
