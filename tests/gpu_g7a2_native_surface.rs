@@ -1,5 +1,5 @@
 use runen_gpu::*;
-use std::sync::Arc;
+use std::sync::{Arc, Barrier};
 use std::time::{Duration, Instant};
 use winit::application::ApplicationHandler;
 use winit::dpi::PhysicalSize;
@@ -172,6 +172,15 @@ fn run_surface_proof(window: Arc<Window>) {
     );
     assert_ne!(next.lease_id(), image.lease_id());
     let retired_graph = clear_and_present_graph(&next);
+    assert_eq!(
+        context.detach_surface_if_unleased(surface),
+        Ok(GpuSurfaceConditionalDetachOutcome::ActiveLease),
+        "active acquired image must be preserved instead of silently abandoned"
+    );
+    assert!(
+        context.surface_capabilities(surface).is_ok(),
+        "refusal must leave the original physical surface registered"
+    );
 
     context
         .detach_surface(surface)
@@ -214,6 +223,67 @@ fn run_surface_proof(window: Arc<Window>) {
     assert_eq!(stats.pending_readbacks(), 0);
 }
 
+/// Real G7 mutex race, not a mock: whichever operation acquires the surface
+/// lock first wins. A successfully acquired lease remains alive until both
+/// invocations return, so the conditional detach must refuse without mutation.
+fn run_conditional_detach_race(window: Arc<Window>) {
+    let (context, surface, _) = configured_surface(window);
+    let started = Barrier::new(3);
+    let completed = Barrier::new(3);
+    let (acquisition, retirement) = std::thread::scope(|scope| {
+        let acquire = scope.spawn(|| {
+            started.wait();
+            let acquired = context.acquire_surface_image(surface);
+            completed.wait();
+            match acquired {
+                Ok(image) => {
+                    image.abandon();
+                    Ok(())
+                }
+                Err(error) => Err(error.category()),
+            }
+        });
+        let detach = scope.spawn(|| {
+            started.wait();
+            let outcome = context.detach_surface_if_unleased(surface);
+            completed.wait();
+            outcome
+        });
+        started.wait();
+        completed.wait();
+        (
+            acquire.join().expect("G7 acquisition worker panicked"),
+            detach.join().expect("G7 conditional retirement worker panicked"),
+        )
+    });
+
+    match (acquisition, retirement) {
+        (Ok(()), Ok(GpuSurfaceConditionalDetachOutcome::ActiveLease)) => {
+            assert_eq!(
+                context.detach_surface_if_unleased(surface),
+                Ok(GpuSurfaceConditionalDetachOutcome::Detached),
+                "released lease must permit a subsequent exact retirement"
+            );
+        }
+        (
+            Err(GpuSurfaceAcquireErrorCategory::UnknownSurface),
+            Ok(GpuSurfaceConditionalDetachOutcome::Detached),
+        ) => {}
+        (acquisition, retirement) => {
+            panic!("nonlinearizable G7 surface acquisition/retirement: {acquisition:?}, {retirement:?}");
+        }
+    }
+
+    assert!(matches!(
+        context.detach_surface_if_unleased(surface),
+        Err(error) if error.category() == GpuSurfaceErrorCategory::UnknownSurface
+    ));
+    assert!(matches!(
+        context.acquire_surface_image(surface),
+        Err(error) if error.category() == GpuSurfaceAcquireErrorCategory::UnknownSurface
+    ));
+}
+
 #[derive(Default)]
 struct NativeSurfaceProof {
     ran: bool,
@@ -234,7 +304,8 @@ impl ApplicationHandler for NativeSurfaceProof {
                 )
                 .expect("Xvfb must provide one native window"),
         );
-        run_surface_proof(window);
+        run_surface_proof(Arc::clone(&window));
+        run_conditional_detach_race(window);
         event_loop.exit();
     }
 
