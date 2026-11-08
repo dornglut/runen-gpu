@@ -253,7 +253,9 @@ fn run_conditional_detach_race(window: Arc<Window>) {
         completed.wait();
         (
             acquire.join().expect("G7 acquisition worker panicked"),
-            detach.join().expect("G7 conditional retirement worker panicked"),
+            detach
+                .join()
+                .expect("G7 conditional retirement worker panicked"),
         )
     });
 
@@ -270,7 +272,9 @@ fn run_conditional_detach_race(window: Arc<Window>) {
             Ok(GpuSurfaceConditionalDetachOutcome::Detached),
         ) => {}
         (acquisition, retirement) => {
-            panic!("nonlinearizable G7 surface acquisition/retirement: {acquisition:?}, {retirement:?}");
+            panic!(
+                "nonlinearizable G7 surface acquisition/retirement: {acquisition:?}, {retirement:?}"
+            );
         }
     }
 
