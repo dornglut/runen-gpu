@@ -85,6 +85,16 @@ impl GpuSurfaceHandle {
     }
 }
 
+/// Atomic result of refusing to detach a surface with an active acquired-image lease.
+///
+/// This is only physical G7 lease evidence. It does not prove that the caller's
+/// GPU submissions, readbacks, renderer work, or presentation obligations settled.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GpuSurfaceConditionalDetachOutcome {
+    Detached,
+    ActiveLease,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum GpuSurfacePresentMode {
     Fifo,

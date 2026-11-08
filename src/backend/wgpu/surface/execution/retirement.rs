@@ -1,5 +1,5 @@
 use super::super::{WgpuSurfaceState, validate_handle};
-use crate::{GpuContext, GpuSurfaceError, GpuSurfaceHandle};
+use crate::{GpuContext, GpuSurfaceConditionalDetachOutcome, GpuSurfaceError, GpuSurfaceHandle};
 
 impl WgpuSurfaceState {
     /// Retires one registered surface and releases its private physical authority.
@@ -21,6 +21,31 @@ impl WgpuSurfaceState {
         drop(record);
         Ok(())
     }
+
+    /// The active-lease guard and physical removal share the exact mutex used
+    /// by acquisition and G5 Present. A busy outcome preserves the surface and
+    /// the original lease so its owner can still complete presentation.
+    fn detach_if_unleased(
+        &self,
+        handle: GpuSurfaceHandle,
+    ) -> Result<GpuSurfaceConditionalDetachOutcome, GpuSurfaceError> {
+        let mut inner = self.inner(Some(handle.id()))?;
+        validate_handle(self.affinity, &inner.records, handle)?;
+        let record = inner
+            .records
+            .get(&handle.id())
+            .expect("validated surface remains registered while guard is held");
+        if record.active_lease.is_some() {
+            return Ok(GpuSurfaceConditionalDetachOutcome::ActiveLease);
+        }
+        let record = inner
+            .records
+            .remove(&handle.id())
+            .expect("validated unleased surface remains registered while guard is held");
+        drop(inner);
+        drop(record);
+        Ok(GpuSurfaceConditionalDetachOutcome::Detached)
+    }
 }
 
 impl GpuContext {
@@ -31,5 +56,24 @@ impl GpuContext {
     /// subsequent use of the retired surface handle is rejected as an unknown surface.
     pub fn detach_surface(&self, surface: GpuSurfaceHandle) -> Result<(), GpuSurfaceError> {
         self.backend.surfaces.detach(surface)
+    }
+
+    /// Conditionally retires one exact physical surface without abandoning its
+    /// currently acquired image. The lease check and retirement are atomic
+    /// against G7 acquisition, configuration, and Present.
+    ///
+    /// ActiveLease preserves the registered physical surface and original
+    /// acquisition; callers may retry only after the lease owner releases it.
+    /// Detached does not establish that independent G5 submissions, pending
+    /// readbacks, UI publications, or product-owned work are terminal.
+    ///
+    /// Terminal teardown that must abandon an active lease keeps using
+    /// `detach_surface`; unknown/stale/foreign handles return their existing
+    /// GpuSurfaceError rather than a successful no-op.
+    pub fn detach_surface_if_unleased(
+        &self,
+        surface: GpuSurfaceHandle,
+    ) -> Result<GpuSurfaceConditionalDetachOutcome, GpuSurfaceError> {
+        self.backend.surfaces.detach_if_unleased(surface)
     }
 }

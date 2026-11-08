@@ -1,5 +1,5 @@
 use runen_gpu::*;
-use std::sync::Arc;
+use std::sync::{Arc, Barrier};
 use std::time::{Duration, Instant};
 use winit::application::ApplicationHandler;
 use winit::dpi::PhysicalSize;
@@ -171,7 +171,25 @@ fn run_surface_proof(window: Arc<Window>) {
         "successful Present must release physical surface authority even while the old logical image token still exists",
     );
     assert_ne!(next.lease_id(), image.lease_id());
-    let retired_graph = clear_and_present_graph(&next);
+    assert_eq!(
+        context.detach_surface_if_unleased(surface),
+        Ok(GpuSurfaceConditionalDetachOutcome::ActiveLease),
+        "active acquired image must be preserved instead of silently abandoned"
+    );
+    assert!(
+        context.surface_capabilities(surface).is_ok(),
+        "refusal must leave the original physical surface registered"
+    );
+    let preserved = pollster::block_on(context.prepare_submission(clear_and_present_graph(&next)))
+        .expect("refused active lease must still be preparable for Present");
+    let preserved = context
+        .submit_prepared(preserved)
+        .expect("refused active lease must still submit through the original surface");
+    progress_to_completion(&context, &preserved);
+    let forced = context
+        .acquire_surface_image(surface)
+        .expect("successful Present after refusal must allow another acquisition");
+    let retired_graph = clear_and_present_graph(&forced);
 
     context
         .detach_surface(surface)
@@ -203,7 +221,7 @@ fn run_surface_proof(window: Arc<Window>) {
         GpuSurfaceLeaseErrorCategory::UnknownSurface
     );
 
-    next.abandon();
+    forced.abandon();
     drop(image);
 
     let stats = context.execution_stats();
@@ -212,6 +230,142 @@ fn run_surface_proof(window: Arc<Window>) {
     assert_eq!(stats.upload_bytes_in_flight(), 0);
     assert_eq!(stats.readback_bytes_in_flight(), 0);
     assert_eq!(stats.pending_readbacks(), 0);
+}
+
+/// Real G7 mutex race, not a mock: whichever operation acquires the surface
+/// lock first wins. A successfully acquired lease remains alive until both
+/// invocations return, so the conditional detach must refuse without mutation.
+fn run_conditional_detach_race(
+    window: Arc<Window>,
+    surviving_window: Arc<Window>,
+    foreign_window: Arc<Window>,
+) {
+    let (context, surface, _) = configured_surface(window);
+    let config = context
+        .surface_configuration(surface)
+        .expect("primary physical surface configuration must remain observable")
+        .expect("primary physical surface must be configured");
+
+    let (foreign_context, foreign_surface, _) = configured_surface(foreign_window);
+    assert!(matches!(
+        context.detach_surface_if_unleased(foreign_surface),
+        Err(error) if error.category() == GpuSurfaceErrorCategory::ForeignContext
+    ));
+    assert!(
+        foreign_context
+            .surface_capabilities(foreign_surface)
+            .is_ok(),
+        "foreign-handle rejection must not disturb its rightful owner"
+    );
+    assert_eq!(
+        foreign_context.detach_surface_if_unleased(foreign_surface),
+        Ok(GpuSurfaceConditionalDetachOutcome::Detached),
+        "foreign context must still retire its own surface"
+    );
+
+    let stale = surface;
+    let surface = context
+        .configure_surface(surface, config.clone())
+        .expect("reconfiguration must advance the exact G7 surface generation");
+    assert!(matches!(
+        context.detach_surface_if_unleased(stale),
+        Err(error) if error.category() == GpuSurfaceErrorCategory::StaleGeneration
+    ));
+    assert!(
+        context.surface_capabilities(surface).is_ok(),
+        "stale-handle rejection must not disturb the current generation"
+    );
+    let surviving = context
+        .attach_surface(surviving_window)
+        .expect("a second native surface must attach to the same G7 context");
+    let caps = context
+        .surface_capabilities(surviving)
+        .expect("second physical surface capabilities must be available");
+    assert!(caps.supports_format(config.format()));
+    assert!(caps.supports_pair(config.format(), config.color_space()));
+    assert!(caps.supports_present_mode(config.present_mode()));
+    assert!(caps.supports_alpha_mode(config.alpha_mode()));
+    let surviving = context
+        .configure_surface(surviving, config)
+        .expect("second native surface must configure without replacing the first");
+    let started = Barrier::new(3);
+    let completed = Barrier::new(3);
+    let (acquisition, retirement) = std::thread::scope(|scope| {
+        let acquire = scope.spawn(|| {
+            started.wait();
+            let acquired = context.acquire_surface_image(surface);
+            completed.wait();
+            match acquired {
+                Ok(image) => {
+                    image.abandon();
+                    Ok(())
+                }
+                Err(error) => Err(error.category()),
+            }
+        });
+        let detach = scope.spawn(|| {
+            started.wait();
+            let outcome = context.detach_surface_if_unleased(surface);
+            completed.wait();
+            outcome
+        });
+        started.wait();
+        completed.wait();
+        (
+            acquire.join().expect("G7 acquisition worker panicked"),
+            detach
+                .join()
+                .expect("G7 conditional retirement worker panicked"),
+        )
+    });
+
+    match (acquisition, retirement) {
+        (Ok(()), Ok(GpuSurfaceConditionalDetachOutcome::ActiveLease)) => {
+            assert_eq!(
+                context.detach_surface_if_unleased(surface),
+                Ok(GpuSurfaceConditionalDetachOutcome::Detached),
+                "released lease must permit a subsequent exact retirement"
+            );
+        }
+        (
+            Err(GpuSurfaceAcquireErrorCategory::UnknownSurface),
+            Ok(GpuSurfaceConditionalDetachOutcome::Detached),
+        ) => {}
+        (acquisition, retirement) => {
+            panic!(
+                "nonlinearizable G7 surface acquisition/retirement: {acquisition:?}, {retirement:?}"
+            );
+        }
+    }
+
+    assert!(matches!(
+        context.detach_surface_if_unleased(surface),
+        Err(error) if error.category() == GpuSurfaceErrorCategory::UnknownSurface
+    ));
+    assert!(matches!(
+        context.acquire_surface_image(surface),
+        Err(error) if error.category() == GpuSurfaceAcquireErrorCategory::UnknownSurface
+    ));
+
+    // The other physically attached surface and the original G7 context must
+    // continue to submit and terminally Present after primary retirement.
+    let image = context
+        .acquire_surface_image(surviving)
+        .expect("surviving secondary must remain physically acquirable");
+    let prepared = pollster::block_on(context.prepare_submission(clear_and_present_graph(&image)))
+        .expect("surviving secondary must prepare an actual G5 Present");
+    let submitted = context
+        .submit_prepared(prepared)
+        .expect("surviving secondary must submit on the original GPU context");
+    progress_to_completion(&context, &submitted);
+    let next = context
+        .acquire_surface_image(surviving)
+        .expect("terminal Present must free surviving secondary for another acquisition");
+    next.abandon();
+    assert_eq!(
+        context.detach_surface_if_unleased(surviving),
+        Ok(GpuSurfaceConditionalDetachOutcome::Detached)
+    );
 }
 
 #[derive(Default)]
@@ -234,7 +388,26 @@ impl ApplicationHandler for NativeSurfaceProof {
                 )
                 .expect("Xvfb must provide one native window"),
         );
-        run_surface_proof(window);
+        let surviving_window = Arc::new(
+            event_loop
+                .create_window(
+                    Window::default_attributes()
+                        .with_title("RunenGPU G7A2 surviving secondary")
+                        .with_inner_size(PhysicalSize::new(WIDTH, HEIGHT)),
+                )
+                .expect("Xvfb must create a second native window"),
+        );
+        let foreign_window = Arc::new(
+            event_loop
+                .create_window(
+                    Window::default_attributes()
+                        .with_title("RunenGPU G7A2 foreign-context surface")
+                        .with_inner_size(PhysicalSize::new(WIDTH, HEIGHT)),
+                )
+                .expect("Xvfb must create a third native window"),
+        );
+        run_surface_proof(Arc::clone(&window));
+        run_conditional_detach_race(window, surviving_window, foreign_window);
         event_loop.exit();
     }
 
