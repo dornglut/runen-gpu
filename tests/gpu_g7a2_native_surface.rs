@@ -171,7 +171,6 @@ fn run_surface_proof(window: Arc<Window>) {
         "successful Present must release physical surface authority even while the old logical image token still exists",
     );
     assert_ne!(next.lease_id(), image.lease_id());
-    let retired_graph = clear_and_present_graph(&next);
     assert_eq!(
         context.detach_surface_if_unleased(surface),
         Ok(GpuSurfaceConditionalDetachOutcome::ActiveLease),
@@ -181,6 +180,16 @@ fn run_surface_proof(window: Arc<Window>) {
         context.surface_capabilities(surface).is_ok(),
         "refusal must leave the original physical surface registered"
     );
+    let preserved = pollster::block_on(context.prepare_submission(clear_and_present_graph(&next)))
+        .expect("refused active lease must still be preparable for Present");
+    let preserved = context
+        .submit_prepared(preserved)
+        .expect("refused active lease must still submit through the original surface");
+    progress_to_completion(&context, &preserved);
+    let forced = context
+        .acquire_surface_image(surface)
+        .expect("successful Present after refusal must allow another acquisition");
+    let retired_graph = clear_and_present_graph(&forced);
 
     context
         .detach_surface(surface)
@@ -212,7 +221,7 @@ fn run_surface_proof(window: Arc<Window>) {
         GpuSurfaceLeaseErrorCategory::UnknownSurface
     );
 
-    next.abandon();
+    forced.abandon();
     drop(image);
 
     let stats = context.execution_stats();
@@ -226,12 +235,44 @@ fn run_surface_proof(window: Arc<Window>) {
 /// Real G7 mutex race, not a mock: whichever operation acquires the surface
 /// lock first wins. A successfully acquired lease remains alive until both
 /// invocations return, so the conditional detach must refuse without mutation.
-fn run_conditional_detach_race(window: Arc<Window>, surviving_window: Arc<Window>) {
+fn run_conditional_detach_race(
+    window: Arc<Window>,
+    surviving_window: Arc<Window>,
+    foreign_window: Arc<Window>,
+) {
     let (context, surface, _) = configured_surface(window);
     let config = context
         .surface_configuration(surface)
         .expect("primary physical surface configuration must remain observable")
         .expect("primary physical surface must be configured");
+
+    let (foreign_context, foreign_surface, _) = configured_surface(foreign_window);
+    assert!(matches!(
+        context.detach_surface_if_unleased(foreign_surface),
+        Err(error) if error.category() == GpuSurfaceErrorCategory::ForeignContext
+    ));
+    assert!(
+        foreign_context.surface_capabilities(foreign_surface).is_ok(),
+        "foreign-handle rejection must not disturb its rightful owner"
+    );
+    assert_eq!(
+        foreign_context.detach_surface_if_unleased(foreign_surface),
+        Ok(GpuSurfaceConditionalDetachOutcome::Detached),
+        "foreign context must still retire its own surface"
+    );
+
+    let stale = surface;
+    let surface = context
+        .configure_surface(surface, config.clone())
+        .expect("reconfiguration must advance the exact G7 surface generation");
+    assert!(matches!(
+        context.detach_surface_if_unleased(stale),
+        Err(error) if error.category() == GpuSurfaceErrorCategory::StaleGeneration
+    ));
+    assert!(
+        context.surface_capabilities(surface).is_ok(),
+        "stale-handle rejection must not disturb the current generation"
+    );
     let surviving = context
         .attach_surface(surviving_window)
         .expect("a second native surface must attach to the same G7 context");
@@ -354,8 +395,17 @@ impl ApplicationHandler for NativeSurfaceProof {
                 )
                 .expect("Xvfb must create a second native window"),
         );
+        let foreign_window = Arc::new(
+            event_loop
+                .create_window(
+                    Window::default_attributes()
+                        .with_title("RunenGPU G7A2 foreign-context surface")
+                        .with_inner_size(PhysicalSize::new(WIDTH, HEIGHT)),
+                )
+                .expect("Xvfb must create a third native window"),
+        );
         run_surface_proof(Arc::clone(&window));
-        run_conditional_detach_race(window, surviving_window);
+        run_conditional_detach_race(window, surviving_window, foreign_window);
         event_loop.exit();
     }
 
