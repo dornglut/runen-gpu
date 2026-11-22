@@ -925,13 +925,13 @@ mod required_reachability_tests {
                         if next_random(&mut seed) % 7 >= 3 {
                             continue;
                         }
-                        let data = next_random(&mut seed) % 3 == 0;
+                        let data = next_random(&mut seed).is_multiple_of(3);
                         paths
                             .outgoing
                             .entry(node(from))
                             .or_default()
                             .push((node(to), data));
-                        if next_random(&mut seed) % 5 == 0 {
+                        if next_random(&mut seed).is_multiple_of(5) {
                             // Distinct typed/non-data reasons may share endpoints.
                             paths
                                 .outgoing
