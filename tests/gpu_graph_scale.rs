@@ -814,7 +814,8 @@ fn measure_compiled_typed_hazards() -> Value {
         let graph_label = label("compiled hazard A/B matched source");
         let (canonical_ns, canonical, templated_ns, templated) = if sample % 2 == 0 {
             let start = Instant::now();
-            let full = GpuPreparedWorkGraph::prepare(graph_label.clone(), [original_input]).unwrap();
+            let full =
+                GpuPreparedWorkGraph::prepare(graph_label.clone(), [original_input]).unwrap();
             let full_ns = nanos(start);
             let start = Instant::now();
             let reused = GpuPreparedWorkGraph::prepare_with_required_orders_using_hazard_template(
