@@ -831,6 +831,160 @@ fn measure_node_lookup(node_count: usize, fragment_count: usize) -> Value {
     })
 }
 
+fn measure_typed_control_path_queries() -> Value {
+    // The observed native Boids graph has ~104 nodes and ~2328 edges. This
+    // fixture has 104 nodes and 2278 genuine typed WAW edges, not invented
+    // controls. It compares lookup mechanisms only, not complete G3 preparation.
+    let (fragment, resource, resources) = author_dense_clear_case(68);
+    let graph = GpuPreparedWorkGraph::prepare(
+        label("graph-scale typed control-query comparison"),
+        [fragment],
+    )
+    .expect("dense typed fixture should prepare");
+    assert_dense_waw_structure(&graph, 68, resource, resources);
+    let ids = graph
+        .nodes()
+        .iter()
+        .map(|node| node.id())
+        .collect::<Vec<_>>();
+    let edges = graph
+        .dependencies()
+        .iter()
+        .map(|edge| {
+            (
+                edge.before(),
+                edge.after(),
+                edge.reasons()
+                    .iter()
+                    .any(|reason| reason.resource().is_some()),
+            )
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(edges.len(), 2278);
+    assert!(edges.iter().all(|(_, _, typed)| *typed));
+    let queries = (0..64)
+        .map(|i| (ids[(i * 7) % 68], ids[(i * 23 + 11) % 104]))
+        .collect::<Vec<_>>();
+
+    // Original algorithm: for every reached node, scan every dependency edge.
+    fn full_scan(
+        edges: &[(GpuPreparedWorkNodeId, GpuPreparedWorkNodeId, bool)],
+        from: GpuPreparedWorkNodeId,
+        target: GpuPreparedWorkNodeId,
+    ) -> bool {
+        let mut ready = vec![(from, false)];
+        let mut visited = std::collections::BTreeSet::new();
+        while let Some((node, path_has_data)) = ready.pop() {
+            if !visited.insert((node, path_has_data)) {
+                continue;
+            }
+            for &(before, after, typed) in edges {
+                if before != node {
+                    continue;
+                }
+                let next_data = path_has_data || typed;
+                if after == target && next_data {
+                    return true;
+                }
+                ready.push((after, next_data));
+            }
+        }
+        false
+    }
+
+    fn indexed_queries(
+        edges: &[(GpuPreparedWorkNodeId, GpuPreparedWorkNodeId, bool)],
+        queries: &[(GpuPreparedWorkNodeId, GpuPreparedWorkNodeId)],
+    ) -> Vec<bool> {
+        // Index construction is included in the timed interval.
+        let mut outgoing = std::collections::BTreeMap::<
+            GpuPreparedWorkNodeId,
+            Vec<(GpuPreparedWorkNodeId, bool)>,
+        >::new();
+        for &(before, after, typed) in edges {
+            outgoing.entry(before).or_default().push((after, typed));
+        }
+        queries
+            .iter()
+            .map(|&(from, target)| {
+                let mut ready = vec![(from, false)];
+                let mut visited = std::collections::BTreeSet::new();
+                while let Some((node, path_has_data)) = ready.pop() {
+                    if !visited.insert((node, path_has_data)) {
+                        continue;
+                    }
+                    if let Some(next) = outgoing.get(&node) {
+                        for &(after, typed) in next {
+                            let next_data = path_has_data || typed;
+                            if after == target && next_data {
+                                return true;
+                            }
+                            ready.push((after, next_data));
+                        }
+                    }
+                }
+                false
+            })
+            .collect::<Vec<_>>()
+    }
+
+    let reference = queries
+        .iter()
+        .map(|&(from, to)| full_scan(&edges, from, to))
+        .collect::<Vec<_>>();
+    assert_eq!(indexed_queries(&edges, &queries), reference);
+
+    let mut full_scan_samples = Vec::with_capacity(MEASURED_SAMPLES);
+    let mut indexed_samples = Vec::with_capacity(MEASURED_SAMPLES);
+    for run in 0..(WARMUP_SAMPLES + MEASURED_SAMPLES) {
+        let old_start = Instant::now();
+        let old_results = queries
+            .iter()
+            .map(|&(from, to)| full_scan(&edges, from, to))
+            .collect::<Vec<_>>();
+        let old_elapsed = nanos(old_start);
+        assert_eq!(old_results, reference);
+
+        let index_start = Instant::now();
+        let indexed_results = indexed_queries(&edges, &queries);
+        let index_elapsed = nanos(index_start);
+        assert_eq!(indexed_results, reference);
+
+        std::hint::black_box((&old_results, &indexed_results));
+        if run >= WARMUP_SAMPLES {
+            full_scan_samples.push(old_elapsed);
+            indexed_samples.push(index_elapsed);
+        }
+    }
+    let (_, old_median, _) = summarize(&full_scan_samples);
+    let (_, indexed_median, _) = summarize(&indexed_samples);
+    json!({
+        "topology": "synthetic-typed-dense-control-queries",
+        "node_count": 104,
+        "access_count": 104,
+        "fragment_count": 1,
+        "dependency_count": edges.len(),
+        "query_count": queries.len(),
+        "all_dependencies_typed": true,
+        "results_identical": true,
+        "warmup_samples": WARMUP_SAMPLES,
+        "measured_samples": MEASURED_SAMPLES,
+        "full_edge_scan_ns": {
+            "samples": full_scan_samples,
+            "median": old_median,
+        },
+        "indexed_build_and_search_ns": {
+            "samples": indexed_samples,
+            "median": indexed_median,
+        },
+        "median_old_over_indexed_ratio": if indexed_median == 0 {
+            0.0
+        } else {
+            old_median as f64 / indexed_median as f64
+        }
+    })
+}
+
 fn scaling_ratio(cases: &[CaseEvidence], topology: Topology) -> f64 {
     let smallest = cases
         .iter()
@@ -892,6 +1046,8 @@ fn graph_preparation_scale_characterization_records_structural_and_timing_eviden
         .map(|(nodes, fragments)| measure_node_lookup(nodes, fragments))
         .collect::<Vec<_>>();
 
+    let typed_control_path_queries = measure_typed_control_path_queries();
+
     let report = json!({
         "schema_version": REPORT_SCHEMA_VERSION,
         "requirement": "G6-S01",
@@ -937,6 +1093,8 @@ fn graph_preparation_scale_characterization_records_structural_and_timing_eviden
         "dense_waw_cases": dense_waw_cases,
         "dense_waw_policy": "fixed 104 nodes and 104 accesses: 0, 68 or 104 clears share one buffer, creating 0, 2278 or 5356 typed WAW edges; synthetic single-fragment validation-only workload, not a Boids replay or hazard-only stage timer; non-gating",
         "node_lookup_cases": node_lookup_cases,
+        "typed_control_path_queries": typed_control_path_queries,
+        "typed_control_path_policy": "CPU-only 104-node / 2278 typed WAW edge fixture with 64 fixed reachability queries; includes adjacency construction; tests equivalent lookup results; neither full Boids nor graph-preparation stage, ratios are characterization not budgets",
         "node_lookup_policy": "test-profile CPU-only lookup comparison; linear search versus transient BTreeMap/HashMap including index construction on each pass, no physical WGPU plan, shader or resource realization; non-gating",
         "shared_resource_policy": "fixed total nodes: one writer and N-1 read/copy consumers; typed export/import when fragmented, one RAW dependency per consumer; GPU physical preparation not measured; non-gating",
         "fragmentation_policy": "fixed total nodes and unique resources; fragment count alone varies; no typed shared resources, no physical execution preparation; measured time is non-gating",
