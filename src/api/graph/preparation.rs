@@ -183,6 +183,18 @@ impl GpuPreparedWorkGraph {
         retained_coverage: &[GpuRetainedInitializationSeed],
         reconstruction_targets: &[GpuResourceRef],
     ) -> Result<Self, GpuWorkGraphError> {
+        // Only the existing, explicitly opted-in tracing subscriber records
+        // these spans. No graph telemetry store, allocation or per-node event.
+        let _g3_profile = tracing::trace_span!(
+            target: "runen_gpu::graph",
+            "g3.prepare_core"
+        )
+        .entered();
+        let stage = tracing::trace_span!(
+            target: "runen_gpu::graph",
+            "g3.collect_arguments"
+        )
+        .entered();
         let graph_orders = graph_orders.into_iter().collect::<Vec<_>>();
         let required_orders = required_orders.into_iter().collect::<Vec<_>>();
         let fragments = fragments.into_iter().collect::<Vec<_>>();
@@ -191,6 +203,12 @@ impl GpuPreparedWorkGraph {
         let mut storage_resources = BTreeMap::<GpuWorkResourceId, GpuResourceRef>::new();
         let mut prepared_nodes = Vec::new();
         let mut node_locations = BTreeMap::<GpuPreparedWorkNodeId, (usize, usize)>::new();
+        drop(stage);
+        let stage = tracing::trace_span!(
+            target: "runen_gpu::graph",
+            "g3.resource_and_node_validation"
+        )
+        .entered();
 
         for (fragment_index, fragment) in fragments.iter().enumerate() {
             let fragment_ordinal = u32::try_from(fragment_index).map_err(|_| {
@@ -256,6 +274,12 @@ impl GpuPreparedWorkGraph {
             }
         }
 
+        drop(stage);
+        let stage = tracing::trace_span!(
+            target: "runen_gpu::graph",
+            "g3.retained_and_reconstruction"
+        )
+        .entered();
         let reconstruction_targets = validate_reconstruction_targets(
             graph_label,
             reconstruction_targets,
@@ -276,15 +300,33 @@ impl GpuPreparedWorkGraph {
             .cloned()
             .collect::<Vec<_>>();
 
+        drop(stage);
+        let stage = tracing::trace_span!(
+            target: "runen_gpu::graph",
+            "g3.boundary_binding"
+        )
+        .entered();
         let output_bindings = collect_output_bindings(graph_label, &fragments)?;
         let (import_bindings, relations) = bind_imports(graph_label, &fragments, &output_bindings)?;
         validate_boundary_access_intents(graph_label, &fragments)?;
+        drop(stage);
+        let stage = tracing::trace_span!(
+            target: "runen_gpu::graph",
+            "g3.typed_hazard_inference"
+        )
+        .entered();
         let mut inferred_edges = BTreeMap::<
             (GpuPreparedWorkNodeId, GpuPreparedWorkNodeId),
             BTreeSet<GpuDependencyReason>,
         >::new();
         infer_fragment_hazards(graph_label, &fragments, &mut inferred_edges)?;
         infer_cross_fragment_hazards(graph_label, &fragments, &relations, &mut inferred_edges)?;
+        drop(stage);
+        let stage = tracing::trace_span!(
+            target: "runen_gpu::graph",
+            "g3.strict_and_required_order_admission"
+        )
+        .entered();
         // No index or additional traversal is needed when no explicit orders
         // exist. Most preparation paths must not pay to optimize absent work.
         if !graph_orders.is_empty()
@@ -317,9 +359,21 @@ impl GpuPreparedWorkGraph {
                 &mut data_paths,
             )?;
         }
+        drop(stage);
+        let stage = tracing::trace_span!(
+            target: "runen_gpu::graph",
+            "g3.topological_order"
+        )
+        .entered();
         let topological_order =
             topological_node_order(graph_label, &fragments, &node_locations, &inferred_edges)?;
         let fragment_order = topological_fragment_order(graph_label, &fragments, &import_bindings)?;
+        drop(stage);
+        let stage = tracing::trace_span!(
+            target: "runen_gpu::graph",
+            "g3.initial_content_and_boundary_validation"
+        )
+        .entered();
         let initial_content = derive_prepared_initial_content(graph_label, &fragments)?
             .into_iter()
             .filter(|candidate| {
@@ -343,6 +397,12 @@ impl GpuPreparedWorkGraph {
             &retained_seed,
         )?;
 
+        drop(stage);
+        let stage = tracing::trace_span!(
+            target: "runen_gpu::graph",
+            "g3.capability_requirements"
+        )
+        .entered();
         let mut requirements = GpuCapabilityRequirements::new();
         for prepared in &prepared_nodes {
             requirements = requirements
@@ -389,6 +449,12 @@ impl GpuPreparedWorkGraph {
                 })?;
         }
 
+        drop(stage);
+        let stage = tracing::trace_span!(
+            target: "runen_gpu::graph",
+            "g3.dynamic_initialization_simulation"
+        )
+        .entered();
         let (initialization, initialization_diagnostics, failure_preserved_coverage) =
             simulate_prepared_initialization(
                 graph_label,
@@ -399,6 +465,12 @@ impl GpuPreparedWorkGraph {
                 &initial_content,
                 &retained_seed,
             )?;
+        drop(stage);
+        let _materialization = tracing::trace_span!(
+            target: "runen_gpu::graph",
+            "g3.diagnostics_and_result"
+        )
+        .entered();
         let dependencies = inferred_edges
             .into_iter()
             .map(|((before, after), reasons)| GpuWorkDependency {
