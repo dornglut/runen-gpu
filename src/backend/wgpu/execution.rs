@@ -19,7 +19,7 @@ use crate::{
     GpuBufferInitialization, GpuBufferRegion, GpuBufferTextureLayout, GpuCapabilityAdmission,
     GpuClearOperation, GpuContext, GpuContextAffinity, GpuCopyExtent, GpuCopyOperation,
     GpuDataLayout, GpuDispatchSize, GpuExecutionLifecycleState, GpuExecutionPolicy,
-    GpuExecutionStats, GpuGraphExplicitOrder, GpuPipelineRealizationError,
+    GpuExecutionStats, GpuGraphExplicitOrder, GpuGraphRequiredOrder, GpuPipelineRealizationError,
     GpuPipelineRealizationErrorCategory, GpuPreparedInitialContent, GpuPreparedSubmission,
     GpuPreparedSubmissionRejected, GpuPreparedTextureData, GpuPreparedWorkGraph,
     GpuProgramBindingRealizationError, GpuProgramBindingRealizationErrorCategory, GpuReadback,
@@ -1258,6 +1258,25 @@ impl GpuContext {
             label,
             fragments,
             graph_orders,
+            &retained,
+        )
+    }
+
+    /// Prepares work with non-data ordering requirements without provisional
+    /// graph preparation. G3 decides which requirements are already fulfilled
+    /// by typed hazards and validates remaining controls, including cycles.
+    /// Retained resource coverage is always taken from this context generation.
+    pub fn prepare_work_graph_with_required_orders(
+        &self,
+        label: GpuResourceLabel,
+        fragments: impl IntoIterator<Item = GpuWorkFragment>,
+        required_orders: impl IntoIterator<Item = GpuGraphRequiredOrder>,
+    ) -> Result<GpuPreparedWorkGraph, GpuWorkGraphError> {
+        let retained = self.backend.execution.retained.coverage_seed();
+        GpuPreparedWorkGraph::prepare_with_retained_coverage_and_required_orders(
+            label,
+            fragments,
+            required_orders,
             &retained,
         )
     }

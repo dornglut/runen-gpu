@@ -4,7 +4,9 @@ use super::super::{
     GpuWorkGraphErrorContext, GpuWorkGraphErrorSource, GpuWorkResourceId,
 };
 use super::{
-    authoring::{GpuGraphExplicitOrder, GpuWorkFragment, GpuWorkNode, GpuWorkOutput},
+    authoring::{
+        GpuGraphExplicitOrder, GpuGraphRequiredOrder, GpuWorkFragment, GpuWorkNode, GpuWorkOutput,
+    },
     composition::{
         bind_imports, collect_output_bindings, topological_fragment_order,
         validate_boundary_access_intents,
@@ -14,7 +16,8 @@ use super::{
     diagnostics::{GpuPreparedWorkDiagnostic, GraphErrorOrigin, graph_error},
     hazards::{
         DataDependencyPaths, add_explicit_orders, add_graph_explicit_orders,
-        infer_cross_fragment_hazards, infer_fragment_hazards, topological_node_order,
+        add_graph_required_orders, infer_cross_fragment_hazards, infer_fragment_hazards,
+        topological_node_order,
     },
     identity::GpuPreparedWorkNodeId,
     initial_content::{GpuPreparedInitialContent, derive_prepared_initial_content},
@@ -92,6 +95,25 @@ impl GpuPreparedWorkGraph {
         Self::prepare_with_retained_coverage_and_orders(label, fragments, graph_orders, &[])
     }
 
+    /// Prepares the full canonical graph once while admitting render/compute
+    /// control requirements that are already guaranteed by typed dependencies.
+    ///
+    /// Unlike strict graph orders, redundant required orders are dropped
+    /// without changing the canonical graph. Reverse typed causality and
+    /// cycles still fail with RunenGPU's typed errors.
+    pub fn prepare_with_required_orders(
+        label: GpuResourceLabel,
+        fragments: impl IntoIterator<Item = GpuWorkFragment>,
+        required_orders: impl IntoIterator<Item = GpuGraphRequiredOrder>,
+    ) -> Result<Self, GpuWorkGraphError> {
+        Self::prepare_with_retained_coverage_and_required_orders(
+            label,
+            fragments,
+            required_orders,
+            &[],
+        )
+    }
+
     pub(crate) fn prepare_with_retained_coverage(
         label: GpuResourceLabel,
         fragments: impl IntoIterator<Item = GpuWorkFragment>,
@@ -111,7 +133,30 @@ impl GpuPreparedWorkGraph {
         graph_orders: impl IntoIterator<Item = GpuGraphExplicitOrder>,
         retained_coverage: &[GpuRetainedInitializationSeed],
     ) -> Result<Self, GpuWorkGraphError> {
-        Self::prepare_core(label, fragments, graph_orders, retained_coverage, &[])
+        Self::prepare_core(
+            label,
+            fragments,
+            graph_orders,
+            std::iter::empty::<GpuGraphRequiredOrder>(),
+            retained_coverage,
+            &[],
+        )
+    }
+
+    pub(crate) fn prepare_with_retained_coverage_and_required_orders(
+        label: GpuResourceLabel,
+        fragments: impl IntoIterator<Item = GpuWorkFragment>,
+        required_orders: impl IntoIterator<Item = GpuGraphRequiredOrder>,
+        retained_coverage: &[GpuRetainedInitializationSeed],
+    ) -> Result<Self, GpuWorkGraphError> {
+        Self::prepare_core(
+            label,
+            fragments,
+            std::iter::empty::<GpuGraphExplicitOrder>(),
+            required_orders,
+            retained_coverage,
+            &[],
+        )
     }
 
     pub(crate) fn prepare_with_retained_coverage_and_reconstruction(
@@ -124,6 +169,7 @@ impl GpuPreparedWorkGraph {
             label,
             fragments,
             std::iter::empty::<GpuGraphExplicitOrder>(),
+            std::iter::empty::<GpuGraphRequiredOrder>(),
             retained_coverage,
             reconstruction_targets,
         )
@@ -133,10 +179,12 @@ impl GpuPreparedWorkGraph {
         label: GpuResourceLabel,
         fragments: impl IntoIterator<Item = GpuWorkFragment>,
         graph_orders: impl IntoIterator<Item = GpuGraphExplicitOrder>,
+        required_orders: impl IntoIterator<Item = GpuGraphRequiredOrder>,
         retained_coverage: &[GpuRetainedInitializationSeed],
         reconstruction_targets: &[GpuResourceRef],
     ) -> Result<Self, GpuWorkGraphError> {
         let graph_orders = graph_orders.into_iter().collect::<Vec<_>>();
+        let required_orders = required_orders.into_iter().collect::<Vec<_>>();
         let fragments = fragments.into_iter().collect::<Vec<_>>();
         let graph_label = label.as_str();
         let mut declared_resources = BTreeMap::<GpuWorkResourceId, GpuResourceRef>::new();
@@ -240,6 +288,7 @@ impl GpuPreparedWorkGraph {
         // No index or additional traversal is needed when no explicit orders
         // exist. Most preparation paths must not pay to optimize absent work.
         if !graph_orders.is_empty()
+            || !required_orders.is_empty()
             || fragments
                 .iter()
                 .any(|fragment| !fragment.explicit_orders().is_empty())
@@ -257,6 +306,13 @@ impl GpuPreparedWorkGraph {
                 graph_label,
                 &fragments,
                 &graph_orders,
+                &mut inferred_edges,
+                &mut data_paths,
+            )?;
+            add_graph_required_orders(
+                graph_label,
+                &fragments,
+                &required_orders,
                 &mut inferred_edges,
                 &mut data_paths,
             )?;
