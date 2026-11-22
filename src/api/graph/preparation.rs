@@ -13,8 +13,8 @@ use super::{
     dependency::{GpuDependencyReason, GpuWorkDependency},
     diagnostics::{GpuPreparedWorkDiagnostic, GraphErrorOrigin, graph_error},
     hazards::{
-        add_explicit_orders, add_graph_explicit_orders, infer_cross_fragment_hazards,
-        infer_fragment_hazards, topological_node_order,
+        DataDependencyPaths, add_explicit_orders, add_graph_explicit_orders,
+        infer_cross_fragment_hazards, infer_fragment_hazards, topological_node_order,
     },
     identity::GpuPreparedWorkNodeId,
     initial_content::{GpuPreparedInitialContent, derive_prepared_initial_content},
@@ -237,8 +237,17 @@ impl GpuPreparedWorkGraph {
         >::new();
         infer_fragment_hazards(graph_label, &fragments, &mut inferred_edges)?;
         infer_cross_fragment_hazards(graph_label, &fragments, &relations, &mut inferred_edges)?;
-        add_explicit_orders(graph_label, &fragments, &mut inferred_edges)?;
-        add_graph_explicit_orders(graph_label, &fragments, &graph_orders, &mut inferred_edges)?;
+        // Canonical typed edges are inferred once. Explicit-order checks query
+        // only outgoing neighbors and include each newly admitted control edge.
+        let mut data_paths = DataDependencyPaths::from_edges(&inferred_edges);
+        add_explicit_orders(graph_label, &fragments, &mut inferred_edges, &mut data_paths)?;
+        add_graph_explicit_orders(
+            graph_label,
+            &fragments,
+            &graph_orders,
+            &mut inferred_edges,
+            &mut data_paths,
+        )?;
         let topological_order =
             topological_node_order(graph_label, &fragments, &node_locations, &inferred_edges)?;
         let fragment_order = topological_fragment_order(graph_label, &fragments, &import_bindings)?;

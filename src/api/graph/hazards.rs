@@ -216,6 +216,7 @@ pub(super) fn add_explicit_orders(
     graph_label: &str,
     fragments: &[GpuWorkFragment],
     edges: &mut DependencyEdges,
+    paths: &mut DataDependencyPaths,
 ) -> Result<(), GpuWorkGraphError> {
     for (fragment_index, fragment) in fragments.iter().enumerate() {
         for order in fragment.explicit_orders() {
@@ -264,7 +265,7 @@ pub(super) fn add_explicit_orders(
                 })?;
             let before = prepared_node_id(graph_label, fragment_index, fragment, before_node)?;
             let after = prepared_node_id(graph_label, fragment_index, fragment, after_node)?;
-            if dependency_data_path_exists(edges, before, after) {
+            if paths.contains_data_path(before, after) {
                 return Err(graph_error(
                     "add explicit GPU work order",
                     graph_label,
@@ -275,7 +276,7 @@ pub(super) fn add_explicit_orders(
                     "remove the explicit edge and rely on typed access-derived dependency",
                 ));
             }
-            if dependency_data_path_exists(edges, after, before) {
+            if paths.contains_data_path(after, before) {
                 return Err(graph_error(
                     "add explicit GPU work order",
                     graph_label,
@@ -291,6 +292,7 @@ pub(super) fn add_explicit_orders(
                     reason: order.reason().to_string(),
                 },
             );
+            paths.add_non_data_edge(before, after);
         }
     }
     Ok(())
@@ -301,6 +303,7 @@ pub(super) fn add_graph_explicit_orders(
     fragments: &[GpuWorkFragment],
     orders: &[GpuGraphExplicitOrder],
     edges: &mut DependencyEdges,
+    paths: &mut DataDependencyPaths,
 ) -> Result<(), GpuWorkGraphError> {
     for order in orders {
         let (_, _, _, before) =
@@ -308,7 +311,7 @@ pub(super) fn add_graph_explicit_orders(
         let (_, after_fragment, after_node, after) =
             resolve_graph_order_endpoint(graph_label, fragments, order.after())?;
 
-        if dependency_data_path_exists(edges, before, after) {
+        if paths.contains_data_path(before, after) {
             return Err(graph_error(
                 "add graph-scope explicit GPU work order",
                 graph_label,
@@ -319,7 +322,7 @@ pub(super) fn add_graph_explicit_orders(
                 "remove the graph-scope explicit edge and rely on typed access-derived dependency",
             ));
         }
-        if dependency_data_path_exists(edges, after, before) {
+        if paths.contains_data_path(after, before) {
             return Err(graph_error(
                 "add graph-scope explicit GPU work order",
                 graph_label,
@@ -337,6 +340,7 @@ pub(super) fn add_graph_explicit_orders(
             .insert(GpuDependencyReason::ExplicitNonData {
                 reason: order.reason().to_string(),
             });
+        paths.add_non_data_edge(before, after);
     }
     Ok(())
 }
@@ -395,32 +399,60 @@ fn resolve_graph_order_endpoint<'a>(
     Ok((fragment_index, fragment, node, prepared))
 }
 
-fn dependency_data_path_exists(
-    edges: &DependencyEdges,
-    start: GpuPreparedWorkNodeId,
-    target: GpuPreparedWorkNodeId,
-) -> bool {
-    let mut ready = vec![(start, false)];
-    let mut visited = BTreeSet::new();
-    while let Some((node, path_has_data)) = ready.pop() {
-        if !visited.insert((node, path_has_data)) {
-            continue;
-        }
+/// Derived adjacency for explicit-order validation only. The original typed
+/// dependency map remains the graph authority and is never replaced by this
+/// index. Edges retain whether at least one reason is data-derived.
+pub(super) struct DataDependencyPaths {
+    outgoing: BTreeMap<GpuPreparedWorkNodeId, Vec<(GpuPreparedWorkNodeId, bool)>>,
+}
+
+impl DataDependencyPaths {
+    pub(super) fn from_edges(edges: &DependencyEdges) -> Self {
+        let mut outgoing =
+            BTreeMap::<GpuPreparedWorkNodeId, Vec<(GpuPreparedWorkNodeId, bool)>>::new();
         for (&(before, after), reasons) in edges {
-            if before != node {
-                continue;
-            }
-            let edge_has_data = reasons
+            let has_data = reasons
                 .iter()
                 .any(|reason| !matches!(reason, GpuDependencyReason::ExplicitNonData { .. }));
-            let next_has_data = path_has_data || edge_has_data;
-            if after == target && next_has_data {
-                return true;
-            }
-            ready.push((after, next_has_data));
+            outgoing.entry(before).or_default().push((after, has_data));
         }
+        Self { outgoing }
     }
-    false
+
+    pub(super) fn add_non_data_edge(
+        &mut self,
+        before: GpuPreparedWorkNodeId,
+        after: GpuPreparedWorkNodeId,
+    ) {
+        // Explicit orders may only add a non-data reason. Preserve the
+        // distinction across subsequent queries, including when an edge is
+        // already present from an earlier control request.
+        self.outgoing.entry(before).or_default().push((after, false));
+    }
+
+    pub(super) fn contains_data_path(
+        &self,
+        start: GpuPreparedWorkNodeId,
+        target: GpuPreparedWorkNodeId,
+    ) -> bool {
+        let mut ready = vec![(start, false)];
+        let mut visited = BTreeSet::new();
+        while let Some((node, path_has_data)) = ready.pop() {
+            if !visited.insert((node, path_has_data)) {
+                continue;
+            }
+            if let Some(successors) = self.outgoing.get(&node) {
+                for &(after, edge_has_data) in successors {
+                    let next_has_data = path_has_data || edge_has_data;
+                    if after == target && next_has_data {
+                        return true;
+                    }
+                    ready.push((after, next_has_data));
+                }
+            }
+        }
+        false
+    }
 }
 
 pub(super) fn topological_node_order(
@@ -499,4 +531,101 @@ pub(super) fn topological_node_order(
         ));
     }
     Ok(ordered)
+}
+
+#[cfg(test)]
+mod dependency_path_tests {
+    use super::*;
+    use core::num::NonZeroU64;
+
+    fn node(local: u64) -> GpuPreparedWorkNodeId {
+        GpuPreparedWorkNodeId::new(0, NonZeroU64::new(local).expect("positive local ID"))
+    }
+
+    // The old algorithm is kept solely as a differential correctness oracle.
+    fn original_full_edge_scan(
+        edges: &[(GpuPreparedWorkNodeId, GpuPreparedWorkNodeId, bool)],
+        start: GpuPreparedWorkNodeId,
+        target: GpuPreparedWorkNodeId,
+    ) -> bool {
+        let mut ready = vec![(start, false)];
+        let mut visited = BTreeSet::new();
+        while let Some((current, path_has_data)) = ready.pop() {
+            if !visited.insert((current, path_has_data)) {
+                continue;
+            }
+            for &(before, after, edge_has_data) in edges {
+                if before != current {
+                    continue;
+                }
+                let next_has_data = path_has_data || edge_has_data;
+                if after == target && next_has_data {
+                    return true;
+                }
+                ready.push((after, next_has_data));
+            }
+        }
+        false
+    }
+
+    fn assert_matches_reference(
+        indexed: &DataDependencyPaths,
+        edges: &[(GpuPreparedWorkNodeId, GpuPreparedWorkNodeId, bool)],
+    ) {
+        for from in 1..=16 {
+            for to in 1..=16 {
+                let source = node(from);
+                let dest = node(to);
+                assert_eq!(
+                    indexed.contains_data_path(source, dest),
+                    original_full_edge_scan(edges, source, dest),
+                    "typed path {source} -> {dest}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn typed_path_index_matches_full_edge_scan_with_dense_sparse_cycles_and_incremental_orders() {
+        let mut edges = Vec::new();
+        let mut index = DataDependencyPaths {
+            outgoing: BTreeMap::new(),
+        };
+        // A dense typed region with enough same-source successors to exercise
+        // revisiting a source via non-data and data-bearing paths.
+        for before in 1..8 {
+            for after in (before + 1)..8 {
+                let has_data = (before + after) % 3 != 0;
+                edges.push((node(before), node(after), has_data));
+                index
+                    .outgoing
+                    .entry(node(before))
+                    .or_default()
+                    .push((node(after), has_data));
+            }
+        }
+        // A separate all-non-data cycle must not count as typed causality.
+        for (before, after) in [(8, 9), (9, 10), (10, 8)] {
+            edges.push((node(before), node(after), false));
+            index.add_non_data_edge(node(before), node(after));
+        }
+        edges.push((node(11), node(12), true));
+        index
+            .outgoing
+            .entry(node(11))
+            .or_default()
+            .push((node(12), true));
+        assert_matches_reference(&index, &edges);
+        assert!(!index.contains_data_path(node(8), node(8)));
+        assert!(!index.contains_data_path(node(8), node(10)));
+
+        // The path index and canonical edge map both incorporate each newly
+        // admitted explicit edge *before* the next query.
+        for (before, after) in [(7, 8), (10, 11), (12, 1), (12, 13), (13, 13)] {
+            edges.push((node(before), node(after), false));
+            index.add_non_data_edge(node(before), node(after));
+            assert_matches_reference(&index, &edges);
+        }
+        assert!(index.contains_data_path(node(8), node(8)));
+    }
 }
