@@ -434,3 +434,143 @@ fn graph_scope_orders_bracket_immutable_work_with_timestamp_markers() {
         2
     );
 }
+
+// Required-order semantics deliberately differ from strict G3 explicit orders.
+// They allow consumers to express their control needs without first
+// preparing a provisional graph only to discover redundant data causality.
+#[test]
+fn required_graph_orders_drop_typed_redundancy_and_preserve_strict_api() {
+    let (producer, before, consumer, after) = data_fragments();
+    let redundant =
+        GpuGraphRequiredOrder::new(&before, &after, "producer before consumer").unwrap();
+    let graph = GpuPreparedWorkGraph::prepare_with_required_orders(
+        label("one-pass typed required order"),
+        [consumer.clone(), producer.clone()],
+        [redundant],
+    )
+    .expect("typed causality already satisfies required control");
+    assert_eq!(graph.dependencies().len(), 1);
+    assert_eq!(prepared_position(&graph, "graph-order write"), 0);
+    assert_eq!(prepared_position(&graph, "graph-order read"), 1);
+    assert!(
+        graph.dependencies().iter().all(|edge| {
+            edge.reasons()
+                .iter()
+                .all(|reason| !matches!(reason, GpuDependencyReason::ExplicitNonData { .. }))
+        }),
+        "no redundant non-data reason may be synthesized"
+    );
+
+    // Existing strict graph order semantics remain unchanged.
+    assert_eq!(
+        GpuPreparedWorkGraph::prepare_with_orders(
+            label("strict redundant still errors"),
+            [consumer, producer],
+            [GpuGraphExplicitOrder::new(&before, &after, "strict").unwrap()],
+        )
+        .unwrap_err()
+        .cause(),
+        GpuWorkGraphCause::RedundantExplicitDataOrder
+    );
+}
+
+#[test]
+fn required_graph_orders_reject_reverse_data_and_missing_endpoints() {
+    let (producer, before, consumer, after) = data_fragments();
+    let conflict = GpuGraphRequiredOrder::new(&after, &before, "reverse").unwrap();
+    assert_eq!(
+        GpuPreparedWorkGraph::prepare_with_required_orders(
+            label("required conflicting with typed order"),
+            [producer.clone(), consumer],
+            [conflict],
+        )
+        .unwrap_err()
+        .cause(),
+        GpuWorkGraphCause::ExplicitOrderConflict
+    );
+    let (absent, missing) = independent_fragment("missing required", "not present");
+    assert_eq!(
+        GpuPreparedWorkGraph::prepare_with_required_orders(
+            label("required missing endpoint"),
+            [producer],
+            [GpuGraphRequiredOrder::new(&before, &missing, "missing").unwrap()],
+        )
+        .unwrap_err()
+        .cause(),
+        GpuWorkGraphCause::ForeignIdentity
+    );
+    assert_eq!(absent.nodes().len(), 1);
+    assert_eq!(
+        GpuGraphRequiredOrder::new(&before, &before, "self")
+            .unwrap_err()
+            .cause(),
+        GpuWorkAuthoringCause::InvalidExplicitOrder
+    );
+}
+
+#[test]
+fn required_graph_orders_are_transitive_and_preserve_original_stable_topology() {
+    let mut fragment = builder("required controls");
+    let first = add_compute(&mut fragment, "required first", []);
+    let second = add_compute(&mut fragment, "required second", []);
+    let third = add_compute(&mut fragment, "required third", []);
+    let graph = GpuPreparedWorkGraph::prepare_with_required_orders(
+        label("required graph from one preparation"),
+        [fragment.finish().unwrap()],
+        [
+            GpuGraphRequiredOrder::new(&first, &second, "first before second").unwrap(),
+            GpuGraphRequiredOrder::new(&second, &third, "second before third").unwrap(),
+            GpuGraphRequiredOrder::new(&first, &third, "already transitive").unwrap(),
+        ],
+    )
+    .expect("one canonical preparation admits both necessary controls");
+    assert_eq!(
+        graph
+            .dependencies()
+            .iter()
+            .filter(|edge| {
+                edge.reasons()
+                    .iter()
+                    .any(|r| matches!(r, GpuDependencyReason::ExplicitNonData { .. }))
+            })
+            .count(),
+        2
+    );
+    assert_eq!(
+        graph
+            .topological_order()
+            .iter()
+            .copied()
+            .collect::<std::collections::BTreeSet<_>>()
+            .len(),
+        3
+    );
+    assert!(
+        prepared_position(&graph, "required first") < prepared_position(&graph, "required second")
+    );
+    assert!(
+        prepared_position(&graph, "required second") < prepared_position(&graph, "required third")
+    );
+}
+
+#[test]
+fn required_graph_orders_reject_nondata_cycles() {
+    let mut fragment = builder("required cycle");
+    let first = add_compute(&mut fragment, "cycle first", []);
+    let second = add_compute(&mut fragment, "cycle second", []);
+    let third = add_compute(&mut fragment, "cycle third", []);
+    assert_eq!(
+        GpuPreparedWorkGraph::prepare_with_required_orders(
+            label("required cycle error"),
+            [fragment.finish().unwrap()],
+            [
+                GpuGraphRequiredOrder::new(&first, &second, "first to second").unwrap(),
+                GpuGraphRequiredOrder::new(&second, &third, "second to third").unwrap(),
+                GpuGraphRequiredOrder::new(&third, &first, "third to first").unwrap(),
+            ]
+        )
+        .unwrap_err()
+        .cause(),
+        GpuWorkGraphCause::Cycle
+    );
+}

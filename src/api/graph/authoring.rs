@@ -205,6 +205,58 @@ impl GpuGraphExplicitOrder {
     }
 }
 
+/// A required, non-data execution order. Unlike a strict
+/// [`GpuGraphExplicitOrder`], this order is silently satisfied when the
+/// canonical prepared dependency graph already enforces its direction.
+///
+/// G3 remains the only owner of typed hazards and ordering. This contract
+/// allows a consumer to express its desired control requirements *before*
+/// preparation without first preparing a provisional graph merely to find
+/// redundant data-implied requests. It never relaxes safety or reverses an
+/// existing typed/data or non-data path.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GpuGraphRequiredOrder {
+    before: GpuWorkNodeId,
+    after: GpuWorkNodeId,
+    reason: String,
+}
+
+impl GpuGraphRequiredOrder {
+    pub fn new(
+        before: &GpuWorkNodeId,
+        after: &GpuWorkNodeId,
+        reason: impl Into<String>,
+    ) -> Result<Self, GpuWorkAuthoringError> {
+        let reason = reason.into();
+        let reason = reason.trim();
+        if reason.is_empty() || before == after {
+            return Err(GpuWorkAuthoringError::invalid(
+                "construct required GPU work order",
+                GpuWorkAuthoringErrorContext::new(None, None, Some(before.clone()), None, None),
+                GpuWorkAuthoringCause::InvalidExplicitOrder,
+                "provide distinct authored work nodes and a nonempty non-data reason",
+            ));
+        }
+        Ok(Self {
+            before: before.clone(),
+            after: after.clone(),
+            reason: reason.to_string(),
+        })
+    }
+
+    pub fn before(&self) -> &GpuWorkNodeId {
+        &self.before
+    }
+
+    pub fn after(&self) -> &GpuWorkNodeId {
+        &self.after
+    }
+
+    pub fn reason(&self) -> &str {
+        &self.reason
+    }
+}
+
 /// Immutable checked work node. Operation kind is derived from `operation()`;
 /// there is no duplicate mutable kind field.
 ///

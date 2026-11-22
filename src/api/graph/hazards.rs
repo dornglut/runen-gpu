@@ -3,7 +3,7 @@ use super::super::{
     GpuWorkResourceId,
 };
 use super::{
-    authoring::{GpuGraphExplicitOrder, GpuWorkFragment, GpuWorkNode},
+    authoring::{GpuGraphExplicitOrder, GpuGraphRequiredOrder, GpuWorkFragment, GpuWorkNode},
     composition::FragmentRelations,
     dependency::{GpuDependencyReason, GpuDependencyRegion, access_intersection},
     diagnostics::{GraphErrorOrigin, graph_error, graph_error_with_region},
@@ -345,6 +345,60 @@ pub(super) fn add_graph_explicit_orders(
     Ok(())
 }
 
+/// Required order admission differs from strict explicit orders: a preexisting
+/// path of typed dependencies or admitted controls fulfills the requirement.
+/// A reverse path is rejected rather than creating a cycle. All accepted
+/// orders are still authored as canonical RunenGPU non-data dependency reasons.
+pub(super) fn add_graph_required_orders(
+    graph_label: &str,
+    fragments: &[GpuWorkFragment],
+    orders: &[GpuGraphRequiredOrder],
+    edges: &mut DependencyEdges,
+    paths: &mut DataDependencyPaths,
+) -> Result<(), GpuWorkGraphError> {
+    for order in orders {
+        let (_, _, _, before) =
+            resolve_graph_order_endpoint(graph_label, fragments, order.before())?;
+        let (_, after_fragment, after_node, after) =
+            resolve_graph_order_endpoint(graph_label, fragments, order.after())?;
+
+        if paths.contains_path(before, after) {
+            continue;
+        }
+        if paths.contains_data_path(after, before) {
+            return Err(graph_error(
+                "admit required GPU work order",
+                graph_label,
+                GraphErrorOrigin::new(Some(after_fragment), Some(after_node)),
+                Some(after),
+                None,
+                GpuWorkGraphCause::ExplicitOrderConflict,
+                "orient the required control consistently with typed resource causality",
+            ));
+        }
+        if paths.contains_path(after, before) {
+            return Err(graph_error(
+                "admit required GPU work order",
+                graph_label,
+                GraphErrorOrigin::new(Some(after_fragment), Some(after_node)),
+                Some(after),
+                None,
+                GpuWorkGraphCause::Cycle,
+                "remove cyclic required control ordering",
+            ));
+        }
+
+        edges
+            .entry((before, after))
+            .or_default()
+            .insert(GpuDependencyReason::ExplicitNonData {
+                reason: order.reason().to_string(),
+            });
+        paths.add_non_data_edge(before, after);
+    }
+    Ok(())
+}
+
 fn resolve_graph_order_endpoint<'a>(
     graph_label: &str,
     fragments: &'a [GpuWorkFragment],
@@ -431,6 +485,31 @@ impl DataDependencyPaths {
             .entry(before)
             .or_default()
             .push((after, false));
+    }
+
+    /// Tests for a positive-length directed path, regardless of whether it
+    /// contains typed data edges or only non-data controls.
+    pub(super) fn contains_path(
+        &self,
+        start: GpuPreparedWorkNodeId,
+        target: GpuPreparedWorkNodeId,
+    ) -> bool {
+        let mut ready = vec![start];
+        let mut visited = BTreeSet::new();
+        while let Some(node) = ready.pop() {
+            if !visited.insert(node) {
+                continue;
+            }
+            if let Some(successors) = self.outgoing.get(&node) {
+                for &(after, _) in successors {
+                    if after == target {
+                        return true;
+                    }
+                    ready.push(after);
+                }
+            }
+        }
+        false
     }
 
     pub(super) fn contains_data_path(
