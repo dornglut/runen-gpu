@@ -695,6 +695,108 @@ fn measure_dense_waw(shared_nodes: usize) -> Value {
     })
 }
 
+fn measure_required_order_dense_waw() -> Value {
+    let (fragment, shared, resource_count) = author_dense_clear_case(68);
+    let original =
+        GpuPreparedWorkGraph::prepare(label("dense required-order reference"), [fragment.clone()])
+            .unwrap();
+    assert_dense_waw_structure(&original, 68, shared, resource_count);
+    let local_nodes = fragment
+        .nodes()
+        .iter()
+        .map(|node| node.id().clone())
+        .collect::<Vec<_>>();
+    let requested = (0..64)
+        .map(|index| {
+            GpuGraphRequiredOrder::new(
+                &local_nodes[index],
+                &local_nodes[index + 1],
+                "characterization: existing WAW data causality",
+            )
+            .unwrap()
+        })
+        .collect::<Vec<_>>();
+
+    let baseline = || {
+        let work = fragment.clone();
+        let graph_label = label("dense required-order reference");
+        let start = Instant::now();
+        let prepared = GpuPreparedWorkGraph::prepare(graph_label, [work]).unwrap();
+        (nanos(start), prepared)
+    };
+    let with_orders = || {
+        let work = fragment.clone();
+        let orders = requested.clone();
+        let graph_label = label("dense required-order reference");
+        let start = Instant::now();
+        let prepared =
+            GpuPreparedWorkGraph::prepare_with_required_orders(graph_label, [work], orders)
+                .unwrap();
+        (nanos(start), prepared)
+    };
+
+    let mut baseline_samples = Vec::with_capacity(MEASURED_SAMPLES);
+    let mut required_samples = Vec::with_capacity(MEASURED_SAMPLES);
+    for sample in 0..(WARMUP_SAMPLES + MEASURED_SAMPLES) {
+        // Alternate execution order across paired samples to reduce warming
+        // bias. The same authored graph and semantic required controls are
+        // exercised with and without additional required-order validation.
+        let (baseline_ns, baseline_graph, required_ns, required_graph) = if sample % 2 == 0 {
+            let (b_ns, b_graph) = baseline();
+            let (r_ns, r_graph) = with_orders();
+            (b_ns, b_graph, r_ns, r_graph)
+        } else {
+            let (r_ns, r_graph) = with_orders();
+            let (b_ns, b_graph) = baseline();
+            (b_ns, b_graph, r_ns, r_graph)
+        };
+        assert_eq!(required_graph.nodes().len(), DENSE_WAW_NODES);
+        assert_eq!(required_graph.dependencies().len(), 2_278);
+        assert_eq!(
+            required_graph.topological_order(),
+            baseline_graph.topological_order()
+        );
+        assert!(
+            required_graph.dependencies().iter().all(|dependency| {
+                dependency
+                    .reasons()
+                    .iter()
+                    .all(|reason| reason.resource().is_some())
+            }),
+            "64 redundant required orders must never add non-data edges"
+        );
+        std::hint::black_box((&baseline_graph, &required_graph));
+        if sample >= WARMUP_SAMPLES {
+            baseline_samples.push(baseline_ns);
+            required_samples.push(required_ns);
+        }
+    }
+    let (_, baseline_median, _) = summarize(&baseline_samples);
+    let (_, required_median, _) = summarize(&required_samples);
+    json!({
+        "topology": "single-fragment-dense-waw-redundant-required-orders",
+        "node_count": DENSE_WAW_NODES,
+        "fragment_count": 1,
+        "access_count": DENSE_WAW_NODES,
+        "dependency_count": 2278,
+        "typed_redundant_required_order_count": requested.len(),
+        "results_identical": true,
+        "warmup_samples": WARMUP_SAMPLES,
+        "measured_samples": MEASURED_SAMPLES,
+        "baseline_g3_prepare_ns": {
+            "samples": baseline_samples,
+            "median": baseline_median
+        },
+        "required_g3_prepare_ns": {
+            "samples": required_samples,
+            "median": required_median
+        },
+        "median_required_minus_baseline_ns":
+            i128::from(required_median) - i128::from(baseline_median),
+        "policy": "paired same-runner CPU-only full G3 prepare vs same prepared graph with 64 typed-redundant required orders; graph clones excluded and all G3 validation included; not a Boids replay or standalone index-only timer; non-gating"
+    })
+}
+
 const NODE_LOOKUP_CASES: [(usize, usize); 6] =
     [(80, 1), (80, 8), (80, 80), (800, 1), (800, 8), (800, 80)];
 const NODE_LOOKUP_REPEATS: usize = 32;
@@ -1047,6 +1149,7 @@ fn graph_preparation_scale_characterization_records_structural_and_timing_eviden
         .collect::<Vec<_>>();
 
     let typed_control_path_queries = measure_typed_control_path_queries();
+    let required_order_dense_waw = measure_required_order_dense_waw();
 
     let report = json!({
         "schema_version": REPORT_SCHEMA_VERSION,
@@ -1094,6 +1197,7 @@ fn graph_preparation_scale_characterization_records_structural_and_timing_eviden
         "dense_waw_policy": "fixed 104 nodes and 104 accesses: 0, 68 or 104 clears share one buffer, creating 0, 2278 or 5356 typed WAW edges; synthetic single-fragment validation-only workload, not a Boids replay or hazard-only stage timer; non-gating",
         "node_lookup_cases": node_lookup_cases,
         "typed_control_path_queries": typed_control_path_queries,
+        "required_order_dense_waw": required_order_dense_waw,
         "typed_control_path_policy": "CPU-only 104-node / 2278 typed WAW edge fixture with 64 fixed reachability queries; includes adjacency construction; tests equivalent lookup results; neither full Boids nor graph-preparation stage, ratios are characterization not budgets",
         "node_lookup_policy": "test-profile CPU-only lookup comparison; linear search versus transient BTreeMap/HashMap including index construction on each pass, no physical WGPU plan, shader or resource realization; non-gating",
         "shared_resource_policy": "fixed total nodes: one writer and N-1 read/copy consumers; typed export/import when fragmented, one RAW dependency per consumer; GPU physical preparation not measured; non-gating",
