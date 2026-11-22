@@ -45,7 +45,10 @@ impl Subscriber for StageCollector {
 
     fn enter(&self, span: &Id) {
         let mut state = self.state.lock().unwrap();
-        let name = *state.names.get(&span.into_u64()).expect("registered G3 span");
+        let name = *state
+            .names
+            .get(&span.into_u64())
+            .expect("registered G3 span");
         if name != "g3.prepare_core" {
             assert_eq!(
                 state.stack.as_slice(),
@@ -59,8 +62,15 @@ impl Subscriber for StageCollector {
 
     fn exit(&self, span: &Id) {
         let mut state = self.state.lock().unwrap();
-        let name = *state.names.get(&span.into_u64()).expect("registered G3 span");
-        assert_eq!(state.stack.pop(), Some(name), "G3 stages must exit in LIFO order");
+        let name = *state
+            .names
+            .get(&span.into_u64())
+            .expect("registered G3 span");
+        assert_eq!(
+            state.stack.pop(),
+            Some(name),
+            "G3 stages must exit in LIFO order"
+        );
     }
 }
 
@@ -102,7 +112,10 @@ fn g3_stages_are_observable_nonoverlapping_and_drop_cleanly_on_error() {
     });
 
     let state = captured.lock().unwrap();
-    assert!(state.stack.is_empty(), "errors must exit all active G3 spans");
+    assert!(
+        state.stack.is_empty(),
+        "errors must exit all active G3 spans"
+    );
     let stages = [
         "g3.prepare_core",
         "g3.collect_arguments",
@@ -132,8 +145,7 @@ fn g3_stages_are_observable_nonoverlapping_and_drop_cleanly_on_error() {
         "successful and rejected G3 calls must each have a parent span"
     );
     assert!(
-        state.entered[stages.len()..]
-            .contains(&"g3.strict_and_required_order_admission"),
+        state.entered[stages.len()..].contains(&"g3.strict_and_required_order_admission"),
         "a rejected required order must still identify its failed phase"
     );
 }
