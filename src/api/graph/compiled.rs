@@ -487,11 +487,8 @@ mod tests {
             builder.operation(
                 "partial buffer writer",
                 GpuClearOperation::buffer_zero(
-                    GpuBufferRegion::new(
-                        &buffer,
-                        GpuBufferRange::new(&buffer, 0, 8).unwrap(),
-                    )
-                    .unwrap(),
+                    GpuBufferRegion::new(&buffer, GpuBufferRange::new(&buffer, 0, 8).unwrap())
+                        .unwrap(),
                 )
                 .unwrap(),
             )?;
@@ -515,7 +512,9 @@ mod tests {
         assert_eq!(rebound.dependencies()[0].reasons().len(), 1);
         assert_eq!(
             rebound.dependencies()[0].reasons()[0].region(),
-            Some(GpuDependencyRegion::Buffer(GpuBufferRange::new(&buffer, 0, 8).unwrap()))
+            Some(GpuDependencyRegion::Buffer(
+                GpuBufferRange::new(&buffer, 0, 8).unwrap()
+            ))
         );
     }
 
