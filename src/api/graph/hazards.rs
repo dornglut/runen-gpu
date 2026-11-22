@@ -609,10 +609,9 @@ impl RequiredReachability {
                         let old_any = any[source][word];
                         let old_typed = typed[source][word];
                         any[source][word] |= reachable;
-                        typed[source][word] |= typed_successor
-                            | (if has_data { reachable } else { 0 });
-                        changed |= any[source][word] != old_any
-                            || typed[source][word] != old_typed;
+                        typed[source][word] |=
+                            typed_successor | (if has_data { reachable } else { 0 });
+                        changed |= any[source][word] != old_any || typed[source][word] != old_typed;
                     }
                 }
             }
@@ -660,17 +659,14 @@ impl RequiredReachability {
         suffix_any[target / 64] |= 1_u64 << (target % 64);
         let suffix_typed = self.typed[target].clone();
         for from in 0..self.any.len() {
-            if from != source
-                && self.any[from][source / 64] & (1_u64 << (source % 64)) == 0
-            {
+            if from != source && self.any[from][source / 64] & (1_u64 << (source % 64)) == 0 {
                 continue;
             }
-            let typed_prefix =
-                self.typed[from][source / 64] & (1_u64 << (source % 64)) != 0;
+            let typed_prefix = self.typed[from][source / 64] & (1_u64 << (source % 64)) != 0;
             for word in 0..suffix_any.len() {
                 self.any[from][word] |= suffix_any[word];
-                self.typed[from][word] |= suffix_typed[word]
-                    | (if typed_prefix { suffix_any[word] } else { 0 });
+                self.typed[from][word] |=
+                    suffix_typed[word] | (if typed_prefix { suffix_any[word] } else { 0 });
             }
         }
         true
@@ -996,7 +992,10 @@ mod required_reachability_tests {
                 inserted += 1;
             }
         }
-        assert!(inserted >= 3, "fixture must actually admit new control edges");
+        assert!(
+            inserted >= 3,
+            "fixture must actually admit new control edges"
+        );
     }
 
     #[test]
