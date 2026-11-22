@@ -797,6 +797,73 @@ fn measure_required_order_dense_waw() -> Value {
     })
 }
 
+fn measure_dependency_diagnostic_observation() -> Value {
+    let (fragment, shared, resource_count) = author_dense_clear_case(68);
+    let mut unobserved_ns = Vec::with_capacity(MEASURED_SAMPLES);
+    let mut observed_ns = Vec::with_capacity(MEASURED_SAMPLES);
+    for sample in 0..(WARMUP_SAMPLES + MEASURED_SAMPLES) {
+        // Both methods prepare the same 104-node, 2,278-edge canonical G3
+        // graph from fresh fragment clones. Observed timing *also* requests
+        // the exact public diagnostics, deliberately charging its work.
+        let unobserved_input = fragment.clone();
+        let observed_input = fragment.clone();
+        let label = label("dense G3 diagnostics observation");
+        let (plain_time, plain, diagnostic_time, observed) = if sample % 2 == 0 {
+            let started = Instant::now();
+            let plain = GpuPreparedWorkGraph::prepare(label.clone(), [unobserved_input]).unwrap();
+            let plain_time = nanos(started);
+            let started = Instant::now();
+            let observed = GpuPreparedWorkGraph::prepare(label, [observed_input]).unwrap();
+            let count = observed.diagnostics().len();
+            std::hint::black_box(count);
+            (plain_time, plain, nanos(started), observed)
+        } else {
+            let started = Instant::now();
+            let observed = GpuPreparedWorkGraph::prepare(label.clone(), [observed_input]).unwrap();
+            let count = observed.diagnostics().len();
+            std::hint::black_box(count);
+            let diagnostic_time = nanos(started);
+            let started = Instant::now();
+            let plain = GpuPreparedWorkGraph::prepare(label, [unobserved_input]).unwrap();
+            (nanos(started), plain, diagnostic_time, observed)
+        };
+        assert_dense_waw_structure(&plain, 68, shared, resource_count);
+        assert_dense_waw_structure(&observed, 68, shared, resource_count);
+        assert_eq!(plain.dependencies(), observed.dependencies());
+        assert_eq!(plain.topological_order(), observed.topological_order());
+        assert_eq!(plain.initialization(), observed.initialization());
+        assert_eq!(
+            observed.diagnostics()[0],
+            GpuPreparedWorkDiagnostic::Dependency(observed.dependencies()[0].clone())
+        );
+        std::hint::black_box((&plain, &observed));
+        if sample >= WARMUP_SAMPLES {
+            unobserved_ns.push(plain_time);
+            observed_ns.push(diagnostic_time);
+        }
+    }
+    let (_, plain_median, _) = summarize(&unobserved_ns);
+    let (_, observed_median, _) = summarize(&observed_ns);
+    json!({
+        "topology": "single-fragment-dense-waw-diagnostic-materialization",
+        "node_count": DENSE_WAW_NODES,
+        "dependency_count": 2278,
+        "warmup_samples": WARMUP_SAMPLES,
+        "measured_samples": MEASURED_SAMPLES,
+        "g3_without_diagnostic_observation_ns": {
+            "samples": unobserved_ns,
+            "median": plain_median
+        },
+        "g3_with_first_diagnostic_observation_ns": {
+            "samples": observed_ns,
+            "median": observed_median
+        },
+        "median_diagnostic_observation_cost_ns":
+            i128::from(observed_median) - i128::from(plain_median),
+        "policy": "paired alternating same-host CPU-only full G3 preparation, explicit diagnostic observation charged only to observed case; excludes fragment cloning, includes all other G3 validation; neither actual Boids nor the old eager-implementation A/B; non-gating"
+    })
+}
+
 const NODE_LOOKUP_CASES: [(usize, usize); 6] =
     [(80, 1), (80, 8), (80, 80), (800, 1), (800, 8), (800, 80)];
 const NODE_LOOKUP_REPEATS: usize = 32;
@@ -1150,6 +1217,7 @@ fn graph_preparation_scale_characterization_records_structural_and_timing_eviden
 
     let typed_control_path_queries = measure_typed_control_path_queries();
     let required_order_dense_waw = measure_required_order_dense_waw();
+    let dependency_diagnostic_observation = measure_dependency_diagnostic_observation();
 
     let report = json!({
         "schema_version": REPORT_SCHEMA_VERSION,
@@ -1198,6 +1266,7 @@ fn graph_preparation_scale_characterization_records_structural_and_timing_eviden
         "node_lookup_cases": node_lookup_cases,
         "typed_control_path_queries": typed_control_path_queries,
         "required_order_dense_waw": required_order_dense_waw,
+        "dependency_diagnostic_observation": dependency_diagnostic_observation,
         "typed_control_path_policy": "CPU-only 104-node / 2278 typed WAW edge fixture with 64 fixed reachability queries; includes adjacency construction; tests equivalent lookup results; neither full Boids nor graph-preparation stage, ratios are characterization not budgets",
         "node_lookup_policy": "test-profile CPU-only lookup comparison; linear search versus transient BTreeMap/HashMap including index construction on each pass, no physical WGPU plan, shader or resource realization; non-gating",
         "shared_resource_policy": "fixed total nodes: one writer and N-1 read/copy consumers; typed export/import when fragmented, one RAW dependency per consumer; GPU physical preparation not measured; non-gating",
