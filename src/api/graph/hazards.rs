@@ -353,19 +353,26 @@ pub(super) fn add_graph_required_orders(
     graph_label: &str,
     fragments: &[GpuWorkFragment],
     orders: &[GpuGraphRequiredOrder],
+    node_locations: &BTreeMap<GpuPreparedWorkNodeId, (usize, usize)>,
     edges: &mut DependencyEdges,
     paths: &mut DataDependencyPaths,
 ) -> Result<(), GpuWorkGraphError> {
+    // Bounded, canonical reachability for repeated required orders. A one-off
+    // request and large graphs retain the original adjacency DFS behavior.
+    // Both paths compare typed-vs-nondata causality identically.
+    let mut indexed = (orders.len() >= 4)
+        .then(|| RequiredReachability::from_paths(paths, node_locations))
+        .flatten();
     for order in orders {
         let (_, _, _, before) =
             resolve_graph_order_endpoint(graph_label, fragments, order.before())?;
         let (_, after_fragment, after_node, after) =
             resolve_graph_order_endpoint(graph_label, fragments, order.after())?;
 
-        if paths.contains_path(before, after) {
+        if required_path_exists(paths, indexed.as_ref(), before, after, false) {
             continue;
         }
-        if paths.contains_data_path(after, before) {
+        if required_path_exists(paths, indexed.as_ref(), after, before, true) {
             return Err(graph_error(
                 "admit required GPU work order",
                 graph_label,
@@ -376,7 +383,7 @@ pub(super) fn add_graph_required_orders(
                 "orient the required control consistently with typed resource causality",
             ));
         }
-        if paths.contains_path(after, before) {
+        if required_path_exists(paths, indexed.as_ref(), after, before, false) {
             return Err(graph_error(
                 "admit required GPU work order",
                 graph_label,
@@ -395,6 +402,14 @@ pub(super) fn add_graph_required_orders(
                 reason: order.reason().to_string(),
             });
         paths.add_non_data_edge(before, after);
+        if indexed
+            .as_mut()
+            .is_some_and(|index| !index.add_non_data_edge(before, after))
+        {
+            // A missing, unexpectedly introduced endpoint cannot justify a
+            // cache hit. Fall back to the original authoritative path checks.
+            indexed = None;
+        }
     }
     Ok(())
 }
@@ -534,6 +549,148 @@ impl DataDependencyPaths {
             }
         }
         false
+    }
+}
+
+/// Dense reachability is only a derivative of G3's canonical typed dependency
+/// map. The entire index is local to a single preparation and never stores
+/// frame resources, retained coverage or operations.
+const MAX_INDEXED_REQUIRED_NODES: usize = 256;
+
+struct RequiredReachability {
+    index: BTreeMap<GpuPreparedWorkNodeId, usize>,
+    any: Vec<Vec<u64>>,
+    typed: Vec<Vec<u64>>,
+}
+
+impl RequiredReachability {
+    fn from_paths(
+        paths: &DataDependencyPaths,
+        node_locations: &BTreeMap<GpuPreparedWorkNodeId, (usize, usize)>,
+    ) -> Option<Self> {
+        let node_count = node_locations.len();
+        if node_count > MAX_INDEXED_REQUIRED_NODES {
+            return None;
+        }
+        let index = node_locations
+            .keys()
+            .copied()
+            .enumerate()
+            .map(|(slot, id)| (id, slot))
+            .collect::<BTreeMap<_, _>>();
+        let word_count = node_count.div_ceil(64);
+        let mut adjacency = vec![Vec::<(usize, bool)>::new(); node_count];
+        for (before, successors) in &paths.outgoing {
+            let &source = index.get(before)?;
+            for &(after, has_data) in successors {
+                let &target = index.get(&after)?;
+                adjacency[source].push((target, has_data));
+            }
+        }
+
+        // Fixed-point propagation over two independent reachability states:
+        // any positive-length path, and a path containing at least one typed
+        // data dependency. Unlike a simple Floyd variant, this also handles
+        // typed cycles and non-data cycles without guessing path semantics.
+        let mut any = vec![vec![0_u64; word_count]; node_count];
+        let mut typed = vec![vec![0_u64; word_count]; node_count];
+        for _ in 0..=node_count.saturating_mul(2) {
+            let mut changed = false;
+            for source in (0..node_count).rev() {
+                for &(target, has_data) in &adjacency[source] {
+                    for word in 0..word_count {
+                        let immediate = if word == target / 64 {
+                            1_u64 << (target % 64)
+                        } else {
+                            0
+                        };
+                        let reachable = immediate | any[target][word];
+                        let typed_successor = typed[target][word];
+                        let old_any = any[source][word];
+                        let old_typed = typed[source][word];
+                        any[source][word] |= reachable;
+                        typed[source][word] |= typed_successor
+                            | (if has_data { reachable } else { 0 });
+                        changed |= any[source][word] != old_any
+                            || typed[source][word] != old_typed;
+                    }
+                }
+            }
+            if !changed {
+                return Some(Self { index, any, typed });
+            }
+        }
+        // The fallback keeps error behavior identical even if this bounded
+        // acceleration cannot establish a complete closure.
+        None
+    }
+
+    fn contains(
+        &self,
+        before: GpuPreparedWorkNodeId,
+        after: GpuPreparedWorkNodeId,
+        requires_data: bool,
+    ) -> Option<bool> {
+        let from = *self.index.get(&before)?;
+        let to = *self.index.get(&after)?;
+        let row = if requires_data {
+            &self.typed[from]
+        } else {
+            &self.any[from]
+        };
+        Some(row[to / 64] & (1_u64 << (to % 64)) != 0)
+    }
+
+    /// Caller has already rejected reverse reachability; the new non-data edge
+    /// cannot participate in a cycle. Every newly admitted positive path can
+    /// therefore be expressed with exactly one occurrence of this new edge.
+    /// Preserve typed prefixes and suffixes but never mark this edge as typed.
+    fn add_non_data_edge(
+        &mut self,
+        before: GpuPreparedWorkNodeId,
+        after: GpuPreparedWorkNodeId,
+    ) -> bool {
+        let Some(&source) = self.index.get(&before) else {
+            return false;
+        };
+        let Some(&target) = self.index.get(&after) else {
+            return false;
+        };
+        let mut suffix_any = self.any[target].clone();
+        suffix_any[target / 64] |= 1_u64 << (target % 64);
+        let suffix_typed = self.typed[target].clone();
+        for from in 0..self.any.len() {
+            if from != source
+                && self.any[from][source / 64] & (1_u64 << (source % 64)) == 0
+            {
+                continue;
+            }
+            let typed_prefix =
+                self.typed[from][source / 64] & (1_u64 << (source % 64)) != 0;
+            for word in 0..suffix_any.len() {
+                self.any[from][word] |= suffix_any[word];
+                self.typed[from][word] |= suffix_typed[word]
+                    | (if typed_prefix { suffix_any[word] } else { 0 });
+            }
+        }
+        true
+    }
+}
+
+fn required_path_exists(
+    paths: &DataDependencyPaths,
+    index: Option<&RequiredReachability>,
+    before: GpuPreparedWorkNodeId,
+    after: GpuPreparedWorkNodeId,
+    requires_data: bool,
+) -> bool {
+    if let Some(result) = index.and_then(|index| index.contains(before, after, requires_data)) {
+        return result;
+    }
+    if requires_data {
+        paths.contains_data_path(before, after)
+    } else {
+        paths.contains_path(before, after)
     }
 }
 
@@ -709,5 +866,173 @@ mod dependency_path_tests {
             assert_matches_reference(&index, &edges);
         }
         assert!(index.contains_data_path(node(8), node(8)));
+    }
+}
+
+#[cfg(test)]
+mod required_reachability_tests {
+    use super::*;
+    use core::num::NonZeroU64;
+
+    fn node(index: usize) -> GpuPreparedWorkNodeId {
+        GpuPreparedWorkNodeId::new(
+            0,
+            NonZeroU64::new(u64::try_from(index + 1).unwrap()).unwrap(),
+        )
+    }
+
+    fn locations(count: usize) -> BTreeMap<GpuPreparedWorkNodeId, (usize, usize)> {
+        (0..count).map(|index| (node(index), (0, index))).collect()
+    }
+
+    fn compare_against_original(
+        paths: &DataDependencyPaths,
+        indexed: &RequiredReachability,
+        count: usize,
+    ) {
+        for from in 0..count {
+            for to in 0..count {
+                let before = node(from);
+                let after = node(to);
+                assert_eq!(
+                    indexed.contains(before, after, false),
+                    Some(paths.contains_path(before, after)),
+                    "positive-length path {from}->{to}"
+                );
+                assert_eq!(
+                    indexed.contains(before, after, true),
+                    Some(paths.contains_data_path(before, after)),
+                    "typed-bearing path {from}->{to}"
+                );
+            }
+        }
+    }
+
+    fn next_random(seed: &mut u64) -> u64 {
+        *seed = seed
+            .wrapping_mul(6_364_136_223_846_793_005)
+            .wrapping_add(1_442_695_040_888_963_407);
+        *seed
+    }
+
+    #[test]
+    fn required_reachability_matches_dfs_in_cycles_and_all_nondata_regions() {
+        let mut seed = 0x1f70_9bad_84ac_c331_u64;
+        for node_count in 1..=11 {
+            let locations = locations(node_count);
+            for _ in 0..96 {
+                let mut paths = DataDependencyPaths {
+                    outgoing: BTreeMap::new(),
+                };
+                for from in 0..node_count {
+                    for to in 0..node_count {
+                        if next_random(&mut seed) % 7 >= 3 {
+                            continue;
+                        }
+                        let data = next_random(&mut seed) % 3 == 0;
+                        paths
+                            .outgoing
+                            .entry(node(from))
+                            .or_default()
+                            .push((node(to), data));
+                        if next_random(&mut seed) % 5 == 0 {
+                            // Distinct typed/non-data reasons may share endpoints.
+                            paths
+                                .outgoing
+                                .entry(node(from))
+                                .or_default()
+                                .push((node(to), false));
+                        }
+                    }
+                }
+                let index = RequiredReachability::from_paths(&paths, &locations)
+                    .expect("small cycles must be bounded and convergent");
+                compare_against_original(&paths, &index, node_count);
+            }
+        }
+    }
+
+    #[test]
+    fn required_reachability_updates_after_each_accepted_nondata_edge() {
+        let count = 16;
+        let locations = locations(count);
+        let mut paths = DataDependencyPaths {
+            outgoing: BTreeMap::new(),
+        };
+        // Existing strict controls can have a cycle; the index must preserve
+        // typed paths through the cycle even if a required edge is added later.
+        for (from, to, typed) in [
+            (0, 1, false),
+            (1, 0, false),
+            (1, 1, true),
+            (3, 4, true),
+            (4, 5, false),
+            (7, 8, true),
+            (8, 9, false),
+            (11, 12, true),
+        ] {
+            paths
+                .outgoing
+                .entry(node(from))
+                .or_default()
+                .push((node(to), typed));
+        }
+        let mut index = RequiredReachability::from_paths(&paths, &locations).unwrap();
+        compare_against_original(&paths, &index, count);
+        let mut inserted = 0_usize;
+        for before in 0..count {
+            for after in 0..count {
+                if before == after
+                    || paths.contains_path(node(before), node(after))
+                    || paths.contains_path(node(after), node(before))
+                {
+                    continue;
+                }
+                let source = node(before);
+                let target = node(after);
+                assert!(index.add_non_data_edge(source, target));
+                paths.add_non_data_edge(source, target);
+                compare_against_original(&paths, &index, count);
+                inserted += 1;
+            }
+        }
+        assert!(inserted >= 3, "fixture must actually admit new control edges");
+    }
+
+    #[test]
+    fn bounded_index_retains_adjacency_fallback_for_large_graphs() {
+        let paths = DataDependencyPaths {
+            outgoing: BTreeMap::new(),
+        };
+        let over_limit = locations(MAX_INDEXED_REQUIRED_NODES + 1);
+        assert!(
+            RequiredReachability::from_paths(&paths, &over_limit).is_none(),
+            "avoid unbounded dense reachability memory and construction work"
+        );
+        assert_eq!(
+            required_path_exists(&paths, None, node(0), node(1), false),
+            paths.contains_path(node(0), node(1))
+        );
+    }
+
+    #[test]
+    fn dense_typed_dependency_fixture_preserves_all_path_states() {
+        let count = 104;
+        let mut paths = DataDependencyPaths {
+            outgoing: BTreeMap::new(),
+        };
+        // 68 densely dependent writers yield 2,278 typed dependencies,
+        // comparable to the measured 2,327-edge native Boids graph.
+        for from in 0..68 {
+            for to in (from + 1)..68 {
+                paths
+                    .outgoing
+                    .entry(node(from))
+                    .or_default()
+                    .push((node(to), true));
+            }
+        }
+        let indexed = RequiredReachability::from_paths(&paths, &locations(count)).unwrap();
+        compare_against_original(&paths, &indexed, count);
     }
 }

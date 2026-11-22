@@ -355,6 +355,7 @@ impl GpuPreparedWorkGraph {
                 graph_label,
                 &fragments,
                 &required_orders,
+                &node_locations,
                 &mut inferred_edges,
                 &mut data_paths,
             )?;
