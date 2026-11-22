@@ -97,7 +97,10 @@ impl core::fmt::Debug for GpuPreparedWorkGraph {
             .field("initial_content", &self.initial_content)
             .field("retained_seed", &self.retained_seed)
             .field("reconstruction_targets", &self.reconstruction_targets)
-            .field("failure_preserved_coverage", &self.failure_preserved_coverage)
+            .field(
+                "failure_preserved_coverage",
+                &self.failure_preserved_coverage,
+            )
             .finish()
     }
 }
@@ -571,14 +574,12 @@ impl GpuPreparedWorkGraph {
                 .map(GpuPreparedWorkDiagnostic::Dependency)
                 .collect::<Vec<_>>();
             diagnostics.extend(self.initialization_diagnostics.iter().cloned());
-            diagnostics.extend(
-                self.outputs
-                    .iter()
-                    .map(|output| GpuPreparedWorkDiagnostic::Output {
-                        export_key: output.relationship().export_key().clone(),
-                        resource: storage_identity(output.relationship().resource()),
-                    }),
-            );
+            diagnostics.extend(self.outputs.iter().map(|output| {
+                GpuPreparedWorkDiagnostic::Output {
+                    export_key: output.relationship().export_key().clone(),
+                    resource: storage_identity(output.relationship().resource()),
+                }
+            }));
             diagnostics
         })
     }

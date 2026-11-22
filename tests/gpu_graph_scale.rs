@@ -832,9 +832,10 @@ fn measure_dependency_diagnostic_observation() -> Value {
         assert_eq!(plain.dependencies(), observed.dependencies());
         assert_eq!(plain.topological_order(), observed.topological_order());
         assert_eq!(plain.initialization(), observed.initialization());
-        assert_eq!(observed.diagnostics()[0], GpuPreparedWorkDiagnostic::Dependency(
-            observed.dependencies()[0].clone()
-        ));
+        assert_eq!(
+            observed.diagnostics()[0],
+            GpuPreparedWorkDiagnostic::Dependency(observed.dependencies()[0].clone())
+        );
         std::hint::black_box((&plain, &observed));
         if sample >= WARMUP_SAMPLES {
             unobserved_ns.push(plain_time);
