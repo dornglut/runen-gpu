@@ -831,7 +831,6 @@ fn measure_node_lookup(node_count: usize, fragment_count: usize) -> Value {
     })
 }
 
-
 fn measure_typed_control_path_queries() -> Value {
     // The observed native Boids graph has ~104 nodes and ~2328 edges. This
     // fixture has 104 nodes and 2278 genuine typed WAW edges, not invented
@@ -843,7 +842,11 @@ fn measure_typed_control_path_queries() -> Value {
     )
     .expect("dense typed fixture should prepare");
     assert_dense_waw_structure(&graph, 68, resource, resources);
-    let ids = graph.nodes().iter().map(|node| node.id()).collect::<Vec<_>>();
+    let ids = graph
+        .nodes()
+        .iter()
+        .map(|node| node.id())
+        .collect::<Vec<_>>();
     let edges = graph
         .dependencies()
         .iter()
