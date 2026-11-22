@@ -27,7 +27,10 @@ use super::{
     },
     same_resource_descriptor,
 };
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    sync::OnceLock,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GpuPreparedWorkNode {
@@ -59,7 +62,7 @@ impl GpuPreparedWorkNode {
 ///     graph.topological_order.clear();
 /// }
 /// ```
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct GpuPreparedWorkGraph {
     label: GpuResourceLabel,
     nodes: Vec<GpuPreparedWorkNode>,
@@ -68,11 +71,35 @@ pub struct GpuPreparedWorkGraph {
     initialization: Vec<GpuPreparedResourceInitialization>,
     requirements: GpuCapabilityRequirements,
     outputs: Vec<GpuWorkOutput>,
-    diagnostics: Vec<GpuPreparedWorkDiagnostic>,
+    diagnostics: OnceLock<Vec<GpuPreparedWorkDiagnostic>>,
+    initialization_diagnostics: Vec<GpuPreparedWorkDiagnostic>,
     initial_content: Vec<GpuPreparedInitialContent>,
     retained_seed: Vec<GpuRetainedInitializationSeed>,
     reconstruction_targets: BTreeSet<GpuWorkResourceId>,
     failure_preserved_coverage: BTreeMap<GpuWorkResourceId, GpuInitialCoverage>,
+}
+
+// Preserve the observable Debug payload of prepared graphs. Formatting is
+// an explicit diagnostic observation and may initialize the lazy view, but
+// ordinary G3/G5 work does not pay for a duplicated dependency vector.
+impl core::fmt::Debug for GpuPreparedWorkGraph {
+    fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        formatter
+            .debug_struct("GpuPreparedWorkGraph")
+            .field("label", &self.label)
+            .field("nodes", &self.nodes)
+            .field("topological_order", &self.topological_order)
+            .field("dependencies", &self.dependencies)
+            .field("initialization", &self.initialization)
+            .field("requirements", &self.requirements)
+            .field("outputs", &self.outputs)
+            .field("diagnostics", &self.diagnostics())
+            .field("initial_content", &self.initial_content)
+            .field("retained_seed", &self.retained_seed)
+            .field("reconstruction_targets", &self.reconstruction_targets)
+            .field("failure_preserved_coverage", &self.failure_preserved_coverage)
+            .finish()
+    }
 }
 
 impl GpuPreparedWorkGraph {
@@ -484,20 +511,11 @@ impl GpuPreparedWorkGraph {
             .iter()
             .flat_map(|fragment| fragment.outputs().iter().cloned())
             .collect::<Vec<_>>();
-        let mut diagnostics = dependencies
-            .iter()
-            .cloned()
-            .map(GpuPreparedWorkDiagnostic::Dependency)
-            .collect::<Vec<_>>();
-        diagnostics.extend(initialization_diagnostics);
-        diagnostics.extend(
-            outputs
-                .iter()
-                .map(|output| GpuPreparedWorkDiagnostic::Output {
-                    export_key: output.relationship().export_key().clone(),
-                    resource: storage_identity(output.relationship().resource()),
-                }),
-        );
+        // Many real-frame consumers only use the validated execution order
+        // and operation/retained-state facts. Do not clone thousands of
+        // dependency reasons into a second diagnostic vector until a caller
+        // explicitly requests the public diagnostic view.
+        let diagnostics = OnceLock::new();
 
         Ok(Self {
             label,
@@ -508,6 +526,7 @@ impl GpuPreparedWorkGraph {
             requirements,
             outputs,
             diagnostics,
+            initialization_diagnostics,
             initial_content,
             retained_seed,
             reconstruction_targets,
@@ -544,7 +563,24 @@ impl GpuPreparedWorkGraph {
     }
 
     pub fn diagnostics(&self) -> &[GpuPreparedWorkDiagnostic] {
-        &self.diagnostics
+        self.diagnostics.get_or_init(|| {
+            let mut diagnostics = self
+                .dependencies
+                .iter()
+                .cloned()
+                .map(GpuPreparedWorkDiagnostic::Dependency)
+                .collect::<Vec<_>>();
+            diagnostics.extend(self.initialization_diagnostics.iter().cloned());
+            diagnostics.extend(
+                self.outputs
+                    .iter()
+                    .map(|output| GpuPreparedWorkDiagnostic::Output {
+                        export_key: output.relationship().export_key().clone(),
+                        resource: storage_identity(output.relationship().resource()),
+                    }),
+            );
+            diagnostics
+        })
     }
 
     pub(crate) fn initial_content(&self) -> &[GpuPreparedInitialContent] {
@@ -737,4 +773,89 @@ fn validate_node_resources(
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod lazy_diagnostics_tests {
+    use super::*;
+    use crate::api::{
+        GpuBufferDescriptor, GpuBufferInitialization, GpuBufferRegion, GpuBufferUsage,
+        GpuClearOperation, GpuReconstruction, GpuResourceLifetime, GpuResourceScope,
+    };
+
+    fn two_writer_fragment() -> GpuWorkFragment {
+        let mut resources = GpuResourceScope::new();
+        let buffer = resources
+            .buffer(
+                GpuBufferDescriptor::ordinary_owned(
+                    "G3 diagnostic source",
+                    GpuResourceLifetime::Transient,
+                    GpuReconstruction::SourceBacked,
+                    16,
+                    [GpuBufferUsage::CopyDestination],
+                    GpuBufferInitialization::Uninitialized,
+                )
+                .unwrap(),
+            )
+            .unwrap();
+        GpuWorkFragment::build("two live data writers", |builder| {
+            builder.operation(
+                "first typed write",
+                GpuClearOperation::buffer_zero(GpuBufferRegion::whole(&buffer).unwrap()).unwrap(),
+            )?;
+            builder.operation(
+                "second typed write",
+                GpuClearOperation::buffer_zero(GpuBufferRegion::whole(&buffer).unwrap()).unwrap(),
+            )?;
+            Ok(())
+        })
+        .unwrap()
+    }
+
+    #[test]
+    fn diagnostic_observation_retains_order_and_clone_before_after_materialization() {
+        let prepared = GpuPreparedWorkGraph::prepare(
+            GpuResourceLabel::new("unobserved G3 diagnostics").unwrap(),
+            [two_writer_fragment()],
+        )
+        .unwrap();
+        assert_eq!(prepared.dependencies().len(), 1);
+        assert!(
+            prepared.diagnostics.get().is_none(),
+            "G3 must not eagerly clone dependency reasons into diagnostic entries"
+        );
+        let before = prepared.clone();
+        assert!(before.diagnostics.get().is_none());
+        let observed = prepared.diagnostics();
+        assert_eq!(
+            observed[0],
+            GpuPreparedWorkDiagnostic::Dependency(prepared.dependencies()[0].clone())
+        );
+        let initial_address = observed.as_ptr();
+        assert_eq!(prepared.diagnostics().as_ptr(), initial_address);
+        assert!(
+            before.diagnostics.get().is_none(),
+            "observing one clone must not mutate another clone"
+        );
+        assert_eq!(before.diagnostics(), prepared.diagnostics());
+        let after = prepared.clone();
+        assert_eq!(after.diagnostics(), prepared.diagnostics());
+        let display = format!("{after:?}");
+        assert!(
+            display.contains("diagnostics: ["),
+            "derived Debug's diagnostic field remains observable"
+        );
+    }
+
+    #[test]
+    fn empty_graph_exposes_same_lazy_empty_diagnostics_slice() {
+        let fragment = GpuWorkFragment::build("empty graph", |_| Ok(())).unwrap();
+        let prepared =
+            GpuPreparedWorkGraph::prepare(GpuResourceLabel::new("empty G3").unwrap(), [fragment])
+                .unwrap();
+        assert!(prepared.diagnostics.get().is_none());
+        assert!(prepared.dependencies().is_empty());
+        assert!(prepared.diagnostics().is_empty());
+        assert!(prepared.diagnostics.get().is_some());
+    }
 }
