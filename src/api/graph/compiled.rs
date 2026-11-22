@@ -231,8 +231,7 @@ impl GpuCompiledHazardTemplate {
             let reasons = reasons
                 .into_iter()
                 .map(|reason| {
-                    let storage_slot =
-                        *binding.storage_by_id.get(&reason.resource()?)?;
+                    let storage_slot = *binding.storage_by_id.get(&reason.resource()?)?;
                     let region = reason.region()?;
                     let kind = match reason {
                         GpuDependencyReason::ReadAfterWrite { .. } => TypedReasonKind::Raw,
@@ -263,8 +262,7 @@ impl GpuCompiledHazardTemplate {
     /// Checks only whether the *typed hazard* structure is identical. A true
     /// result does not admit programs, devices, retained content or surfaces.
     pub fn matches_fragment(&self, fragment: &GpuWorkFragment) -> bool {
-        CurrentFrameSlots::capture(fragment)
-            .is_some_and(|current| current.shape == self.shape)
+        CurrentFrameSlots::capture(fragment).is_some_and(|current| current.shape == self.shape)
     }
 
     pub(super) fn bind_fresh_typed_edges(
@@ -277,16 +275,23 @@ impl GpuCompiledHazardTemplate {
         }
         let mut edges = DependencyEdges::new();
         for edge in &self.typed_edges {
-            let before = GpuPreparedWorkNodeId::new(0, fragment.nodes().get(edge.before)?.id().local);
+            let before =
+                GpuPreparedWorkNodeId::new(0, fragment.nodes().get(edge.before)?.id().local);
             let after = GpuPreparedWorkNodeId::new(0, fragment.nodes().get(edge.after)?.id().local);
             let mut reasons = BTreeSet::new();
             for reason in &edge.reasons {
                 let resource = *current.storage_ids.get(reason.storage_slot)?;
                 let region = reason.region;
                 reasons.insert(match reason.kind {
-                    TypedReasonKind::Raw => GpuDependencyReason::ReadAfterWrite { resource, region },
-                    TypedReasonKind::War => GpuDependencyReason::WriteAfterRead { resource, region },
-                    TypedReasonKind::Waw => GpuDependencyReason::WriteAfterWrite { resource, region },
+                    TypedReasonKind::Raw => {
+                        GpuDependencyReason::ReadAfterWrite { resource, region }
+                    }
+                    TypedReasonKind::War => {
+                        GpuDependencyReason::WriteAfterRead { resource, region }
+                    }
+                    TypedReasonKind::Waw => {
+                        GpuDependencyReason::WriteAfterWrite { resource, region }
+                    }
                 });
             }
             edges.entry((before, after)).or_default().extend(reasons);
@@ -338,11 +343,15 @@ mod tests {
             )?;
             builder.operation(
                 "second buffer writer",
-                GpuClearOperation::buffer_zero(GpuBufferRegion::whole(if two_writers_share_resource {
-                    &first
-                } else {
-                    &second
-                }).unwrap()).unwrap(),
+                GpuClearOperation::buffer_zero(
+                    GpuBufferRegion::whole(if two_writers_share_resource {
+                        &first
+                    } else {
+                        &second
+                    })
+                    .unwrap(),
+                )
+                .unwrap(),
             )?;
             Ok(())
         })
@@ -369,7 +378,9 @@ mod tests {
         let current_id = second.resources()[0].diagnostic_identity();
         assert_ne!(first_id, current_id);
         assert!(rebound.values().all(|reasons| {
-            reasons.iter().all(|reason| reason.resource() == Some(current_id))
+            reasons
+                .iter()
+                .all(|reason| reason.resource() == Some(current_id))
         }));
     }
 
@@ -402,10 +413,12 @@ mod tests {
         assert_eq!(rebound.diagnostics(), canonical.diagnostics());
         assert_eq!(rebound.nodes().len(), canonical.nodes().len());
         assert_eq!(rebound.dependencies().len(), 1);
-        assert!(rebound.dependencies()[0]
-            .reasons()
-            .iter()
-            .all(|reason| reason.resource().is_some()));
+        assert!(
+            rebound.dependencies()[0]
+                .reasons()
+                .iter()
+                .all(|reason| reason.resource().is_some())
+        );
     }
 
     #[test]

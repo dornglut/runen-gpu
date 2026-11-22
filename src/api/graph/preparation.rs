@@ -7,11 +7,11 @@ use super::{
     authoring::{
         GpuGraphExplicitOrder, GpuGraphRequiredOrder, GpuWorkFragment, GpuWorkNode, GpuWorkOutput,
     },
+    compiled::GpuCompiledHazardTemplate,
     composition::{
         bind_imports, collect_output_bindings, topological_fragment_order,
         validate_boundary_access_intents,
     },
-    compiled::GpuCompiledHazardTemplate,
     coverage::{GpuInitialCoverage, canonical_storage_resource, storage_identity},
     dependency::{GpuDependencyReason, GpuWorkDependency},
     diagnostics::{GpuPreparedWorkDiagnostic, GraphErrorOrigin, graph_error},
