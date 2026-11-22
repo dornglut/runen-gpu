@@ -797,6 +797,84 @@ fn measure_required_order_dense_waw() -> Value {
     })
 }
 
+fn measure_compiled_typed_hazards() -> Value {
+    // Source and every fresh frame use separate logical resource owners.
+    // The template retains slot topology only; no compiled source handles.
+    let (source, _, _) = author_dense_clear_case(68);
+    let template = GpuCompiledHazardTemplate::compile(&source)
+        .expect("canonical dense WAW source admits a typed-hazard template");
+
+    let mut canonical_samples = Vec::with_capacity(MEASURED_SAMPLES);
+    let mut templated_samples = Vec::with_capacity(MEASURED_SAMPLES);
+    for sample in 0..(WARMUP_SAMPLES + MEASURED_SAMPLES) {
+        let (fresh, shared, resources) = author_dense_clear_case(68);
+        assert!(template.matches_fragment(&fresh));
+        let original_input = fresh.clone();
+        let template_input = fresh;
+        let graph_label = label("compiled hazard A/B matched source");
+        let (canonical_ns, canonical, templated_ns, templated) = if sample % 2 == 0 {
+            let start = Instant::now();
+            let full = GpuPreparedWorkGraph::prepare(graph_label.clone(), [original_input]).unwrap();
+            let full_ns = nanos(start);
+            let start = Instant::now();
+            let reused = GpuPreparedWorkGraph::prepare_with_required_orders_using_hazard_template(
+                graph_label,
+                template_input,
+                std::iter::empty::<GpuGraphRequiredOrder>(),
+                &template,
+            )
+            .unwrap();
+            (full_ns, full, nanos(start), reused)
+        } else {
+            let start = Instant::now();
+            let reused = GpuPreparedWorkGraph::prepare_with_required_orders_using_hazard_template(
+                graph_label.clone(),
+                template_input,
+                std::iter::empty::<GpuGraphRequiredOrder>(),
+                &template,
+            )
+            .unwrap();
+            let reuse_ns = nanos(start);
+            let start = Instant::now();
+            let full = GpuPreparedWorkGraph::prepare(graph_label, [original_input]).unwrap();
+            (nanos(start), full, reuse_ns, reused)
+        };
+        assert_dense_waw_structure(&canonical, 68, shared, resources);
+        assert_dense_waw_structure(&templated, 68, shared, resources);
+        assert_eq!(canonical.dependencies(), templated.dependencies());
+        assert_eq!(canonical.topological_order(), templated.topological_order());
+        assert_eq!(canonical.initialization(), templated.initialization());
+        assert_eq!(canonical.diagnostics(), templated.diagnostics());
+        std::hint::black_box((&canonical, &templated));
+        if sample >= WARMUP_SAMPLES {
+            canonical_samples.push(canonical_ns);
+            templated_samples.push(templated_ns);
+        }
+    }
+    let (_, full_median, _) = summarize(&canonical_samples);
+    let (_, templated_median, _) = summarize(&templated_samples);
+    json!({
+        "topology": "single-fragment-dense-waw-fresh-owner-scopes-compiled-hazard-hint",
+        "node_count": 104,
+        "typed_dependency_count": 2278,
+        "fresh_resource_scope_each_sample": true,
+        "old_operations_or_handles_retained_by_template": false,
+        "canonical_and_templated_results_identical": true,
+        "warmup_samples": WARMUP_SAMPLES,
+        "measured_samples": MEASURED_SAMPLES,
+        "canonical_g3_prepare_ns": {
+            "samples": canonical_samples,
+            "median": full_median
+        },
+        "templated_g3_prepare_ns": {
+            "samples": templated_samples,
+            "median": templated_median
+        },
+        "median_saved_ns": i128::from(full_median) - i128::from(templated_median),
+        "policy": "same-runner, alternating debug CPU-only G3 full preparation vs fresh-frame canonical G3 with compile-once typed-hazard hint; excludes fragment authoring and template compilation; all remaining dynamic validation runs; non-gating, not actual Boids/G5 or release hardware"
+    })
+}
+
 const NODE_LOOKUP_CASES: [(usize, usize); 6] =
     [(80, 1), (80, 8), (80, 80), (800, 1), (800, 8), (800, 80)];
 const NODE_LOOKUP_REPEATS: usize = 32;
@@ -1150,6 +1228,7 @@ fn graph_preparation_scale_characterization_records_structural_and_timing_eviden
 
     let typed_control_path_queries = measure_typed_control_path_queries();
     let required_order_dense_waw = measure_required_order_dense_waw();
+    let compiled_hazard_rebind = measure_compiled_typed_hazards();
 
     let report = json!({
         "schema_version": REPORT_SCHEMA_VERSION,
@@ -1198,6 +1277,7 @@ fn graph_preparation_scale_characterization_records_structural_and_timing_eviden
         "node_lookup_cases": node_lookup_cases,
         "typed_control_path_queries": typed_control_path_queries,
         "required_order_dense_waw": required_order_dense_waw,
+        "compiled_hazard_rebind": compiled_hazard_rebind,
         "typed_control_path_policy": "CPU-only 104-node / 2278 typed WAW edge fixture with 64 fixed reachability queries; includes adjacency construction; tests equivalent lookup results; neither full Boids nor graph-preparation stage, ratios are characterization not budgets",
         "node_lookup_policy": "test-profile CPU-only lookup comparison; linear search versus transient BTreeMap/HashMap including index construction on each pass, no physical WGPU plan, shader or resource realization; non-gating",
         "shared_resource_policy": "fixed total nodes: one writer and N-1 read/copy consumers; typed export/import when fragmented, one RAW dependency per consumer; GPU physical preparation not measured; non-gating",
