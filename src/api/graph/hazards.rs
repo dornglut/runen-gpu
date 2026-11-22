@@ -427,7 +427,10 @@ impl DataDependencyPaths {
         // Explicit orders may only add a non-data reason. Preserve the
         // distinction across subsequent queries, including when an edge is
         // already present from an earlier control request.
-        self.outgoing.entry(before).or_default().push((after, false));
+        self.outgoing
+            .entry(before)
+            .or_default()
+            .push((after, false));
     }
 
     pub(super) fn contains_data_path(

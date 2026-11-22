@@ -240,7 +240,12 @@ impl GpuPreparedWorkGraph {
         // Canonical typed edges are inferred once. Explicit-order checks query
         // only outgoing neighbors and include each newly admitted control edge.
         let mut data_paths = DataDependencyPaths::from_edges(&inferred_edges);
-        add_explicit_orders(graph_label, &fragments, &mut inferred_edges, &mut data_paths)?;
+        add_explicit_orders(
+            graph_label,
+            &fragments,
+            &mut inferred_edges,
+            &mut data_paths,
+        )?;
         add_graph_explicit_orders(
             graph_label,
             &fragments,
