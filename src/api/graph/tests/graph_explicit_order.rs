@@ -441,7 +441,8 @@ fn graph_scope_orders_bracket_immutable_work_with_timestamp_markers() {
 #[test]
 fn required_graph_orders_drop_typed_redundancy_and_preserve_strict_api() {
     let (producer, before, consumer, after) = data_fragments();
-    let redundant = GpuGraphRequiredOrder::new(&before, &after, "producer before consumer").unwrap();
+    let redundant =
+        GpuGraphRequiredOrder::new(&before, &after, "producer before consumer").unwrap();
     let graph = GpuPreparedWorkGraph::prepare_with_required_orders(
         label("one-pass typed required order"),
         [consumer.clone(), producer.clone()],
@@ -524,11 +525,15 @@ fn required_graph_orders_are_transitive_and_preserve_original_stable_topology() 
     )
     .expect("one canonical preparation admits both necessary controls");
     assert_eq!(
-        graph.dependencies().iter().filter(|edge| {
-            edge.reasons()
-                .iter()
-                .any(|r| matches!(r, GpuDependencyReason::ExplicitNonData { .. }))
-        }).count(),
+        graph
+            .dependencies()
+            .iter()
+            .filter(|edge| {
+                edge.reasons()
+                    .iter()
+                    .any(|r| matches!(r, GpuDependencyReason::ExplicitNonData { .. }))
+            })
+            .count(),
         2
     );
     assert_eq!(
@@ -540,8 +545,12 @@ fn required_graph_orders_are_transitive_and_preserve_original_stable_topology() 
             .len(),
         3
     );
-    assert!(prepared_position(&graph, "required first") < prepared_position(&graph, "required second"));
-    assert!(prepared_position(&graph, "required second") < prepared_position(&graph, "required third"));
+    assert!(
+        prepared_position(&graph, "required first") < prepared_position(&graph, "required second")
+    );
+    assert!(
+        prepared_position(&graph, "required second") < prepared_position(&graph, "required third")
+    );
 }
 
 #[test]
