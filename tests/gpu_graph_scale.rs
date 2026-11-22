@@ -697,11 +697,9 @@ fn measure_dense_waw(shared_nodes: usize) -> Value {
 
 fn measure_required_order_dense_waw() -> Value {
     let (fragment, shared, resource_count) = author_dense_clear_case(68);
-    let original = GpuPreparedWorkGraph::prepare(
-        label("dense required-order reference"),
-        [fragment.clone()],
-    )
-    .unwrap();
+    let original =
+        GpuPreparedWorkGraph::prepare(label("dense required-order reference"), [fragment.clone()])
+            .unwrap();
     assert_dense_waw_structure(&original, 68, shared, resource_count);
     let local_nodes = fragment
         .nodes()
@@ -732,7 +730,8 @@ fn measure_required_order_dense_waw() -> Value {
         let graph_label = label("dense required-order reference");
         let start = Instant::now();
         let prepared =
-            GpuPreparedWorkGraph::prepare_with_required_orders(graph_label, [work], orders).unwrap();
+            GpuPreparedWorkGraph::prepare_with_required_orders(graph_label, [work], orders)
+                .unwrap();
         (nanos(start), prepared)
     };
 
