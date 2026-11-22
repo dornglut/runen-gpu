@@ -11,6 +11,7 @@ use super::{
         bind_imports, collect_output_bindings, topological_fragment_order,
         validate_boundary_access_intents,
     },
+    compiled::GpuCompiledHazardTemplate,
     coverage::{GpuInitialCoverage, canonical_storage_resource, storage_identity},
     dependency::{GpuDependencyReason, GpuWorkDependency},
     diagnostics::{GpuPreparedWorkDiagnostic, GraphErrorOrigin, graph_error},
@@ -114,6 +115,45 @@ impl GpuPreparedWorkGraph {
         )
     }
 
+    /// Prepare one current-frame fragment with an optional compiled *typed
+    /// hazard* hint. Fresh G3 resource, boundary, control, topological,
+    /// initialization and capability validation is still mandatory.
+    ///
+    /// A changed resource/access topology automatically falls back to full
+    /// canonical inference. This never submits or replays a prior-frame graph.
+    pub fn prepare_with_required_orders_using_hazard_template(
+        label: GpuResourceLabel,
+        fragment: GpuWorkFragment,
+        required_orders: impl IntoIterator<Item = GpuGraphRequiredOrder>,
+        template: &GpuCompiledHazardTemplate,
+    ) -> Result<Self, GpuWorkGraphError> {
+        Self::prepare_with_retained_coverage_and_hazard_template(
+            label,
+            fragment,
+            required_orders,
+            &[],
+            template,
+        )
+    }
+
+    pub(crate) fn prepare_with_retained_coverage_and_hazard_template(
+        label: GpuResourceLabel,
+        fragment: GpuWorkFragment,
+        required_orders: impl IntoIterator<Item = GpuGraphRequiredOrder>,
+        retained_coverage: &[GpuRetainedInitializationSeed],
+        template: &GpuCompiledHazardTemplate,
+    ) -> Result<Self, GpuWorkGraphError> {
+        Self::prepare_core_with_hazard_hint(
+            label,
+            std::iter::once(fragment),
+            std::iter::empty::<GpuGraphExplicitOrder>(),
+            required_orders,
+            retained_coverage,
+            &[],
+            Some(template),
+        )
+    }
+
     pub(crate) fn prepare_with_retained_coverage(
         label: GpuResourceLabel,
         fragments: impl IntoIterator<Item = GpuWorkFragment>,
@@ -182,6 +222,26 @@ impl GpuPreparedWorkGraph {
         required_orders: impl IntoIterator<Item = GpuGraphRequiredOrder>,
         retained_coverage: &[GpuRetainedInitializationSeed],
         reconstruction_targets: &[GpuResourceRef],
+    ) -> Result<Self, GpuWorkGraphError> {
+        Self::prepare_core_with_hazard_hint(
+            label,
+            fragments,
+            graph_orders,
+            required_orders,
+            retained_coverage,
+            reconstruction_targets,
+            None,
+        )
+    }
+
+    fn prepare_core_with_hazard_hint(
+        label: GpuResourceLabel,
+        fragments: impl IntoIterator<Item = GpuWorkFragment>,
+        graph_orders: impl IntoIterator<Item = GpuGraphExplicitOrder>,
+        required_orders: impl IntoIterator<Item = GpuGraphRequiredOrder>,
+        retained_coverage: &[GpuRetainedInitializationSeed],
+        reconstruction_targets: &[GpuResourceRef],
+        hazard_template: Option<&GpuCompiledHazardTemplate>,
     ) -> Result<Self, GpuWorkGraphError> {
         // Only the existing, explicitly opted-in tracing subscriber records
         // these spans. No graph telemetry store, allocation or per-node event.
@@ -319,7 +379,18 @@ impl GpuPreparedWorkGraph {
             (GpuPreparedWorkNodeId, GpuPreparedWorkNodeId),
             BTreeSet<GpuDependencyReason>,
         >::new();
-        infer_fragment_hazards(graph_label, &fragments, &mut inferred_edges)?;
+        let cached_hazards = hazard_template
+            .filter(|_| fragments.len() == 1)
+            .and_then(|template| template.bind_fresh_typed_edges(&fragments[0]));
+        if let Some(edges) = cached_hazards {
+            // The hint is structural only: reasons contain THIS frame's
+            // resource identities, not identities from the source fragment.
+            inferred_edges = edges;
+        } else {
+            // An unsupported or changed shape gets exactly the original G3
+            // path, including its original error and diagnostic semantics.
+            infer_fragment_hazards(graph_label, &fragments, &mut inferred_edges)?;
+        }
         infer_cross_fragment_hazards(graph_label, &fragments, &relations, &mut inferred_edges)?;
         drop(stage);
         let stage = tracing::trace_span!(

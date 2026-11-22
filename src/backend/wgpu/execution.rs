@@ -17,7 +17,7 @@ use super::surface::execution::WgpuSurfaceLeaseGuard;
 use crate::api::texture_format;
 use crate::{
     GpuBufferInitialization, GpuBufferRegion, GpuBufferTextureLayout, GpuCapabilityAdmission,
-    GpuClearOperation, GpuContext, GpuContextAffinity, GpuCopyExtent, GpuCopyOperation,
+    GpuClearOperation, GpuCompiledHazardTemplate, GpuContext, GpuContextAffinity, GpuCopyExtent, GpuCopyOperation,
     GpuDataLayout, GpuDispatchSize, GpuExecutionLifecycleState, GpuExecutionPolicy,
     GpuExecutionStats, GpuGraphExplicitOrder, GpuGraphRequiredOrder, GpuPipelineRealizationError,
     GpuPipelineRealizationErrorCategory, GpuPreparedInitialContent, GpuPreparedSubmission,
@@ -1278,6 +1278,29 @@ impl GpuContext {
             fragments,
             required_orders,
             &retained,
+        )
+    }
+
+    /// Prepares a fresh single-fragment graph with a reusable, bounded typed
+    /// hazard-structure hint. The hint is never a prepared GPU graph, and all
+    /// current-context retained/resource/initialization facts are still
+    /// validated through G3 before G5 submission.
+    ///
+    /// Incompatible frame topology safely falls back to canonical inference.
+    pub fn prepare_work_graph_with_hazard_template(
+        &self,
+        label: GpuResourceLabel,
+        fragment: GpuWorkFragment,
+        required_orders: impl IntoIterator<Item = GpuGraphRequiredOrder>,
+        template: &GpuCompiledHazardTemplate,
+    ) -> Result<GpuPreparedWorkGraph, GpuWorkGraphError> {
+        let retained = self.backend.execution.retained.coverage_seed();
+        GpuPreparedWorkGraph::prepare_with_retained_coverage_and_hazard_template(
+            label,
+            fragment,
+            required_orders,
+            &retained,
+            template,
         )
     }
 

@@ -5,6 +5,7 @@
 //! preparation responsibilities independently maintainable.
 
 mod authoring;
+mod compiled;
 mod composition;
 mod coverage;
 mod dependency;
@@ -19,6 +20,7 @@ pub use authoring::{
     GpuExecutionPreference, GpuExplicitOrder, GpuGraphExplicitOrder, GpuGraphRequiredOrder,
     GpuWorkFragment, GpuWorkFragmentBuilder, GpuWorkImport, GpuWorkNode, GpuWorkOutput,
 };
+pub use compiled::GpuCompiledHazardTemplate;
 pub use coverage::{
     GpuBufferCoverage, GpuBufferStridedCoverage, GpuInitialCoverage, GpuInitialCoverageKind,
     GpuWorkResourceInput,
