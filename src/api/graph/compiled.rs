@@ -455,6 +455,71 @@ mod tests {
     }
 
     #[test]
+    fn changed_buffer_region_must_recheck_current_canonical_hazards() {
+        use crate::api::{
+            GpuBufferRange, GpuGraphRequiredOrder, GpuPreparedWorkGraph, GpuResourceLabel,
+            GpuResourceScope,
+        };
+
+        let source = fragment(true);
+        let template = GpuCompiledHazardTemplate::compile(&source).unwrap();
+        let mut scope = GpuResourceScope::new();
+        let buffer = scope
+            .buffer(
+                GpuBufferDescriptor::ordinary_owned(
+                    "compiled frame slot buffer",
+                    GpuResourceLifetime::Transient,
+                    GpuReconstruction::SourceBacked,
+                    16,
+                    [GpuBufferUsage::CopyDestination],
+                    GpuBufferInitialization::Uninitialized,
+                )
+                .unwrap(),
+            )
+            .unwrap();
+        // This is a structurally different region even though buffer kind,
+        // node count, resource aliasing, and operation kinds remain unchanged.
+        let fresh = GpuWorkFragment::build("compiled hazards independent source", |builder| {
+            builder.operation(
+                "first buffer writer",
+                GpuClearOperation::buffer_zero(GpuBufferRegion::whole(&buffer).unwrap()).unwrap(),
+            )?;
+            builder.operation(
+                "partial buffer writer",
+                GpuClearOperation::buffer_zero(
+                    GpuBufferRegion::new(
+                        &buffer,
+                        GpuBufferRange::new(&buffer, 0, 8).unwrap(),
+                    )
+                    .unwrap(),
+                )
+                .unwrap(),
+            )?;
+            Ok(())
+        })
+        .unwrap();
+        assert!(!template.matches_fragment(&fresh));
+        let label = GpuResourceLabel::new("changed buffer region").unwrap();
+        let canonical = GpuPreparedWorkGraph::prepare(label.clone(), [fresh.clone()]).unwrap();
+        let rebound = GpuPreparedWorkGraph::prepare_with_required_orders_using_hazard_template(
+            label,
+            fresh,
+            std::iter::empty::<GpuGraphRequiredOrder>(),
+            &template,
+        )
+        .unwrap();
+        assert_eq!(rebound.dependencies(), canonical.dependencies());
+        assert_eq!(rebound.initialization(), canonical.initialization());
+        assert_eq!(rebound.topological_order(), canonical.topological_order());
+        assert_eq!(rebound.dependencies().len(), 1);
+        assert_eq!(rebound.dependencies()[0].reasons().len(), 1);
+        assert_eq!(
+            rebound.dependencies()[0].reasons()[0].region(),
+            Some(GpuDependencyRegion::Buffer(GpuBufferRange::new(&buffer, 0, 8).unwrap()))
+        );
+    }
+
+    #[test]
     fn changed_alias_structure_must_use_full_g3_fallback() {
         let base = fragment(true);
         let changed = fragment(false);
